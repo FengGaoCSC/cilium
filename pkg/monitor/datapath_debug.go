@@ -309,7 +309,7 @@ func (n *DebugMsg) subTypeString() string {
 	case DbgLb4LookupMaster:
 		return fmt.Sprintf("Master service lookup, addr=%s key.dport=%d", ip4Str(n.Arg1), byteorder.NetworkToHost(uint16(n.Arg2)))
 	case DbgLb4LookupMasterFail:
-		return fmt.Sprintf("Master service lookup failed")
+		return fmt.Sprintf("Master service lookup failed: %s", ctLookup4Info1(n))
 	case DbgLb4LookupSlaveSuccess:
 		return fmt.Sprintf("Slave service lookup result: target=%s port=%d", ip4Str(n.Arg1), byteorder.NetworkToHost(uint16(n.Arg2)))
 	case DbgLb4ReverseNat:

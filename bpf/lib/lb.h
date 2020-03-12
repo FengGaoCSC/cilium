@@ -721,10 +721,17 @@ static inline
 struct lb4_service *lb4_lookup_service(struct __sk_buff *skb,
 				       struct lb4_key *key)
 {
+	void *data, *data_end;
+	struct iphdr *ip4;
+	if (!revalidate_data(skb, &data, &data_end, &ip4)) {
+		return NULL;
+	}
+	__be16 dport = key->dport;
 	struct lb4_service *svc = __lb4_lookup_service(key);
 
 	if (!svc)
-		cilium_dbg_lb(skb, DBG_LB4_LOOKUP_MASTER_FAIL, 0, 0);
+		cilium_dbg3(skb, DBG_LB4_LOOKUP_MASTER_FAIL, ip4->saddr, ip4->daddr, bpf_ntohs(dport));
+		//cilium_dbg(skb, DBG_LB4_LOOKUP_MASTER_FAIL, 0, 0);
 
 	return svc;
 }

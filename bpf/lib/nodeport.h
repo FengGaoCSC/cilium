@@ -813,15 +813,21 @@ int tail_nodeport_ipv4_dsr(struct __sk_buff *skb)
 	struct bpf_fib_lookup fib_params = {};
 	int ret;
 
+	cilium_dbg(skb, DBG_CAPTURE_DELIVERY, 113, 0);
+
 	__be16 dport = skb->cb[CB_SVC_PORT];
 	__be32 address = skb->cb[CB_SVC_ADDR_V4];
 
 	if (!revalidate_data(skb, &data, &data_end, &ip4))
 		return DROP_INVALID;
 
+	cilium_dbg(skb, DBG_CAPTURE_DELIVERY, 114, 0);
+
 	ret = set_dsr_opt4(skb, ip4, address, dport);
 	if (ret != 0)
 		return DROP_INVALID;
+
+	cilium_dbg(skb, DBG_CAPTURE_DELIVERY, 115, 0);
 
 	if (!revalidate_data(skb, &data, &data_end, &ip4))
 		return DROP_INVALID;
@@ -831,11 +837,17 @@ int tail_nodeport_ipv4_dsr(struct __sk_buff *skb)
 	fib_params.ipv4_src = ip4->saddr;
 	fib_params.ipv4_dst = ip4->daddr;
 
+	cilium_dbg(skb, DBG_CAPTURE_DELIVERY, 116, 0);
+
 	ret = fib_lookup(skb, &fib_params, sizeof(fib_params),
 			 BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT);
+	cilium_dbg(skb, DBG_CAPTURE_DELIVERY, 117, ret);
 	if (ret != 0) {
 		return DROP_NO_FIB;
 	}
+
+	cilium_dbg(skb, DBG_CAPTURE_DELIVERY, 118, ret);
+
 
 	if (eth_store_daddr(skb, fib_params.dmac, 0) < 0) {
 		return DROP_WRITE_ERROR;
@@ -843,6 +855,8 @@ int tail_nodeport_ipv4_dsr(struct __sk_buff *skb)
 	if (eth_store_saddr(skb, fib_params.smac, 0) < 0) {
 		return DROP_WRITE_ERROR;
 	}
+
+	cilium_dbg(skb, DBG_CAPTURE_DELIVERY, 119, fib_params.ifindex);
 
 	return redirect(fib_params.ifindex, 0);
 }
@@ -1007,6 +1021,8 @@ static inline int nodeport_lb4(struct __sk_buff *skb, __u32 src_identity)
 #endif /* ENABLE_DSR */
 	}
 
+	//cilium_dbg(skb, DBG_CAPTURE_DELIVERY, 110, 0);
+
 	ret = ct_lookup4(get_ct_map4(&tuple), &tuple, skb, l4_off, CT_EGRESS,
 			 &ct_state, &monitor);
 	if (ret < 0)
@@ -1015,6 +1031,8 @@ static inline int nodeport_lb4(struct __sk_buff *skb, __u32 src_identity)
 		return DROP_INVALID;
 
 	backend_local = lookup_ip4_endpoint(ip4);
+
+	//cilium_dbg(skb, DBG_CAPTURE_DELIVERY, 111, backend_local);
 
 	switch (ret) {
 	case CT_NEW:
@@ -1063,6 +1081,7 @@ redo:
 
 	if (!backend_local) {
 #ifdef ENABLE_DSR
+		//cilium_dbg(skb, DBG_CAPTURE_DELIVERY, 112, 0);
 		skb->cb[CB_SVC_PORT] = key.dport;
 		skb->cb[CB_SVC_ADDR_V4] = key.address;
 		ep_tail_call(skb, CILIUM_CALL_IPV4_NODEPORT_DSR);
