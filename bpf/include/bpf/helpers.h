@@ -44,6 +44,11 @@ static __u64 BPF_FUNC(jiffies64);
 /* We have cookies! ;-) */
 static __u64 BPF_FUNC(get_socket_cookie, void *ctx);
 static __u64 BPF_FUNC(get_netns_cookie, void *ctx);
+static int BPF_FUNC_REMAP(sock_event_output, struct bpf_sock_addr *ctx, void *map,
+			  __u64 index, const void *data, __u32 size) =
+			 (void *)BPF_FUNC_perf_event_output;
+
+
 
 /* Debugging */
 static __printf(1,3) void BPF_FUNC(trace_printk, const char *fmt, int fmt_size, ...);

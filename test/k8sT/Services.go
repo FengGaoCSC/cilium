@@ -1252,6 +1252,23 @@ var _ = Describe("K8sServicesTest", func() {
 					res.ExpectFail("NAT entry was not evicted")
 				}
 
+				startMonitor := func() {
+					ciliumPodK8s1, err := kubectl.GetCiliumPodOnNodeWithLabel(helpers.CiliumNamespace, helpers.K8s1)
+					Expect(err).Should(BeNil(), "Cannot get cilium pod on k8s1")
+					ciliumPodK8s2, err := kubectl.GetCiliumPodOnNodeWithLabel(helpers.CiliumNamespace, helpers.K8s2)
+					Expect(err).Should(BeNil(), "Cannot get cilium pod on k8s2")
+					monitorRes1, monitorCancel1 := kubectl.MonitorStart(helpers.CiliumNamespace, ciliumPodK8s1)
+					monitorRes2, monitorCancel2 := kubectl.MonitorStart(helpers.CiliumNamespace, ciliumPodK8s2)
+
+					helpers.FoobarCallback = func() {
+						time.Sleep(1 * time.Second)
+						monitorCancel1()
+						helpers.WriteToReportFile(monitorRes1.CombineOutput().Bytes(), "foobar-k8s1.log")
+						monitorCancel2()
+						helpers.WriteToReportFile(monitorRes2.CombineOutput().Bytes(), "foobar-k8s2.log")
+					}
+				}
+
 				SkipItIf(helpers.DoesNotExistNodeWithoutCilium, "Tests with direct routing and DSR", func() {
 					DeployCiliumOptionsAndDNS(kubectl, ciliumFilename, map[string]string{
 						"global.nodePort.mode":        "dsr",

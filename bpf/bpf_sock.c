@@ -239,6 +239,21 @@ wildcard_lookup:
 #endif /* ENABLE_NODEPORT */
 }
 
+static __always_inline void cilium_dbg_sock(struct bpf_sock_addr *ctx, __u8 type,
+				       __u32 arg1, __u32 arg2)
+{
+	struct debug_msg msg = {
+		.type = CILIUM_NOTIFY_DBG_MSG,
+		.subtype = type,
+		.source = EVENT_SOURCE,
+		.hash = 0,
+		.arg1 = arg1,
+		.arg2 = arg2,
+	};
+
+	sock_event_output(ctx, &EVENTS_MAP, BPF_F_CURRENT_CPU, &msg, sizeof(msg));
+}
+
 static __always_inline int __sock4_xlate(struct bpf_sock_addr *ctx,
 					 struct bpf_sock_addr *ctx_full,
 					 const bool udp_only)
@@ -269,6 +284,9 @@ static __always_inline int __sock4_xlate(struct bpf_sock_addr *ctx,
 		svc = sock4_nodeport_wildcard_lookup(&key, true, in_hostns);
 		if (svc && !lb4_svc_is_nodeport(svc))
 			svc = NULL;
+	}
+	if (svc) {
+		cilium_dbg_sock(ctx_full, DBG_LB4_LOOKUP_MASTER, key.address, key.dport);
 	}
 	if (!svc)
 		return -ENXIO;

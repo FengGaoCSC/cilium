@@ -63,7 +63,7 @@ func Wrk(endpoint string) string {
 // into the curl message
 func CurlFail(endpoint string, optionalValues ...interface{}) string {
 	statsInfo := `time-> DNS: '%{time_namelookup}(%{remote_ip})', Connect: '%{time_connect}',` +
-		`Transfer '%{time_starttransfer}', total '%{time_total}'`
+		`Transfer '%{time_starttransfer}', total '%{time_total}', local_port: '%{local_port}'`
 
 	if len(optionalValues) > 0 {
 		endpoint = fmt.Sprintf(endpoint, optionalValues...)

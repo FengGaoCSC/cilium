@@ -39,6 +39,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var FoobarCallback func()
+
 // ensure that our random numbers are seeded differently on each run
 var randGen = rand.NewSafeRand(time.Now().UnixNano())
 
@@ -252,6 +254,12 @@ func Fail(description string, callerSkip ...int) {
 	}
 
 	if config.CiliumTestConfig.HoldEnvironment {
+		fmt.Println("MAYBE EXECUTING FOOBAR CALLBACK")
+		if FoobarCallback != nil {
+			fmt.Println("EXECUTING FOOBAR CALLBACK")
+			FoobarCallback()
+			fmt.Println("DONE")
+		}
 		HoldEnvironment(description)
 	}
 	ginkgoext.Fail(description, callerSkip...)

@@ -1581,12 +1581,12 @@ func (kub *Kubectl) overwriteHelmOptions(options map[string]string) error {
 
 		if RunsOnNetNextOr419Kernel() {
 			// Enable BPF masquerading
-			defaultIface, err := kub.GetDefaultIface()
-			if err != nil {
-				return err
-			}
-			devices = fmt.Sprintf(`'{%s,%s}'`, privateIface, defaultIface)
-			opts["global.bpfMasquerade"] = "true"
+			//defaultIface, err := kub.GetDefaultIface()
+			//if err != nil {
+			//	return err
+			//}
+			//devices = fmt.Sprintf(`'{%s,%s}'`, privateIface, defaultIface)
+			//opts["global.bpfMasquerade"] = "false"
 		}
 
 		opts["global.nodePort.device"] = devices
