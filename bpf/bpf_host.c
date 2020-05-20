@@ -558,8 +558,8 @@ resolve_srcid_ipv4(struct __ctx_buff *ctx, __u32 srcid_from_proxy,
 					srcid_from_ipcache = sec_label;
 			}
 		}
-		cilium_dbg(ctx, info ? DBG_IP_ID_MAP_SUCCEED4 : DBG_IP_ID_MAP_FAILED4,
-			   ip4->saddr, srcid_from_ipcache);
+		//cilium_dbg(ctx, info ? DBG_IP_ID_MAP_SUCCEED4 : DBG_IP_ID_MAP_FAILED4,
+		//	   ip4->saddr, srcid_from_ipcache);
 	}
 
 	if (from_host)
@@ -759,6 +759,7 @@ handle_ipv4(struct __ctx_buff *ctx, __u32 secctx, bool from_host)
 	if (!from_host) {
 		if (ctx_get_xfer(ctx) != XFER_PKT_NO_SVC &&
 		    !bpf_skip_nodeport(ctx)) {
+			cilium_dbg(ctx, DBG_GENERIC, 666, 0);
 			ret = nodeport_lb4(ctx, secctx);
 			if (ret < 0)
 				return ret;

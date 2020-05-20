@@ -1152,6 +1152,8 @@ static __always_inline int nodeport_lb4(struct __ctx_buff *ctx,
 			return ret;
 	}
 
+	cilium_dbg(ctx, DBG_GENERIC, 666, 1);
+
 	if (!svc || (!lb4_svc_is_external_ip(svc) &&
 		     !lb4_svc_is_nodeport(svc) &&
 		     !lb4_svc_is_hostport(svc))) {
@@ -1170,6 +1172,8 @@ static __always_inline int nodeport_lb4(struct __ctx_buff *ctx,
 		ep_tail_call(ctx, CILIUM_CALL_IPV4_NODEPORT_NAT);
 		return DROP_MISSED_TAIL_CALL;
 	}
+
+	cilium_dbg(ctx, DBG_GENERIC, 666, 2);
 
 	ret = ct_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, CT_EGRESS,
 			 &ct_state, &monitor);

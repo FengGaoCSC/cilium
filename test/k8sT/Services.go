@@ -569,11 +569,32 @@ var _ = Describe("K8sServicesTest", func() {
 			return ipv4, ipv6
 		}
 
+		startMonitor := func() {
+			ciliumPodK8s1, err := kubectl.GetCiliumPodOnNodeWithLabel(helpers.CiliumNamespace, helpers.K8s1)
+			Expect(err).Should(BeNil(), "Cannot get cilium pod on k8s1")
+			ciliumPodK8s2, err := kubectl.GetCiliumPodOnNodeWithLabel(helpers.CiliumNamespace, helpers.K8s2)
+			Expect(err).Should(BeNil(), "Cannot get cilium pod on k8s2")
+			monitorRes1, monitorCancel1 := kubectl.MonitorStart(helpers.CiliumNamespace, ciliumPodK8s1)
+			monitorRes2, monitorCancel2 := kubectl.MonitorStart(helpers.CiliumNamespace, ciliumPodK8s2)
+
+			helpers.FoobarCallback = func() {
+				time.Sleep(1 * time.Second)
+				monitorCancel1()
+				helpers.WriteToReportFile(monitorRes1.CombineOutput().Bytes(), "foobar-k8s1.log")
+				monitorCancel2()
+				helpers.WriteToReportFile(monitorRes2.CombineOutput().Bytes(), "foobar-k8s2.log")
+			}
+		}
+
 		testNodePort := func(bpfNodePort, testSecondaryNodePortIP, testFromOutside bool) {
 			var (
 				data                                 v1.Service
 				secondaryK8s1IPv4, secondaryK8s2IPv4 string
 			)
+
+			//if bpfNodePort {
+			//	startMonitor()
+			//}
 
 			k8s1Name, k8s1IP := kubectl.GetNodeInfo(helpers.K8s1)
 			k8s2Name, k8s2IP := kubectl.GetNodeInfo(helpers.K8s2)
@@ -770,14 +791,14 @@ var _ = Describe("K8sServicesTest", func() {
 			// Make sure all the rest works as expected as well
 			testNodePort(true, false, false)
 
-			// Clear CT tables on both Cilium nodes
-			pod, err := kubectl.GetCiliumPodOnNode(helpers.CiliumNamespace, helpers.K8s1)
-			Expect(err).Should(BeNil(), "Cannot determine cilium pod name")
-			kubectl.CiliumExecMustSucceed(context.TODO(), pod, "cilium bpf ct flush global", "Unable to flush CT maps")
+			//// Clear CT tables on both Cilium nodes
+			//pod, err := kubectl.GetCiliumPodOnNode(helpers.CiliumNamespace, helpers.K8s1)
+			//Expect(err).Should(BeNil(), "Cannot determine cilium pod name")
+			//kubectl.CiliumExecMustSucceed(context.TODO(), pod, "cilium bpf ct flush global", "Unable to flush CT maps")
 
-			pod, err = kubectl.GetCiliumPodOnNode(helpers.CiliumNamespace, helpers.K8s2)
-			Expect(err).Should(BeNil(), "Cannot determine cilium pod name")
-			kubectl.CiliumExecMustSucceed(context.TODO(), pod, "cilium bpf ct flush global", "Unable to flush CT maps")
+			//pod, err = kubectl.GetCiliumPodOnNode(helpers.CiliumNamespace, helpers.K8s2)
+			//Expect(err).Should(BeNil(), "Cannot determine cilium pod name")
+			//kubectl.CiliumExecMustSucceed(context.TODO(), pod, "cilium bpf ct flush global", "Unable to flush CT maps")
 		}
 
 		// fromOutside=true tests session affinity implementation from lb.h, while
@@ -1096,7 +1117,9 @@ var _ = Describe("K8sServicesTest", func() {
 					})
 
 					It("Tests NodePort", func() {
+						startMonitor()
 						testNodePort(true, false, helpers.ExistNodeWithoutCilium())
+						Expect(false).To(Equal(true), "expected")
 					})
 
 					It("Tests NodePort with externalTrafficPolicy=Local", func() {
@@ -1250,23 +1273,6 @@ var _ = Describe("K8sServicesTest", func() {
 					res = kubectl.CiliumExecMustSucceed(context.TODO(), pod, "cilium bpf ct flush global", "Unable to flush CT maps")
 					res = kubectl.CiliumExecContext(context.TODO(), pod, fmt.Sprintf("cilium bpf nat list | grep %d", sourcePortForCTGCtest))
 					res.ExpectFail("NAT entry was not evicted")
-				}
-
-				startMonitor := func() {
-					ciliumPodK8s1, err := kubectl.GetCiliumPodOnNodeWithLabel(helpers.CiliumNamespace, helpers.K8s1)
-					Expect(err).Should(BeNil(), "Cannot get cilium pod on k8s1")
-					ciliumPodK8s2, err := kubectl.GetCiliumPodOnNodeWithLabel(helpers.CiliumNamespace, helpers.K8s2)
-					Expect(err).Should(BeNil(), "Cannot get cilium pod on k8s2")
-					monitorRes1, monitorCancel1 := kubectl.MonitorStart(helpers.CiliumNamespace, ciliumPodK8s1)
-					monitorRes2, monitorCancel2 := kubectl.MonitorStart(helpers.CiliumNamespace, ciliumPodK8s2)
-
-					helpers.FoobarCallback = func() {
-						time.Sleep(1 * time.Second)
-						monitorCancel1()
-						helpers.WriteToReportFile(monitorRes1.CombineOutput().Bytes(), "foobar-k8s1.log")
-						monitorCancel2()
-						helpers.WriteToReportFile(monitorRes2.CombineOutput().Bytes(), "foobar-k8s2.log")
-					}
 				}
 
 				SkipItIf(helpers.DoesNotExistNodeWithoutCilium, "Tests with direct routing and DSR", func() {
