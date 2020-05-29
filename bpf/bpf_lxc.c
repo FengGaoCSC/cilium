@@ -494,7 +494,7 @@ skip_service_lookup:
 	 * POLICY_SKIP if the packet is a reply packet to an existing
 	 * incoming connection. */
 	ret = ct_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, CT_EGRESS,
-			 &ct_state, &monitor);
+			 &ct_state, &monitor, false);
 	if (ret < 0)
 		return ret;
 
@@ -698,6 +698,7 @@ pass_to_stack:
 	 * network.
 	 */
 
+	cilium_dbg(ctx, DBG_CAPTURE_DELIVERY, 668, 1);
 	send_trace_notify(ctx, TRACE_TO_STACK, SECLABEL, *dstID, 0, 0,
 			  reason, monitor);
 #ifndef ENCAP_IFINDEX
@@ -718,7 +719,7 @@ pass_to_stack:
 	ctx->mark |= MARK_MAGIC_IDENTITY;
 	set_identity_mark(ctx, SECLABEL);
 
-	cilium_dbg_capture(ctx, DBG_CAPTURE_DELIVERY, 0);
+	cilium_dbg_capture(ctx, DBG_CAPTURE_DELIVERY, 666);
 	return CTX_ACT_OK;
 }
 
@@ -1053,7 +1054,7 @@ ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label, __u8 *reason,
 #endif
 
 	ret = ct_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, CT_INGRESS, &ct_state,
-			 &monitor);
+			 &monitor, false);
 	if (ret < 0)
 		return ret;
 

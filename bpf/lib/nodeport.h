@@ -1145,6 +1145,11 @@ static __always_inline int nodeport_lb4(struct __ctx_buff *ctx,
 			return ret;
 	}
 
+	if (bpf_ntohs(key.dport) == 69 || key.dport == 69) {
+		cilium_dbg_capture(ctx, DBG_GENERIC, 667);
+	}
+
+
 	if ((svc = lb4_lookup_service(&key)) != NULL) {
 		ret = lb4_local(get_ct_map4(&tuple), ctx, l3_off, l4_off, &csum_off,
 				&key, &tuple, svc, &ct_state_new, ip4->saddr);
@@ -1152,7 +1157,6 @@ static __always_inline int nodeport_lb4(struct __ctx_buff *ctx,
 			return ret;
 	}
 
-	cilium_dbg(ctx, DBG_GENERIC, 666, 1);
 
 	if (!svc || (!lb4_svc_is_external_ip(svc) &&
 		     !lb4_svc_is_nodeport(svc) &&
@@ -1173,10 +1177,10 @@ static __always_inline int nodeport_lb4(struct __ctx_buff *ctx,
 		return DROP_MISSED_TAIL_CALL;
 	}
 
-	cilium_dbg(ctx, DBG_GENERIC, 666, 2);
+	//cilium_dbg(ctx, DBG_GENERIC, 666, 2);
 
 	ret = ct_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, CT_EGRESS,
-			 &ct_state, &monitor);
+			 &ct_state, &monitor, false);
 	if (ret < 0)
 		return ret;
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
@@ -1293,7 +1297,7 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, int *ifindex
 	csum_l4_offset_and_flags(tuple.nexthdr, &csum_off);
 
 	ret = ct_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, CT_INGRESS, &ct_state,
-			 &monitor);
+			 &monitor, false);
 
 	if (ret == CT_REPLY && ct_state.node_port == 1 && ct_state.rev_nat_index != 0) {
 		ret2 = lb4_rev_nat(ctx, l3_off, l4_off, &csum_off,

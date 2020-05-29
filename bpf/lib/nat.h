@@ -288,7 +288,7 @@ static __always_inline int snat_v4_track_local(struct __ctx_buff *ctx,
 	where = dir == NAT_DIR_INGRESS ? CT_INGRESS : CT_EGRESS;
 
 	ret = ct_lookup4(get_ct_map4(&tmp), &tmp, ctx, off, where,
-			 &ct_state, &monitor);
+			 &ct_state, &monitor, true);
 	if (ret < 0) {
 		return ret;
 	} else if (ret == CT_NEW) {

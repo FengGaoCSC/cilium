@@ -1154,7 +1154,7 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 		.client_ip = saddr,
 	};
 #endif
-	ret = ct_lookup4(map, tuple, ctx, l4_off, CT_SERVICE, state, &monitor);
+	ret = ct_lookup4(map, tuple, ctx, l4_off, CT_SERVICE, state, &monitor, false);
 	switch(ret) {
 	case CT_NEW:
 #ifdef ENABLE_SESSION_AFFINITY

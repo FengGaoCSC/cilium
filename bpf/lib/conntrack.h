@@ -204,13 +204,15 @@ static __always_inline __u8 __ct_lookup(const void *map, struct __ctx_buff *ctx,
 					const void *tuple, int action, int dir,
 					struct ct_state *ct_state,
 					bool is_tcp, union tcp_flags seen_flags,
-					__u32 *monitor)
+					__u32 *monitor, bool silent)
 {
 	struct ct_entry *entry;
 	int reopen;
 
 	if ((entry = map_lookup_elem(map, tuple))) {
-		cilium_dbg(ctx, DBG_CT_MATCH, entry->lifetime, entry->rev_nat_index);
+		if (!silent) {
+			cilium_dbg(ctx, DBG_CT_MATCH, entry->lifetime, entry->rev_nat_index);
+		}
 		if (ct_entry_alive(entry)) {
 			*monitor = ct_update_timeout(entry, is_tcp, dir, seen_flags);
 		}
@@ -401,7 +403,7 @@ static __always_inline int ct_lookup6(const void *map,
 		      (bpf_ntohs(tuple->sport) << 16) | bpf_ntohs(tuple->dport));
 	cilium_dbg3(ctx, DBG_CT_LOOKUP6_2, (tuple->nexthdr << 8) | tuple->flags, 0, 0);
 	ret = __ct_lookup(map, ctx, tuple, action, dir, ct_state, is_tcp,
-			  tcp_flags, monitor);
+			  tcp_flags, monitor, false);
 	if (ret != CT_NEW) {
 		if (likely(ret == CT_ESTABLISHED)) {
 			if (unlikely(tuple->flags & TUPLE_F_RELATED))
@@ -416,7 +418,7 @@ static __always_inline int ct_lookup6(const void *map,
 	if (dir != CT_SERVICE) {
 		ipv6_ct_tuple_reverse(tuple);
 		ret = __ct_lookup(map, ctx, tuple, action, dir, ct_state,
-				  is_tcp, tcp_flags, monitor);
+				  is_tcp, tcp_flags, monitor, false);
 	}
 
 #ifdef ENABLE_NAT46
@@ -486,7 +488,7 @@ static __always_inline void ct4_cilium_dbg_tuple(struct __ctx_buff *ctx, __u8 ty
 static __always_inline int ct_lookup4(const void *map,
 				      struct ipv4_ct_tuple *tuple,
 				      struct __ctx_buff *ctx, int off, int dir,
-				      struct ct_state *ct_state, __u32 *monitor)
+				      struct ct_state *ct_state, __u32 *monitor, bool silent)
 {
 	int ret = CT_NEW, action = ACTION_UNSPEC;
 	bool is_tcp = tuple->nexthdr == IPPROTO_TCP;
@@ -578,12 +580,14 @@ static __always_inline int ct_lookup4(const void *map,
 	 * This will find an existing flow in the reverse direction.
 	 */
 #ifndef QUIET_CT
-	cilium_dbg3(ctx, DBG_CT_LOOKUP4_1, tuple->saddr, tuple->daddr,
-		      (bpf_ntohs(tuple->sport) << 16) | bpf_ntohs(tuple->dport));
-	cilium_dbg3(ctx, DBG_CT_LOOKUP4_2, (tuple->nexthdr << 8) | tuple->flags, 0, 0);
+	if (!silent) {
+		cilium_dbg3(ctx, DBG_CT_LOOKUP4_1, tuple->saddr, tuple->daddr,
+			      (bpf_ntohs(tuple->sport) << 16) | bpf_ntohs(tuple->dport));
+		cilium_dbg3(ctx, DBG_CT_LOOKUP4_2, (tuple->nexthdr << 8) | tuple->flags, 0, 0);
+	}
 #endif
 	ret = __ct_lookup(map, ctx, tuple, action, dir, ct_state, is_tcp,
-			  tcp_flags, monitor);
+			  tcp_flags, monitor, silent);
 	if (ret != CT_NEW) {
 		if (likely(ret == CT_ESTABLISHED)) {
 			if (unlikely(tuple->flags & TUPLE_F_RELATED))
@@ -598,7 +602,7 @@ static __always_inline int ct_lookup4(const void *map,
 	if (dir != CT_SERVICE) {
 		ipv4_ct_tuple_reverse(tuple);
 		ret = __ct_lookup(map, ctx, tuple, action, dir, ct_state,
-				  is_tcp, tcp_flags, monitor);
+				  is_tcp, tcp_flags, monitor, silent);
 	}
 out:
 	cilium_dbg(ctx, DBG_CT_VERDICT, ret < 0 ? -ret : ret, ct_state->rev_nat_index);
@@ -842,7 +846,7 @@ ct_lookup4(const void *map __maybe_unused,
 	   struct ipv4_ct_tuple *tuple __maybe_unused,
 	   struct __ctx_buff *ctx __maybe_unused, int off __maybe_unused,
 	   int dir __maybe_unused, struct ct_state *ct_state __maybe_unused,
-	   __u32 *monitor __maybe_unused)
+	   __u32 *monitor __maybe_unused, bool silent __maybe_unused)
 {
 	return 0;
 }

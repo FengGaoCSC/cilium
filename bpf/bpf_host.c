@@ -602,7 +602,7 @@ ipv4_host_policy_egress(struct __ctx_buff *ctx, __u32 srcID)
 	tuple.saddr = ip4->saddr;
 	l4_off = l3_off + ipv4_hdrlen(ip4);
 	ret = ct_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, CT_EGRESS,
-			 &ct_state, &monitor);
+			 &ct_state, &monitor, false);
 	if (ret < 0)
 		return ret;
 
@@ -688,7 +688,7 @@ ipv4_host_policy_ingress(struct __ctx_buff *ctx, __u32 *srcID)
 	is_untracked_fragment = ipv4_is_fragment(ip4);
 #endif
 	ret = ct_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, CT_INGRESS,
-			 &ct_state, &monitor);
+			 &ct_state, &monitor, false);
 	if (ret < 0)
 		return ret;
 
@@ -759,7 +759,7 @@ handle_ipv4(struct __ctx_buff *ctx, __u32 secctx, bool from_host)
 	if (!from_host) {
 		if (ctx_get_xfer(ctx) != XFER_PKT_NO_SVC &&
 		    !bpf_skip_nodeport(ctx)) {
-			cilium_dbg(ctx, DBG_GENERIC, 666, 0);
+			//cilium_dbg(ctx, DBG_GENERIC, 666, 0);
 			ret = nodeport_lb4(ctx, secctx);
 			if (ret < 0)
 				return ret;
@@ -811,6 +811,21 @@ handle_ipv4(struct __ctx_buff *ctx, __u32 secctx, bool from_host)
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
 #endif /* ENABLE_HOST_FIREWALL */
+
+	{
+		int l3_off = ETH_HLEN;
+		int l4_off = l3_off + ipv4_hdrlen(ip4);
+		struct csum_offset csum_off = {};
+		struct lb4_key key = {};
+
+		lb4_extract_key(ctx, ip4, l4_off, &key, &csum_off, CT_EGRESS);
+		if (bpf_ntohs(key.dport) == 69 || key.dport == 69) {
+			cilium_dbg_capture(ctx, DBG_GENERIC, 333);
+		}
+	}
+
+	if (!revalidate_data(ctx, &data, &data_end, &ip4))
+		return DROP_INVALID;
 
 	/* Lookup IPv4 address in list of local endpoints and host IPs */
 	if ((ep = lookup_ip4_endpoint(ip4)) != NULL) {

@@ -58,6 +58,7 @@ COPY --from=builder /go/src/github.com/cilium/cilium/contrib/packaging/docker/in
 WORKDIR /home/cilium
 RUN groupadd -f cilium \
     && echo ". /etc/profile.d/bash_completion.sh" >> /etc/bash.bashrc
+RUN apt-get update && apt-get install -y conntrack
 
 ENV INITSYSTEM="SYSTEMD"
 CMD ["/usr/bin/cilium"]
