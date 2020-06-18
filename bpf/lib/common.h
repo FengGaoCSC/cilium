@@ -399,6 +399,7 @@ enum {
  * overlap with MARK_MAGIC_KEY_ID.
  */
 #define MARK_MAGIC_SNAT_DONE		0x1500
+#define MARK_MAGIC_FOOBAR		0x2500
 
 /* IPv4 option used to carry service addr and port for DSR. Lower 16bits set to
  * zero so that they can be OR'd with service port.

@@ -1253,6 +1253,22 @@ out:
 #if defined(ENABLE_NODEPORT) && \
 	(!defined(ENABLE_DSR) || \
 	 (defined(ENABLE_DSR) && defined(ENABLE_DSR_HYBRID)))
+
+	if ((ctx->mark & MARK_MAGIC_FOOBAR) == MARK_MAGIC_FOOBAR) {
+		int ifindex = 0;
+		int subret = 0;
+
+		ctx->tc_index |= TC_INDEX_F_SKIP_RECIRCULATION;
+
+		cilium_dbg(ctx, DBG_GENERIC, 42, 0);
+
+		subret = rev_nodeport_lb4(ctx, &ifindex);
+		if (IS_ERR(subret))
+			return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP, METRIC_EGRESS);
+		return subret;
+	}
+
+
 	if ((ctx->mark & MARK_MAGIC_SNAT_DONE) != MARK_MAGIC_SNAT_DONE) {
 		ret = nodeport_nat_fwd(ctx);
 		if (IS_ERR(ret))
