@@ -401,6 +401,9 @@ func (m *IptablesManager) Init() {
 		switch {
 		case waitSecondsMinVersion.Check(v):
 			m.waitArgs = []string{waitString, fmt.Sprintf("%d", option.Config.IPTablesLockTimeout/time.Second)}
+			if option.Config.IPTablesLockWaitInterval != "" {
+				m.waitArgs = append(m.waitArgs, "-W", option.Config.IPTablesLockWaitInterval)
+			}
 		case waitMinVersion.Check(v):
 			m.waitArgs = []string{waitString}
 		}

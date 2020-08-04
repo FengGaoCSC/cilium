@@ -252,6 +252,8 @@ const (
 
 	IPTablesLockTimeout = "iptables-lock-timeout"
 
+	IPTablesLockWaitInterval = "iptables-lock-wait-interval"
+
 	// IPv6NodeAddr is the IPv6 address of node
 	IPv6NodeAddr = "ipv6-node"
 
@@ -958,6 +960,8 @@ type DaemonConfig struct {
 	// iptables CLI is directly invoked from the Cilium agent.
 	IPTablesLockTimeout time.Duration
 
+	IPTablesLockWaitInterval string
+
 	// K8sNamespace is the name of the namespace in which Cilium is
 	// deployed in when running in Kubernetes mode
 	K8sNamespace string
@@ -1651,6 +1655,7 @@ func (c *DaemonConfig) Populate() {
 	c.Masquerade = viper.GetBool(Masquerade)
 	c.InstallIptRules = viper.GetBool(InstallIptRules)
 	c.IPTablesLockTimeout = viper.GetDuration(IPTablesLockTimeout)
+	c.IPTablesLockWaitInterval = viper.GetString(IPTablesLockWaitInterval)
 	c.IPSecKeyFile = viper.GetString(IPSecKeyFileName)
 	c.ModePreFilter = viper.GetString(PrefilterMode)
 	c.MonitorAggregation = viper.GetString(MonitorAggregationName)

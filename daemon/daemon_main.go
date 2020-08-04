@@ -689,6 +689,9 @@ func init() {
 	flags.Duration(option.IPTablesLockTimeout, 5*time.Second, "Time to pass to each iptables invocation to wait for xtables lock acquisition")
 	option.BindEnv(option.IPTablesLockTimeout)
 
+	flags.String(option.IPTablesLockWaitInterval, "", "Interval to wait per each iptables lock acquisition (in microseconds)")
+	option.BindEnv(option.IPTablesLockWaitInterval)
+
 	flags.Int(option.MaxCtrlIntervalName, 0, "Maximum interval (in seconds) between controller runs. Zero is no limit.")
 	flags.MarkHidden(option.MaxCtrlIntervalName)
 	option.BindEnv(option.MaxCtrlIntervalName)
