@@ -23,6 +23,7 @@ import (
 	"github.com/cilium/cilium/pkg/cidr"
 	"github.com/cilium/cilium/pkg/counter"
 	"github.com/cilium/cilium/pkg/datapath"
+	"github.com/cilium/cilium/pkg/datapath/linux/arp"
 	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
@@ -33,7 +34,6 @@ import (
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 
-	"github.com/cilium/arping"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -592,9 +592,13 @@ func (n *linuxNodeHandler) insertNeighbor(newNode *nodeTypes.Node, ifaceName str
 			return
 		}
 
-		_, err = arping.FindIPInNetworkFromIface(nextHopIPv4, *iface)
+		hwAddr, err := arp.PingOverIface(*iface, nextHopIPv4)
 		if err != nil {
-			scopedLog.WithError(err).Error("IP is not L2 reachable")
+			if errors.Is(err, arp.ErrL2Unreachable) {
+				scopedLog.WithError(err).Error("IP is not L2 reachable")
+			} else {
+				scopedLog.WithError(err).Error("arping failed")
+			}
 			return
 		}
 
@@ -605,11 +609,6 @@ func (n *linuxNodeHandler) insertNeighbor(newNode *nodeTypes.Node, ifaceName str
 		}
 		link := linkAttr.Attrs().Index
 
-		hwAddr, _, err := arping.PingOverIface(nextHopIPv4, *iface)
-		if err != nil {
-			scopedLog.WithError(err).Error("arping failed")
-			return
-		}
 		scopedLog = scopedLog.WithField(logfields.HardwareAddr, hwAddr)
 
 		neigh := netlink.Neigh{
