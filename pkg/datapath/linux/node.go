@@ -556,6 +556,15 @@ func (n *linuxNodeHandler) insertNeighbor(newNode *nodeTypes.Node, ifaceName str
 		logfields.IPAddr:    ciliumIPv4,
 	})
 
+	routes, err := netlink.RouteGet(ciliumIPv4)
+	if err != nil {
+		// TODO(brb)
+
+	}
+	for _, route := range routes {
+
+	}
+
 	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
 		scopedLog.WithError(err).Error("Failed to retrieve iface by name")
