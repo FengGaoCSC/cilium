@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: digger
+  labels:
+    app: digger
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: digger
+  template:
+    metadata:
+      labels:
+        app: digger
+    spec:
+      containers:
+      - name: digger
+        image: tutum/dnsutils:latest
+        command: ['/bin/sh', '-c', 'while true; do dig @1.1.1.1 www.yahoo.com. >/dev/null; sleep 0.01; done']
+      nodeSelector:
+        kubernetes.io/hostname: cilium1
+

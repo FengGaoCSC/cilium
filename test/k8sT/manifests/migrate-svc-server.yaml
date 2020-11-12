@@ -3,6 +3,7 @@ kind: Service
 metadata:
   name: migrate-svc
 spec:
+  type: NodePort
   ports:
   - port: 8000
   selector:
@@ -25,6 +26,8 @@ spec:
     spec:
       containers:
       - name: server
-        image: docker.io/cilium/migrate-svc-test:v0.0.1
+        image: docker.io/cilium/migrate-svc-test:v0.0.2
         imagePullPolicy: IfNotPresent
         command: [ "/server", "8000" ]
+      nodeSelector:
+        kubernetes.io/hostname: cilium2

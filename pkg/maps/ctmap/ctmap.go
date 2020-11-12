@@ -110,6 +110,7 @@ type NatMap interface {
 	DumpReliablyWithCallback(bpf.DumpCallback, *bpf.DumpStats) error
 	Delete(bpf.MapKey) error
 	DumpStats() *bpf.DumpStats
+	DumpEntries() (string, error)
 }
 
 type mapAttributes struct {
@@ -555,7 +556,16 @@ func PurgeOrphanNATEntries(ctMapTCP, ctMapAny *Map) *NatGCStats {
 		return nil
 	}
 
+	fmt.Println("=TCP=")
+	fmt.Println(ctMapTCP.DumpEntries())
+	fmt.Println("=UDP=")
+	fmt.Println(ctMapAny.DumpEntries())
+	fmt.Println("=NAT=")
+	fmt.Println(natMap.DumpEntries())
+	fmt.Println("=DEL=")
+
 	stats := newNatGCStats(natMap)
+
 	cb := func(key bpf.MapKey, value bpf.MapValue) {
 		natKey := key.(nat.NatKey)
 		natVal := value.(nat.NatEntry)
@@ -568,9 +578,20 @@ func PurgeOrphanNATEntries(ctMapTCP, ctMapAny *Map) *NatGCStats {
 		if natKey.GetFlags()&tuple.TUPLE_F_IN == 1 { // natKey is r(everse)tuple
 			ctKey := egressCTKeyFromIngressNatKeyAndVal(natKey, natVal)
 			if _, err := ctMap.Lookup(ctKey); errors.Is(err, unix.ENOENT) {
+				var buffer bytes.Buffer
+				buffer.WriteString("CT ")
+				ct := ctKey.(tuple.TupleKey)
+				ct.ToHost().Dump(&buffer, true)
+				buffer.WriteString("\nRNAT ")
+				natKey.ToHost().Dump(&buffer, false)
+				buffer.WriteString(natVal.ToHost().Dump(natKey, 0))
+
 				// No CT entry is found, so delete SNAT for both original and
 				// reverse flows
 				oNatKey := oNatKeyFromReverse(natKey, natVal)
+				buffer.WriteString("ONAT ")
+				oNatKey.ToHost().Dump(&buffer, false)
+				fmt.Println(buffer.String())
 				if err := natMap.Delete(oNatKey); err == nil {
 					stats.EgressDeleted += 1
 				}
@@ -584,6 +605,8 @@ func PurgeOrphanNATEntries(ctMapTCP, ctMapAny *Map) *NatGCStats {
 	}
 
 	natMap.DumpReliablyWithCallback(cb, stats.DumpStats)
+
+	fmt.Println("=EOF=")
 
 	return &stats
 }

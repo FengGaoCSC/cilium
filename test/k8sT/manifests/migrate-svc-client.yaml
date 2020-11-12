@@ -18,3 +18,5 @@ spec:
         image: docker.io/cilium/migrate-svc-test:v0.0.1
         imagePullPolicy: IfNotPresent
         command: [ "/client", "migrate-svc.default.svc.cluster.local.:8000" ]
+      nodeSelector:
+        kubernetes.io/hostname: cilium2
