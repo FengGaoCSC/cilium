@@ -49,6 +49,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const (
@@ -64,6 +65,20 @@ const (
 	// base64 form.
 	ciliumCHeaderPrefix = "CILIUM_BASE64_"
 )
+
+var dbgLog *logrus.Logger
+
+func init() {
+	dbgLog = logrus.New()
+	lumberjackLogger := &lumberjack.Logger{
+		Filename:   "/var/log/misc.log",
+		MaxSize:    10,
+		MaxBackups: 3,
+		MaxAge:     3,
+		LocalTime:  true,
+	}
+	dbgLog.SetOutput(lumberjackLogger)
+}
 
 // policyMapPath returns the path to the policy map of endpoint.
 func (e *Endpoint) policyMapPath() string {
@@ -1222,6 +1237,14 @@ func (e *Endpoint) applyPolicyMapChanges() (proxyChanges bool, err error) {
 // difference between the realized and desired policy state without
 // dumping the bpf policy map.
 func (e *Endpoint) syncPolicyMap() error {
+
+	dbgLog.WithFields(logrus.Fields{
+		"id":             e.ID,
+		"realizedPolicy": e.realizedPolicy,
+		"desiredPolicy":  e.desiredPolicy,
+	}).Info("syncPolicyMap")
+
+	fmt.Println("!!!!!!!!!!! syncPolicyMap")
 	// Nothing to do if the desired policy is already fully realized.
 	if e.realizedPolicy != e.desiredPolicy {
 		errors := 0
