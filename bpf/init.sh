@@ -367,53 +367,6 @@ function encap_fail()
 	exit 1
 }
 
-# node_config.h header generation
-case "${MODE}" in
-	*)
-		sed -i '/^#.*CILIUM_NET_MAC.*$/d' $RUNDIR/globals/node_config.h
-		CILIUM_NET_MAC=$(ip link show $HOST_DEV2 | grep ether | awk '{print $2}')
-		CILIUM_NET_MAC=$(mac2array $CILIUM_NET_MAC)
-
-		# Remove the entire '#ifndef ... #endif block
-		# Each line must contain the string '#.*CILIUM_NET_MAC.*'
-		sed -i '/^#.*CILIUM_NET_MAC.*$/d' $RUNDIR/globals/node_config.h
-		echo "#ifndef CILIUM_NET_MAC" >> $RUNDIR/globals/node_config.h
-		echo "#define CILIUM_NET_MAC { .addr = ${CILIUM_NET_MAC}}" >> $RUNDIR/globals/node_config.h
-		echo "#endif /* CILIUM_NET_MAC */" >> $RUNDIR/globals/node_config.h
-
-		sed -i '/^#.*HOST_IFINDEX.*$/d' $RUNDIR/globals/node_config.h
-		HOST_IDX=$(cat /sys/class/net/${HOST_DEV2}/ifindex)
-		echo "#define HOST_IFINDEX $HOST_IDX" >> $RUNDIR/globals/node_config.h
-
-		sed -i '/^#.*HOST_IFINDEX_MAC.*$/d' $RUNDIR/globals/node_config.h
-		HOST_MAC=$(ip link show $HOST_DEV1 | grep ether | awk '{print $2}')
-		HOST_MAC=$(mac2array $HOST_MAC)
-		echo "#define HOST_IFINDEX_MAC { .addr = ${HOST_MAC}}" >> $RUNDIR/globals/node_config.h
-
-		sed -i '/^#.*CILIUM_IFINDEX.*$/d' $RUNDIR/globals/node_config.h
-		CILIUM_IDX=$(cat /sys/class/net/${HOST_DEV1}/ifindex)
-		echo "#define CILIUM_IFINDEX $CILIUM_IDX" >> $RUNDIR/globals/node_config.h
-
-		CILIUM_EPHEMERAL_MIN=$(cat /proc/sys/net/ipv4/ip_local_port_range | awk '{print $1}')
-		echo "#define EPHEMERAL_MIN $CILIUM_EPHEMERAL_MIN" >> $RUNDIR/globals/node_config.h
-
-		if [ "$NODE_PORT" = "true" ]; then
-			MAC_BY_IFINDEX_MACRO="#define NATIVE_DEV_MAC_BY_IFINDEX(IFINDEX) ({ \\
-	union macaddr __mac = {.addr = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0}}; \\
-	switch (IFINDEX) { \\\\\n"
-			MAC_BY_IFINDEX_MACRO_END="	} \\
-	__mac; })"
-			for NATIVE_DEV in ${NATIVE_DEVS//;/ }; do
-				IDX=$(cat /sys/class/net/${NATIVE_DEV}/ifindex)
-				MAC=$(ip link show $NATIVE_DEV | grep ether | awk '{print $2}')
-				MAC=$(mac2array $MAC)
-				MAC_BY_IFINDEX_MACRO="${MAC_BY_IFINDEX_MACRO}	case ${IDX}: {union macaddr __tmp = {.addr = ${MAC}}; __mac=__tmp;} break; \\\\\n"
-			done
-			MAC_BY_IFINDEX_MACRO="${MAC_BY_IFINDEX_MACRO}${MAC_BY_IFINDEX_MACRO_END}"
-			echo -e "${MAC_BY_IFINDEX_MACRO}" >> $RUNDIR/globals/node_config.h
-		fi
-esac
-
 # Address management
 case "${MODE}" in
 	"flannel")

@@ -228,6 +228,10 @@ func (d *Daemon) init() error {
 		if err := d.Datapath().Loader().Reinitialize(d.ctx, d, d.mtuConfig.GetDeviceMTU(), d.Datapath(), d.l7Proxy); err != nil {
 			return err
 		}
+
+		if err := d.nodeConfigHeaderfilePost(); err != nil {
+			return err
+		}
 	}
 
 	return nil

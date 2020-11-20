@@ -75,6 +75,22 @@ func (d *Daemon) createNodeConfigHeaderfile() error {
 	return nil
 }
 
+func (d *Daemon) nodeConfigHeaderfilePost() error {
+	nodeConfigPath := option.Config.GetNodeConfigPath()
+	f, err := os.Open(nodeConfigPath)
+	if err != nil {
+		log.WithError(err).WithField(logfields.Path, nodeConfigPath).Fatal("Failed to open node configuration file")
+		return err
+	}
+	defer f.Close()
+
+	if err := d.datapath.WriteNodeConfigPost(f); err != nil {
+		log.WithError(err).WithField(logfields.Path, nodeConfigPath).Fatal("Failed to write post node configuration file")
+		return err
+	}
+	return nil
+}
+
 func deleteHostDevice() {
 	link, err := netlink.LinkByName(option.Config.HostDevice)
 	if err != nil {

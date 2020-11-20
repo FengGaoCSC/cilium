@@ -23,9 +23,12 @@ import (
 	"net"
 	"reflect"
 	"sort"
+	"strconv"
+	"text/template"
 
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/byteorder"
+	"github.com/cilium/cilium/pkg/common"
 	"github.com/cilium/cilium/pkg/datapath"
 	"github.com/cilium/cilium/pkg/datapath/iptables"
 	"github.com/cilium/cilium/pkg/datapath/link"
@@ -475,6 +478,80 @@ func (h *HeaderfileWriter) writeNetdevConfig(w io.Writer, cfg datapath.DeviceCon
 		}
 		fmt.Fprint(w, "\n")
 	}
+}
+
+func (h *HeaderfileWriter) WriteNodeConfigPost(w io.Writer) error {
+	cDefinesMap := make(map[string]string)
+
+	fw := bufio.NewWriter(w)
+
+	ciliumHost, err := netlink.LinkByName("cilium_host")
+	if err != nil {
+		return err
+	}
+	ciliumNet, err := netlink.LinkByName("cilium_net")
+	if err != nil {
+		return err
+	}
+	cDefinesMap["CILIUM_NET_MAC"] = common.GoArray2C(ciliumNet.Attrs().HardwareAddr)
+	cDefinesMap["HOST_IFINDEX"] = strconv.Itoa(ciliumNet.Attrs().Index)
+	cDefinesMap["HOST_IFINDEX_MAC"] = common.GoArray2C(ciliumHost.Attrs().HardwareAddr)
+	cDefinesMap["CILIUM_IFINDEX"] = strconv.Itoa(ciliumHost.Attrs().Index)
+
+	_, ephemeralMin, _, err := node.EphemeralPortRange()
+	if err != nil {
+		return err
+	}
+	cDefinesMap["CILIUM_EPHEMERAL_MIN"] = strconv.Itoa(ephemeralMin)
+
+	t := template.Must(template.New("nativeDevMacByIfindex").Parse(`#define NATIVE_DEV_MAC_BY_IFINDEX(IFINDEX) ({ \
+       union macaddr __mac = {.addr = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0}}; \
+       switch (IFINDEX) { \
+{{range .devices}}
+       case {{.Attrs().Index}}: {union macaddr __tmp = {.addr = {{common.GoArray2C(ciliumNet.Attrs().HardwareAddr)}}; __mac=__tmp;} break; \
+{{end}}
+       } \
+       __mac; })`))
+	devices := make([]netlink.Link, 0, len(option.Config.Devices))
+	if len(option.Config.Devices) != 0 {
+		for _, device := range option.Config.Devices {
+			link, err := netlink.LinkByName(device)
+			if err != nil {
+				return err
+			}
+			devices = append(devices, link)
+		}
+	}
+	if err := t.Execute(fw, devices); err != nil {
+		return err
+	}
+
+	// Since golang maps are unordered, we sort the keys in the map
+	// to get a consistent writtern format to the writer. This maintains
+	// the consistency when we try to calculate hash for a datapath after
+	// writing the config.
+	keys := []string{}
+	for key := range cDefinesMap {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		fmt.Fprintf(fw, "#define %s %s\n", key, cDefinesMap[key])
+	}
+
+	// Write the JSON encoded config as base64 encoded commented string to
+	// the header file.
+	jsonBytes, err := json.Marshal(cDefinesMap)
+	if err == nil {
+		// We don't care if some error occurs while marshaling the map.
+		// In such cases we skip embedding the base64 encoded JSON configuration
+		// to the writer.
+		encodedConfig := base64.StdEncoding.EncodeToString(jsonBytes)
+		fmt.Fprintf(fw, "\n// JSON_OUTPUT: %s\n", encodedConfig)
+	}
+
+	return fw.Flush()
 }
 
 // WriteNetdevConfig writes the BPF configuration for the endpoint to a writer.

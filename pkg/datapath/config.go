@@ -108,6 +108,8 @@ type ConfigWriter interface {
 	// node-wide options into the specified writer.
 	WriteNodeConfig(io.Writer, *LocalNodeConfiguration) error
 
+	WriteNodeConfigPost(io.Writer) error
+
 	// WriteNetdevConfig writes the implementation-specific configuration
 	// of configurable options to the specified writer. Options specified
 	// here will apply to base programs and not to endpoints, though
