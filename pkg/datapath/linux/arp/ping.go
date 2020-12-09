@@ -17,8 +17,10 @@ package arp
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/vishvananda/netns"
 	"net"
 	"time"
 )
@@ -27,7 +29,7 @@ var (
 	ErrNotImplemented = errors.New("not implemented")
 	ErrL2Unreachable  = errors.New("interface can't reach the IP address")
 
-	timeout = 1 * time.Second
+	timeout = 10 * time.Second
 )
 
 var defaultSerializeOpts = gopacket.SerializeOptions{
@@ -85,13 +87,20 @@ func (p *pinger) resolve(ip net.IP) (net.HardwareAddr, error) {
 		return nil, err
 	}
 
+	foo0, _ := netns.Get()
+
 	for {
 		resp, err := p.read()
 		if err != nil {
+			fmt.Println("OH NOES", err)
+			foo1, _ := netns.Get()
+			fmt.Println("DAMN", foo0, foo1)
+
 			return nil, err
 		}
 
 		if resp.Operation != layers.ARPReply || !bytes.Equal(resp.SourceProtAddress, []byte(ip.To4())) {
+			fmt.Println("WTF", resp.Operation)
 			continue
 		}
 
