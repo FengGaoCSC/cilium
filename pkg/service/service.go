@@ -442,8 +442,7 @@ func (s *Service) RestoreServices() error {
 
 	// Remove obsolete backends and release their IDs
 	if err := s.deleteOrphanBackends(); err != nil {
-		log.WithError(err).Warn("Failed to remove orphan backends")
-
+		return fmt.Errorf("failed to remove orphan backend: %w", err)
 	}
 
 	return nil

@@ -409,7 +409,9 @@ func NewDaemon(ctx context.Context, epMgr *endpointmanager.EndpointManager, dp d
 	// Also, create missing v2 services from the corresponding legacy ones.
 	if option.Config.RestoreState && !option.Config.DryMode {
 		bootstrapStats.restore.Start()
-		d.svc.RestoreServices()
+		if err := d.svc.RestoreServices(); err != nil {
+			log.WithError(err).Warn("Failed to restore services")
+		}
 		bootstrapStats.restore.End(true)
 	}
 
