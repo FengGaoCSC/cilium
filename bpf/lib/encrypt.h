@@ -26,6 +26,8 @@ do_decrypt(struct __ctx_buff *ctx, __u16 proto)
 	struct iphdr *ip4;
 #endif
 
+	cilium_dbg_capture(ctx, DBG_CAPTURE_DELIVERY, 0);
+
 	decrypted = ((ctx->mark & MARK_MAGIC_HOST_MASK) == MARK_MAGIC_DECRYPT);
 
 	switch (proto) {
@@ -68,7 +70,9 @@ do_decrypt(struct __ctx_buff *ctx, __u16 proto)
 		return CTX_ACT_OK;
 	}
 	ctx->mark = 0;
-	return redirect(CILIUM_IFINDEX, 0);
+	ctx_change_type(ctx, PACKET_HOST);
+	return CTX_ACT_OK;
+	//return redirect(CILIUM_IFINDEX, 0);
 }
 #else
 static __always_inline int

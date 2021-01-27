@@ -86,6 +86,14 @@ struct dsr_opt_v6 {
 };
 #endif /* ENABLE_IPV6 */
 
+struct bpf_elf_map __section_maps cilium_nodeport_scratch = {
+	.type		= BPF_MAP_TYPE_PERCPU_ARRAY,
+	.size_key	= sizeof(int),
+	.size_value	= sizeof(int),
+	.pinning	= PIN_GLOBAL_NS,
+	.max_elem	= 1,
+};
+
 static __always_inline bool nodeport_uses_dsr(__u8 nexthdr __maybe_unused)
 {
 # if defined(ENABLE_DSR) && !defined(ENABLE_DSR_HYBRID)
@@ -105,14 +113,25 @@ static __always_inline bool nodeport_lb_hairpin(void)
 }
 
 static __always_inline void
-bpf_mark_snat_done(struct __ctx_buff *ctx __maybe_unused)
+bpf_mark_snat_done(void)
 {
 	/* From XDP layer, we do not go through an egress hook from
 	 * here, hence nothing to be done.
 	 */
 #if __ctx_is == __ctx_skb
-	ctx->mark |= MARK_MAGIC_SNAT_DONE;
+	int zero = 0;
+	int one = 1;
+
+	map_update_elem(&cilium_nodeport_scratch, &zero, &one, 0);
 #endif
+}
+
+static __always_inline bool
+bpf_is_snat_done(void)
+{
+	int zero = 0;
+
+	return !map_delete_elem(&cilium_nodeport_scratch, &zero);
 }
 
 static __always_inline bool
@@ -521,7 +540,8 @@ int tail_nodeport_nat_ipv6(struct __ctx_buff *ctx)
 			goto drop_err;
 	}
 
-	bpf_mark_snat_done(ctx);
+	//bpf_mark_snat_done(ctx);
+	bpf_mark_snat_done();
 
 	if (dir == NAT_DIR_INGRESS) {
 		ep_tail_call(ctx, CILIUM_CALL_IPV6_NODEPORT_REVNAT);
@@ -786,7 +806,8 @@ static __always_inline int rev_nodeport_lb6(struct __ctx_buff *ctx, int *ifindex
 		if (!revalidate_data(ctx, &data, &data_end, &ip6))
 			return DROP_INVALID;
 
-		bpf_mark_snat_done(ctx);
+		//bpf_mark_snat_done(ctx);
+		bpf_mark_snat_done();
 
 		*ifindex = ct_state.ifindex;
 #ifdef ENCAP_IFINDEX
@@ -1345,7 +1366,8 @@ int tail_nodeport_nat_ipv4(struct __ctx_buff *ctx)
 			goto drop_err;
 	}
 
-	bpf_mark_snat_done(ctx);
+	//bpf_mark_snat_done(ctx);
+	bpf_mark_snat_done();
 
 	if (dir == NAT_DIR_INGRESS) {
 		ep_tail_call(ctx, CILIUM_CALL_IPV4_NODEPORT_REVNAT);
@@ -1616,7 +1638,8 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, int *ifindex
 		if (!revalidate_data(ctx, &data, &data_end, &ip4))
 			return DROP_INVALID;
 
-		bpf_mark_snat_done(ctx);
+		//bpf_mark_snat_done(ctx);
+		bpf_mark_snat_done();
 
 		*ifindex = ct_state.ifindex;
 #ifdef ENCAP_IFINDEX
