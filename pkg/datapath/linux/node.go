@@ -60,6 +60,7 @@ type linuxNodeHandler struct {
 	neighNextHopByNode   map[nodeTypes.Identity]string // val = string(net.IP)
 	neighNextHopRefCount counter.StringCounter
 	neighByNextHop       map[string]*netlink.Neigh // key = string(net.IP)
+	neighLink            netlink.Link
 }
 
 // NewNodeHandler returns a new node handler to handle node events and
@@ -611,7 +612,7 @@ func (n *linuxNodeHandler) encryptNode(newNode *nodeTypes.Node) {
 
 }
 
-func (n *linuxNodeHandler) getSrcAndNextHopIPv4(nodeIPv4 net.IP, ifaceName string) (srcIPv4, nextHopIPv4 net.IP, err error) {
+func (n *linuxNodeHandler) getSrcAndNextHopIPv4(nodeIPv4 net.IP) (srcIPv4, nextHopIPv4 net.IP, err error) {
 	// Figure out whether nodeIPv4 is directly reachable (i.e. in the same L2)
 	routes, err := netlink.RouteGet(nodeIPv4)
 	if err != nil {
@@ -666,7 +667,7 @@ func (n *linuxNodeHandler) insertNeighbor(ctx context.Context, newNode *nodeType
 		logfields.IPAddr:    newNodeIP,
 	})
 
-	srcIPv4, nextHopIPv4, err := n.getSrcAndNextHopIPv4(nextHopIPv4, ifaceName)
+	srcIPv4, nextHopIPv4, err := n.getSrcAndNextHopIPv4(nextHopIPv4)
 	if err != nil {
 		scopedLog.WithError(err).Error("Failed to determine source and nexthop IP addr")
 		return
