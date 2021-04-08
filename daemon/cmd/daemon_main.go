@@ -1316,7 +1316,7 @@ func initEnv(cmd *cobra.Command) {
 
 	// If there is one device specified, use it to derive better default
 	// allocation prefixes
-	node.InitDefaultPrefix(option.Config.DirectRoutingDevice)
+	// node.InitDefaultPrefix(option.Config.DirectRoutingDevice)
 
 	if option.Config.IPv6NodeAddr != "auto" {
 		if ip := net.ParseIP(option.Config.IPv6NodeAddr); ip == nil {
