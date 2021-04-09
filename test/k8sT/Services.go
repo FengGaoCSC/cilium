@@ -2692,6 +2692,7 @@ Secondary Interface %s :: IPv4: (%s, %s), IPv6: (%s, %s)`, helpers.DualStackSupp
 								"tunnel":               "disabled",
 								"autoDirectNodeRoutes": "true",
 								"wireguard.enabled":    "true",
+								"wireguard.lb":         "true",
 								"l7Proxy":              "false",
 							})
 

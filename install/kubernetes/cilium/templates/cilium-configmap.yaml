@@ -426,6 +426,9 @@ data:
 {{- if .Values.wireguard.enabled }}
   enable-wireguard: {{ .Values.wireguard.enabled | quote }}
 {{- end }}
+{{- if .Values.wireguard.lb }}
+  bpf-lb-wireguard: {{ .Values.wireguard.lb | quote }}
+{{- end }}
 {{- end }}
 
 {{- if .Values.encryption.enabled }}

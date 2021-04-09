@@ -404,8 +404,11 @@ func init() {
 	flags.String(option.IPSecKeyFileName, "", "Path to IPSec key file")
 	option.BindEnv(option.IPSecKeyFileName)
 
-	flags.Bool(option.EnableWireguard, false, "Enable wireguard")
+	flags.Bool(option.EnableWireguard, false, "Enable Wireguard")
 	option.BindEnv(option.EnableWireguard)
+
+	flags.Bool(option.EnableWireguardForLB, false, "Enable Wireguard encryption for packets forwarded by Cilium LB (e.g. NodePort)")
+	option.BindEnv(option.EnableWireguardForLB)
 
 	flags.Bool(option.ForceLocalPolicyEvalAtSource, defaults.ForceLocalPolicyEvalAtSource, "Force policy evaluation of all local communication at the source endpoint")
 	option.BindEnv(option.ForceLocalPolicyEvalAtSource)

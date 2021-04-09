@@ -42,6 +42,7 @@ cilium-agent [flags]
       --bpf-lb-mode string                                   BPF load balancing mode ("snat", "dsr", "hybrid") (default "snat")
       --bpf-lb-rss-ipv4-src-cidr string                      BPF load balancing RSS outer source IPv4 CIDR prefix for IPIP
       --bpf-lb-rss-ipv6-src-cidr string                      BPF load balancing RSS outer source IPv6 CIDR prefix for IPIP
+      --bpf-lb-wireguard                                     Enable Wireguard encryption for packets forwarded by Cilium LB (e.g. NodePort)
       --bpf-map-dynamic-size-ratio float                     Ratio (0.0-1.0) of total system memory to use for dynamic sizing of CT, NAT and policy BPF maps. Set to 0.0 to disable dynamic BPF map sizing (default: 0.0)
       --bpf-nat-global-max int                               Maximum number of entries for the global BPF NAT table (default 524288)
       --bpf-neigh-global-max int                             Maximum number of entries for the global BPF neighbor table (default 524288)
@@ -109,7 +110,7 @@ cilium-agent [flags]
       --enable-svc-source-range-check                        Enable check of service source ranges (currently, only for LoadBalancer) (default true)
       --enable-tracing                                       Enable tracing while determining policy (debugging)
       --enable-well-known-identities                         Enable well-known identities for known Kubernetes components (default true)
-      --enable-wireguard                                     Enable wireguard
+      --enable-wireguard                                     Enable Wireguard
       --enable-xt-socket-fallback                            Enable fallback for missing xt_socket module (default true)
       --encrypt-interface string                             Transparent encryption interface
       --encrypt-node                                         Enables encrypting traffic from non-Cilium pods and host networking

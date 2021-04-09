@@ -198,10 +198,10 @@ skip_service_lookup:
 			    info->sec_label != HOST_ID &&
 			    info->sec_label != REMOTE_NODE_ID)
 				encrypt_wg = true;
-# ifdef ENABLE_NODEPORT
+# if defined(ENABLE_NODEPORT) && defined(ENABLE_WIREGUARD_LB)
 			else if (info->sec_label == REMOTE_NODE_ID)
 				encrypt_wg = true;
-# endif
+# endif /* ENABLE_NODEPORT && ENABLE_WIREGUARD_LB */
 #endif /* ENABLE_WIREGUARD */
 		} else {
 			*dstID = WORLD_ID;
@@ -630,7 +630,7 @@ skip_service_lookup:
 			    info->sec_label != HOST_ID &&
 			    info->sec_label != REMOTE_NODE_ID)
 				encrypt_wg = true;
-# ifdef ENABLE_NODEPORT
+# if defined(ENABLE_NODEPORT) && defined(ENABLE_WIREGUARD_LB)
 			/* When NodePort BPF is enabled, we need to encrypt
 			 * pod2host packets. Otherwise, a reply from a remote
 			 * service endpoint to the node which received a request
@@ -644,7 +644,7 @@ skip_service_lookup:
 			 */
 			else if (info->sec_label == REMOTE_NODE_ID)
 				encrypt_wg = true;
-# endif /* ENABLE_NODEPORT */
+# endif /* ENABLE_NODEPORT && ENABLE_WIREGUARD_LB */
 #endif /* ENABLE_WIREGUARD */
 		} else {
 			*dstID = WORLD_ID;

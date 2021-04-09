@@ -218,6 +218,9 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 
 	if option.Config.EnableWireguard {
 		cDefinesMap["ENABLE_WIREGUARD"] = "1"
+		if option.Config.EnableWireguardForLB {
+			cDefinesMap["ENABLE_WIREGUARD_LB"] = "1"
+		}
 	}
 
 	if option.Config.InstallIptRules || iptables.KernelHasNetfilter() {

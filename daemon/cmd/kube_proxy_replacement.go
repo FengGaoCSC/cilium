@@ -416,7 +416,7 @@ func probeCgroupSupportUDP(strict, ipv4 bool) {
 
 // handleNativeDevices tries to detect bpf_host devices (if needed).
 func handleNativeDevices(strict bool) {
-	if option.Config.EnableWireguard {
+	if option.Config.EnableWireguard && option.Config.EnableWireguardForLB {
 		// Change the direct routing device to the Wireguard tunnel, so that
 		// NodePort BPF would forward requests to a service endpoint on a remote
 		// node via the Wireguard tunnel device which makes requests to be

@@ -662,8 +662,12 @@ const (
 	// IPSecKeyFileName is the name of the option for ipsec key file
 	IPSecKeyFileName = "ipsec-key-file"
 
-	// EnableWireguard is the name of the option to enable wireguard
+	// EnableWireguard is the name of the option to enable Wireguard
 	EnableWireguard = "enable-wireguard"
+
+	// EnableWireguardForLB is the name of the option to enable Wireguard encryption
+	// for traffic which is forwarded by LB.
+	EnableWireguardForLB = "bpf-lb-wireguard"
 
 	// KVstoreLeaseTTL is the time-to-live for lease in kvstore.
 	KVstoreLeaseTTL = "kvstore-lease-ttl"
@@ -1372,6 +1376,9 @@ type DaemonConfig struct {
 
 	// EnableWireguard enables Wireguard encryption
 	EnableWireguard bool
+
+	// EnableWireguardForLB enables Wireguard encryption for LB traffic
+	EnableWireguardForLB bool
 
 	// MonitorQueueSize is the size of the monitor event queue
 	MonitorQueueSize int
@@ -2342,6 +2349,7 @@ func (c *DaemonConfig) Populate() {
 	c.IPv6MCastDevice = viper.GetString(IPv6MCastDevice)
 	c.EnableIPSec = viper.GetBool(EnableIPSecName)
 	c.EnableWireguard = viper.GetBool(EnableWireguard)
+	c.EnableWireguardForLB = viper.GetBool(EnableWireguardForLB)
 	c.EnableWellKnownIdentities = viper.GetBool(EnableWellKnownIdentities)
 	c.EndpointInterfaceNamePrefix = viper.GetString(EndpointInterfaceNamePrefix)
 	c.DevicePreFilter = viper.GetString(PrefilterDevice)
