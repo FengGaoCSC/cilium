@@ -501,7 +501,13 @@ func finishKubeProxyReplacementInit(isKubeProxyReplacementStrict bool) {
 		}
 	}
 
+	if option.Config.EnableNodePort && option.Config.EnableWireguard && !option.Config.EnableRemoteNodeIdentity {
+		log.Fatalf("Wireguard requires --%s to be enabled to encrypt NodePort BPF traffic",
+			option.EnableRemoteNodeIdentity)
+	}
+
 	// After this point, BPF NodePort should not be disabled
+
 	if !option.Config.EnableHostLegacyRouting {
 		msg := ""
 		switch {

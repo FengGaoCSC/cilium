@@ -102,7 +102,7 @@ static __always_inline int ipv6_l3_from_lxc(struct __ctx_buff *ctx,
 	bool hairpin_flow = false; /* endpoint wants to access itself via service IP */
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	__u8 audited = 0;
-	bool __maybe_unused dst_remote_ep = false;
+	bool __maybe_unused encrypt_wg = false;
 
 	if (unlikely(!is_valid_lxc_src_ip(ip6)))
 		return DROP_INVALID_SIP;
@@ -197,7 +197,11 @@ skip_service_lookup:
 			if (info->tunnel_endpoint != 0 &&
 			    info->sec_label != HOST_ID &&
 			    info->sec_label != REMOTE_NODE_ID)
-				dst_remote_ep = true;
+				encrypt_wg = true;
+# ifdef ENABLE_NODEPORT
+			else if (info->sec_label == REMOTE_NODE_ID)
+				encrypt_wg = true;
+# endif
 #endif /* ENABLE_WIREGUARD */
 		} else {
 			*dstID = WORLD_ID;
@@ -430,7 +434,7 @@ pass_to_stack:
 #endif
 	} else
 #elif defined(ENABLE_WIREGUARD)
-	if (dst_remote_ep)
+	if (encrypt_wg)
 		set_encrypt_mark(ctx);
 	else
 #endif /* ENABLE_IPSEC */
@@ -533,7 +537,7 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx,
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	__u8 audited = 0;
 	bool has_l4_header = false;
-	bool __maybe_unused dst_remote_ep = false;
+	bool __maybe_unused encrypt_wg = false;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
@@ -625,7 +629,22 @@ skip_service_lookup:
 			if (info->tunnel_endpoint != 0 &&
 			    info->sec_label != HOST_ID &&
 			    info->sec_label != REMOTE_NODE_ID)
-				dst_remote_ep = true;
+				encrypt_wg = true;
+# ifdef ENABLE_NODEPORT
+			/* When NodePort BPF is enabled, we need to encrypt
+			 * pod2host packets. Otherwise, a reply from a remote
+			 * service endpoint to the node which received a request
+			 * from an outside client (src=podIP|dst=nodeIP) would
+			 * not be routed over the Wireguard tunnel, and
+			 * therefore won't be encrypted.
+			 * Unfortunately, this introduces an asymmetry for
+			 * regular (non-NodePort) host2pod traffic, as a request
+			 * to a pod won't go over the Wireguard tunnel, while a
+			 * reply will.
+			 */
+			else if (info->sec_label == REMOTE_NODE_ID)
+				encrypt_wg = true;
+# endif /* ENABLE_NODEPORT */
 #endif /* ENABLE_WIREGUARD */
 		} else {
 			*dstID = WORLD_ID;
@@ -871,7 +890,7 @@ pass_to_stack:
 #endif
 	} else
 #elif defined(ENABLE_WIREGUARD)
-	if (dst_remote_ep)
+	if (encrypt_wg)
 		set_encrypt_mark(ctx);
 	else /* Wireguard and identity mark are mutually exclusive */
 #endif /* ENABLE_IPSEC */
