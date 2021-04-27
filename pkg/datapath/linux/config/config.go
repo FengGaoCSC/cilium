@@ -214,6 +214,11 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 
 	if option.Config.EnableWireguard {
 		cDefinesMap["ENABLE_WIREGUARD"] = "1"
+		link, err := netlink.LinkByName("cilium_wg0")
+		if err != nil {
+			return err
+		}
+		cDefinesMap["WG_IFINDEX"] = fmt.Sprintf("%d", link.Attrs().Index)
 	}
 
 	if option.Config.InstallIptRules || iptables.KernelHasNetfilter() {

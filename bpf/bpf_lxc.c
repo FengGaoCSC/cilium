@@ -627,8 +627,11 @@ skip_service_lookup:
 			 */
 			if (info->tunnel_endpoint != 0 &&
 			    info->sec_label != HOST_ID &&
-			    info->sec_label != REMOTE_NODE_ID)
-				dst_remote_ep = true;
+			    info->sec_label != REMOTE_NODE_ID) {
+				//dst_remote_ep = true;
+				return redirect(WG_IFINDEX, 0); // TODO
+			}
+
 #endif /* ENABLE_WIREGUARD */
 		} else {
 			*dstID = WORLD_ID;
