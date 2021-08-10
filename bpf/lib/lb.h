@@ -93,6 +93,7 @@ struct bpf_elf_map __section_maps LB6_MAGLEV_MAP_OUTER = {
 #endif /* ENABLE_IPV6 */
 
 #ifdef ENABLE_IPV4
+
 struct bpf_elf_map __section_maps LB4_REVERSE_NAT_MAP = {
 	.type		= BPF_MAP_TYPE_HASH,
 	.size_key	= sizeof(__u16),

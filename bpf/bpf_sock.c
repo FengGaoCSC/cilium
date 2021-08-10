@@ -3,6 +3,7 @@
 
 #include <bpf/ctx/unspec.h>
 #include <bpf/api.h>
+#include <bpf/bpf_helpers.h>
 
 #include <node_config.h>
 #include <netdev_config.h>
@@ -21,6 +22,23 @@
 #ifndef HOST_NETNS_COOKIE
 # define HOST_NETNS_COOKIE   get_netns_cookie(NULL)
 #endif
+
+
+#define SO_ORIGINAL_DST 80
+#define SOL_IP		0x0
+
+struct svc_addr {
+	__be32 addr;
+	__be16 port;
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_SK_STORAGE);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+	__type(key, int);
+	__type(value, struct svc_addr);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} socket_storage SEC(".maps");
 
 static __always_inline __maybe_unused bool is_v4_loopback(__be32 daddr)
 {
@@ -344,6 +362,7 @@ static __always_inline int __sock4_xlate_fwd(struct bpf_sock_addr *ctx,
 	struct lb4_service *backend_slot;
 	bool backend_from_affinity = false;
 	__u32 backend_id = 0;
+	struct svc_addr *orig;
 
 	if (!udp_only && !sock_proto_enabled(ctx->protocol))
 		return -ENOTSUP;
@@ -423,6 +442,13 @@ static __always_inline int __sock4_xlate_fwd(struct bpf_sock_addr *ctx,
 		return -ENOMEM;
 	}
 
+	orig = bpf_sk_storage_get(&socket_storage, ctx_full->sk, 0,
+				  BPF_SK_STORAGE_GET_F_CREATE);
+	if (orig) {
+		orig->addr = ctx->user_ip4;
+		orig->port = ctx->user_port;
+	}
+
 	ctx->user_ip4 = backend->address;
 	ctx_set_port(ctx, backend->port);
 
@@ -445,6 +471,26 @@ __sock4_health_fwd(struct bpf_sock_addr *ctx __maybe_unused)
 	}
 #endif /* ENABLE_HEALTH_CHECK */
 	return ret;
+}
+
+SEC("cgroup/getsockopt")
+int _getsockopt(struct bpf_sockopt *ctx)
+{
+	__u8 *optval_end = ctx->optval_end;
+	__u8 *optval = ctx->optval;
+	struct svc_addr *orig;
+
+	if (ctx->level == SOL_IP && ctx->optname == SO_ORIGINAL_DST) {
+		if (optval + 10 > optval_end)
+			return 0; /* EPERM, bounds check */
+		orig = bpf_sk_storage_get(&socket_storage, ctx->sk, 0, 0);
+		if (orig) {
+			*(__be32 *)&optval[4] = orig->addr;
+			*(__be16 *)&optval[8] = orig->port;
+		}
+	}
+
+	return 1;
 }
 
 __section("cgroup/connect4")

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
-#ifndef __BPF_HELPERS__
-#define __BPF_HELPERS__
+#ifndef __LIBBPF_BPF_HELPERS__
+#define __LIBBPF_BPF_HELPERS__
 
 /*
  * Note that bpf programs need to include either
