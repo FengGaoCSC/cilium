@@ -289,6 +289,8 @@ const (
 	// features in BPF datapath
 	KubeProxyReplacement = "kube-proxy-replacement"
 
+	EnableServiceMeshCompat = "enable-service-mesh-compat"
+
 	// EnableSessionAffinity enables a support for service sessionAffinity
 	EnableSessionAffinity = "enable-session-affinity"
 
@@ -1708,6 +1710,8 @@ type DaemonConfig struct {
 	// features in BPF datapath
 	KubeProxyReplacement string
 
+	EnableServiceMeshCompat bool
+
 	// EnableBandwidthManager enables EDT-based pacing
 	EnableBandwidthManager bool
 
@@ -2415,6 +2419,7 @@ func (c *DaemonConfig) Populate() {
 	c.NodePortBindProtection = viper.GetBool(NodePortBindProtection)
 	c.EnableAutoProtectNodePortRange = viper.GetBool(EnableAutoProtectNodePortRange)
 	c.KubeProxyReplacement = viper.GetString(KubeProxyReplacement)
+	c.EnableServiceMeshCompat = viper.GetBool(EnableServiceMeshCompat)
 	c.EnableSessionAffinity = viper.GetBool(EnableSessionAffinity)
 	c.EnableBandwidthManager = viper.GetBool(EnableBandwidthManager)
 	c.EnableRecorder = viper.GetBool(EnableRecorder)

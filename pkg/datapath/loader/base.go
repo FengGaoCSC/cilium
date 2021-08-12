@@ -57,6 +57,7 @@ const (
 	initArgNrCPUs
 	initArgEndpointRoutes
 	initArgProxyRule
+	initArgServiceMesh
 	initArgMax
 )
 
@@ -306,6 +307,11 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 			args[initArgHostReachableServicesPeer] = "true"
 		} else {
 			args[initArgHostReachableServicesPeer] = "false"
+		}
+		if option.Config.EnableServiceMeshCompat {
+			args[initArgServiceMesh] = "true"
+		} else {
+			args[initArgServiceMesh] = "false"
 		}
 	} else {
 		args[initArgHostReachableServices] = "false"

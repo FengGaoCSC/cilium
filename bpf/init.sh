@@ -36,6 +36,7 @@ MCPU=${18}
 NR_CPUS=${19}
 ENDPOINT_ROUTES=${20}
 PROXY_RULE=${21}
+SERVICE_MESH=${22}
 
 ID_HOST=1
 ID_WORLD=2
@@ -527,7 +528,11 @@ if [ "$HOSTLB" = "true" ]; then
 	fi
 	if [ "$IP4_HOST" != "<nil>" ]; then
 		bpf_load_cgroups "$COPTS" bpf_sock.c bpf_sock.o sockaddr connect4 $CALLS_MAP $CGROUP_ROOT $BPFFS_ROOT
-		bpf_load_cgroups "$COPTS" bpf_sock.c bpf_sock.o sockopt getsockopt $CALLS_MAP $CGROUP_ROOT $BPFFS_ROOT
+        if [ "$SERVICE_MESH" = "true" ]; then
+		    bpf_load_cgroups "$COPTS" bpf_sock.c bpf_sock.o sockopt getsockopt $CALLS_MAP $CGROUP_ROOT $BPFFS_ROOT
+        else
+	        bpf_clear_cgroups $CGROUP_ROOT getsockopt
+        fi
 		if [ "$HOSTLB_PEER" = "true" ]; then
 			bpf_load_cgroups "$COPTS" bpf_sock.c bpf_sock.o sockaddr getpeername4 $CALLS_MAP $CGROUP_ROOT $BPFFS_ROOT
 		fi
@@ -562,6 +567,7 @@ else
 	bpf_clear_cgroups $CGROUP_ROOT recvmsg6
 	bpf_clear_cgroups $CGROUP_ROOT getpeername4
 	bpf_clear_cgroups $CGROUP_ROOT getpeername6
+	bpf_clear_cgroups $CGROUP_ROOT getsockopt
 fi
 
 if [ "$HOST_DEV1" != "$HOST_DEV2" ]; then
