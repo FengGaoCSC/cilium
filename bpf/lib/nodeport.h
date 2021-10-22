@@ -556,7 +556,10 @@ int tail_nodeport_ipv6_dsr(struct __ctx_buff *ctx)
 		       (union v6addr *)&ip6->daddr);
 
 	ret = fib_lookup(ctx, &fib_params.l, sizeof(fib_params),
-			 BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT);
+#ifndef ENABLE_MULTIHOMING
+			 BPF_FIB_LOOKUP_DIRECT |
+#endif
+			 BPF_FIB_LOOKUP_OUTPUT);
 	if (ret != 0) {
 		ret = DROP_NO_FIB;
 		goto drop_err;
@@ -680,7 +683,10 @@ int tail_nodeport_nat_ipv6(struct __ctx_buff *ctx)
 		       (union v6addr *)&ip6->daddr);
 
 	ret = fib_lookup(ctx, &fib_params.l, sizeof(fib_params),
-			 BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT);
+#ifndef ENABLE_MULTIHOMING
+			 BPF_FIB_LOOKUP_DIRECT |
+#endif
+			 BPF_FIB_LOOKUP_OUTPUT);
 	if (ret != 0) {
 		ret = DROP_NO_FIB;
 		goto drop_err;
@@ -951,7 +957,10 @@ static __always_inline int rev_nodeport_lb6(struct __ctx_buff *ctx, int *ifindex
 		ipv6_addr_copy((union v6addr *)&fib_params.ipv6_dst, &tuple.daddr);
 
 		ret = fib_lookup(ctx, &fib_params, sizeof(fib_params),
-				 BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT);
+#ifndef ENABLE_MULTIHOMING
+				 BPF_FIB_LOOKUP_DIRECT |
+#endif
+				 BPF_FIB_LOOKUP_OUTPUT);
 		if (ret != 0) {
 			union macaddr smac =
 				NATIVE_DEV_MAC_BY_IFINDEX(*ifindex);
@@ -1494,7 +1503,9 @@ int tail_nodeport_ipv4_dsr(struct __ctx_buff *ctx)
 	struct bpf_fib_lookup_padded fib_params = {
 		.l = {
 			.family		= AF_INET,
+#ifndef ENABLE_MULTIHOMING
 			.ifindex	= DIRECT_ROUTING_DEV_IFINDEX,
+#endif
 		},
 	};
 	void *data, *data_end;
@@ -1542,7 +1553,10 @@ int tail_nodeport_ipv4_dsr(struct __ctx_buff *ctx)
 	fib_params.l.ipv4_dst = ip4->daddr;
 
 	ret = fib_lookup(ctx, &fib_params.l, sizeof(fib_params),
-			 BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT);
+#ifndef ENABLE_MULTIHOMING
+			 BPF_FIB_LOOKUP_DIRECT |
+#endif
+			 BPF_FIB_LOOKUP_OUTPUT);
 	if (ret != 0) {
 		ret = DROP_NO_FIB;
 		goto drop_err;
@@ -1570,7 +1584,9 @@ int tail_nodeport_nat_ipv4(struct __ctx_buff *ctx)
 	struct bpf_fib_lookup_padded fib_params = {
 		.l = {
 			.family		= AF_INET,
+#ifndef ENABLE_MULTIHOMING
 			.ifindex	= DIRECT_ROUTING_DEV_IFINDEX,
+#endif
 		},
 	};
 	struct ipv4_nat_target target = {
@@ -1665,7 +1681,10 @@ int tail_nodeport_nat_ipv4(struct __ctx_buff *ctx)
 	fib_params.l.ipv4_dst = ip4->daddr;
 
 	ret = fib_lookup(ctx, &fib_params.l, sizeof(fib_params),
-			 BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT);
+#ifndef ENABLE_MULTIHOMING
+			 BPF_FIB_LOOKUP_DIRECT |
+#endif
+			 BPF_FIB_LOOKUP_OUTPUT);
 	if (ret != 0) {
 		ret = DROP_NO_FIB;
 		goto drop_err;
@@ -1964,7 +1983,9 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, int *ifindex
 		fib_params.ipv4_dst = ip4->daddr;
 
 		ret = fib_lookup(ctx, &fib_params, sizeof(fib_params),
+#ifndef ENABLE_MULTIHOMING
 				 BPF_FIB_LOOKUP_DIRECT |
+#endif
 				 BPF_FIB_LOOKUP_OUTPUT);
 		if (ret != 0) {
 			union macaddr smac =
