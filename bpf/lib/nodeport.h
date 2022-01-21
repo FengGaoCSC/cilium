@@ -504,7 +504,7 @@ int tail_nodeport_ipv6_dsr(struct __ctx_buff *ctx)
 	struct bpf_fib_lookup_padded fib_params = {
 		.l = {
 			.family		= AF_INET6,
-			.ifindex	= DIRECT_ROUTING_DEV_IFINDEX,
+			.ifindex	= ctx_get_ifindex(ctx),
 		},
 	};
 	void *data, *data_end;
@@ -542,8 +542,19 @@ int tail_nodeport_ipv6_dsr(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 
-	ret = maybe_add_l2_hdr(ctx, DIRECT_ROUTING_DEV_IFINDEX,
-			       &l2_hdr_required);
+	ipv6_addr_copy((union v6addr *)&fib_params.l.ipv6_src,
+		       (union v6addr *)&ip6->saddr);
+	ipv6_addr_copy((union v6addr *)&fib_params.l.ipv6_dst,
+		       (union v6addr *)&ip6->daddr);
+
+	ret = fib_lookup(ctx, &fib_params.l, sizeof(fib_params),
+			 BPF_FIB_LOOKUP_OUTPUT);
+	if (ret != 0) {
+		ret = DROP_NO_FIB;
+		goto drop_err;
+	}
+
+	ret = maybe_add_l2_hdr(ctx, fib_params.l.ifindex, &l2_hdr_required);
 	if (ret != 0)
 		goto drop_err;
 	if (!l2_hdr_required)
@@ -552,17 +563,6 @@ int tail_nodeport_ipv6_dsr(struct __ctx_buff *ctx)
 						__ETH_HLEN))
 		return DROP_INVALID;
 
-	ipv6_addr_copy((union v6addr *)&fib_params.l.ipv6_src,
-		       (union v6addr *)&ip6->saddr);
-	ipv6_addr_copy((union v6addr *)&fib_params.l.ipv6_dst,
-		       (union v6addr *)&ip6->daddr);
-
-	ret = fib_lookup(ctx, &fib_params.l, sizeof(fib_params),
-			 BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT);
-	if (ret != 0) {
-		ret = DROP_NO_FIB;
-		goto drop_err;
-	}
 	if (eth_store_daddr(ctx, fib_params.l.dmac, 0) < 0) {
 		ret = DROP_WRITE_ERROR;
 		goto drop_err;
@@ -587,7 +587,7 @@ int tail_nodeport_nat_ipv6(struct __ctx_buff *ctx)
 	struct bpf_fib_lookup_padded fib_params = {
 		.l = {
 			.family		= AF_INET6,
-			.ifindex	= DIRECT_ROUTING_DEV_IFINDEX,
+			.ifindex	= ctx_get_ifindex(ctx),
 		},
 	};
 	struct ipv6_nat_target target = {
@@ -666,8 +666,19 @@ int tail_nodeport_nat_ipv6(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 
-	ret = maybe_add_l2_hdr(ctx, DIRECT_ROUTING_DEV_IFINDEX,
-			       &l2_hdr_required);
+	ipv6_addr_copy((union v6addr *)&fib_params.l.ipv6_src,
+		       (union v6addr *)&ip6->saddr);
+	ipv6_addr_copy((union v6addr *)&fib_params.l.ipv6_dst,
+		       (union v6addr *)&ip6->daddr);
+
+	ret = fib_lookup(ctx, &fib_params.l, sizeof(fib_params),
+			 BPF_FIB_LOOKUP_OUTPUT);
+	if (ret != 0) {
+		ret = DROP_NO_FIB;
+		goto drop_err;
+	}
+
+	ret = maybe_add_l2_hdr(ctx, fib_params.l.ifindex, &l2_hdr_required);
 	if (ret != 0)
 		goto drop_err;
 	if (!l2_hdr_required)
@@ -676,17 +687,6 @@ int tail_nodeport_nat_ipv6(struct __ctx_buff *ctx)
 						__ETH_HLEN))
 		return DROP_INVALID;
 
-	ipv6_addr_copy((union v6addr *)&fib_params.l.ipv6_src,
-		       (union v6addr *)&ip6->saddr);
-	ipv6_addr_copy((union v6addr *)&fib_params.l.ipv6_dst,
-		       (union v6addr *)&ip6->daddr);
-
-	ret = fib_lookup(ctx, &fib_params.l, sizeof(fib_params),
-			 BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT);
-	if (ret != 0) {
-		ret = DROP_NO_FIB;
-		goto drop_err;
-	}
 	if (eth_store_daddr(ctx, fib_params.l.dmac, 0) < 0) {
 		ret = DROP_WRITE_ERROR;
 		goto drop_err;
@@ -933,7 +933,7 @@ static __always_inline int rev_nodeport_lb6(struct __ctx_buff *ctx, int *ifindex
 		ipv6_addr_copy((union v6addr *)&fib_params.ipv6_dst, &tuple.daddr);
 
 		ret = fib_lookup(ctx, &fib_params, sizeof(fib_params),
-				 BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT);
+				 BPF_FIB_LOOKUP_OUTPUT);
 		if (ret != 0) {
 			union macaddr smac =
 				NATIVE_DEV_MAC_BY_IFINDEX(*ifindex);
@@ -1564,7 +1564,7 @@ int tail_nodeport_nat_ipv4(struct __ctx_buff *ctx)
 	struct bpf_fib_lookup_padded fib_params = {
 		.l = {
 			.family		= AF_INET,
-			.ifindex	= DIRECT_ROUTING_DEV_IFINDEX,
+			.ifindex	= ctx_get_ifindex(ctx),
 		},
 	};
 	struct ipv4_nat_target target = {
@@ -1575,6 +1575,10 @@ int tail_nodeport_nat_ipv4(struct __ctx_buff *ctx)
 	void *data, *data_end;
 	struct iphdr *ip4;
 	bool l2_hdr_required = true;
+
+	/* dir = NAT_DIR_EGRESS SNAT & fwd
+	 * dir = NAT_DIR_INGRESS rev-SNAT
+	 */
 
 	target.addr = IPV4_DIRECT_ROUTING;
 #ifdef TUNNEL_MODE
@@ -1645,8 +1649,17 @@ int tail_nodeport_nat_ipv4(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 
-	ret = maybe_add_l2_hdr(ctx, DIRECT_ROUTING_DEV_IFINDEX,
-			       &l2_hdr_required);
+	fib_params.l.ipv4_src = ip4->saddr;
+	fib_params.l.ipv4_dst = ip4->daddr;
+
+	ret = fib_lookup(ctx, &fib_params.l, sizeof(fib_params),
+			 BPF_FIB_LOOKUP_OUTPUT);
+	if (ret != 0) {
+		ret = DROP_NO_FIB;
+		goto drop_err;
+	}
+
+	ret = maybe_add_l2_hdr(ctx, fib_params.l.ifindex, &l2_hdr_required);
 	if (ret != 0)
 		goto drop_err;
 	if (!l2_hdr_required)
@@ -1655,15 +1668,6 @@ int tail_nodeport_nat_ipv4(struct __ctx_buff *ctx)
 						__ETH_HLEN))
 		return DROP_INVALID;
 
-	fib_params.l.ipv4_src = ip4->saddr;
-	fib_params.l.ipv4_dst = ip4->daddr;
-
-	ret = fib_lookup(ctx, &fib_params.l, sizeof(fib_params),
-			 BPF_FIB_LOOKUP_DIRECT | BPF_FIB_LOOKUP_OUTPUT);
-	if (ret != 0) {
-		ret = DROP_NO_FIB;
-		goto drop_err;
-	}
 	if (eth_store_daddr(ctx, fib_params.l.dmac, 0) < 0) {
 		ret = DROP_WRITE_ERROR;
 		goto drop_err;
@@ -1849,7 +1853,7 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, int *ifindex
 	void *data, *data_end;
 	struct iphdr *ip4;
 	struct csum_offset csum_off = {};
-	int ret, ret2, l3_off = ETH_HLEN, l4_off;
+	int ret, fib_ret, ret2, l3_off = ETH_HLEN, l4_off;
 	struct ct_state ct_state = {};
 	struct bpf_fib_lookup fib_params = {};
 	__u32 monitor = 0;
@@ -1919,6 +1923,21 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, int *ifindex
 		}
 #endif
 
+		fib_params.family = AF_INET;
+		fib_params.ifindex = ctx_get_ifindex(ctx);
+
+		fib_params.ipv4_src = ip4->saddr;
+		fib_params.ipv4_dst = ip4->daddr;
+
+		fib_ret = fib_lookup(ctx, &fib_params, sizeof(fib_params),
+				 BPF_FIB_LOOKUP_OUTPUT);
+
+		if (fib_ret == 0) {
+			*ifindex = fib_params.ifindex;
+		} else {
+			*ifindex = ct_state.ifindex;
+		}
+
 		ret = maybe_add_l2_hdr(ctx, *ifindex, &l2_hdr_required);
 		if (ret != 0)
 			return ret;
@@ -1928,21 +1947,12 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, int *ifindex
 							&ip4, __ETH_HLEN))
 			return DROP_INVALID;
 
-		fib_params.family = AF_INET;
-		fib_params.ifindex = *ifindex;
-
-		fib_params.ipv4_src = ip4->saddr;
-		fib_params.ipv4_dst = ip4->daddr;
-
-		ret = fib_lookup(ctx, &fib_params, sizeof(fib_params),
-				 BPF_FIB_LOOKUP_DIRECT |
-				 BPF_FIB_LOOKUP_OUTPUT);
-		if (ret != 0) {
+		if (fib_ret != 0) {
 			union macaddr smac =
 				NATIVE_DEV_MAC_BY_IFINDEX(*ifindex);
 			union macaddr *dmac;
 
-			if (ret != BPF_FIB_LKUP_RET_NO_NEIGH)
+			if (fib_ret != BPF_FIB_LKUP_RET_NO_NEIGH)
 				return DROP_NO_FIB;
 
 			/* For the case where a client from the same L2
