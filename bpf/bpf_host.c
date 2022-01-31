@@ -1167,6 +1167,21 @@ out:
 	send_trace_notify(ctx, TRACE_TO_NETWORK, src_id, 0, 0, 0,
 			  trace.reason, trace.monitor);
 
+#ifdef ENABLE_WIREGUARD
+	{
+		struct remote_endpoint_info *info;
+		void *data, *data_end;
+		struct iphdr *ip4;
+
+		if (!revalidate_data(ctx, &data, &data_end, &ip4))
+			return DROP_INVALID;
+
+		info = lookup_ip4_remote_endpoint(ip4->daddr);
+		if (((ctx->mark & 0x4d2) != 0x4d2) && info != NULL && info->sec_label == REMOTE_NODE_ID) {
+			return ctx_redirect(ctx, WG_IFINDEX, 0);
+		}
+	}
+#endif
 	return ret;
 }
 
