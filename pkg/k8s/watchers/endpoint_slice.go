@@ -188,7 +188,7 @@ func (k *K8sWatcher) addKubeAPIServerServiceEPSliceV1(eps *slim_discover_v1.Endp
 		}
 	}
 
-	k.handleKubeAPIServerServiceEPChanges(desiredIPs)
+	k.handleKubeAPIServerServiceEPChanges(desiredIPs, eps.ObjectMeta.GetUID())
 }
 
 func (k *K8sWatcher) addKubeAPIServerServiceEPSliceV1Beta1(eps *slim_discover_v1beta1.EndpointSlice) {
@@ -205,7 +205,7 @@ func (k *K8sWatcher) addKubeAPIServerServiceEPSliceV1Beta1(eps *slim_discover_v1
 		}
 	}
 
-	k.handleKubeAPIServerServiceEPChanges(desiredIPs)
+	k.handleKubeAPIServerServiceEPChanges(desiredIPs, eps.ObjectMeta.GetUID())
 }
 
 // initEndpointsOrSlices initializes either the "Endpoints" or "EndpointSlice"

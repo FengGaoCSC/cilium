@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/datapath"
@@ -52,7 +53,7 @@ type IPCache interface {
 	Upsert(ip string, hostIP net.IP, hostKey uint8, k8sMeta *ipcache.K8sMetadata, newIdentity ipcache.Identity) (bool, error)
 	Delete(IP string, source source.Source) bool
 	TriggerLabelInjection(source source.Source)
-	UpsertMetadata(string, labels.Labels)
+	UpsertMetadata(prefix string, lbls labels.Labels, src source.Source, uid k8sTypes.UID)
 }
 
 // Configuration is the set of configuration options the node manager depends
@@ -444,7 +445,7 @@ func (m *Manager) NodeUpdated(n nodeTypes.Node) {
 			Source: n.Source,
 		})
 
-		m.upsertIntoIDMD(ipAddrStr, remoteHostIdentity)
+		m.upsertIntoIDMD(ipAddrStr, remoteHostIdentity, n.UID)
 
 		// Upsert() will return true if the ipcache entry is owned by
 		// the source of the node update that triggered this node
@@ -532,11 +533,11 @@ func (m *Manager) NodeUpdated(n nodeTypes.Node) {
 // upsertIntoIDMD upserts the given CIDR into the ipcache.identityMetadata
 // (IDMD) map. The given node identity determines which labels are associated
 // with the CIDR.
-func (m *Manager) upsertIntoIDMD(prefix string, id identity.NumericIdentity) {
+func (m *Manager) upsertIntoIDMD(prefix string, id identity.NumericIdentity, uid k8sTypes.UID) {
 	if id == identity.ReservedIdentityHost {
-		m.ipcache.UpsertMetadata(prefix, labels.LabelHost)
+		m.ipcache.UpsertMetadata(prefix, labels.LabelHost, source.Local, uid)
 	} else {
-		m.ipcache.UpsertMetadata(prefix, labels.LabelRemoteNode)
+		m.ipcache.UpsertMetadata(prefix, labels.LabelRemoteNode, source.CustomResource, uid)
 	}
 }
 

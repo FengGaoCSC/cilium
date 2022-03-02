@@ -7,6 +7,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	v1meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
@@ -105,7 +106,7 @@ func (k *K8sWatcher) deleteK8sEndpointV1(ep *slim_corev1.Endpoints, swg *lock.St
 //
 // The actual implementation of this logic down to the datapath is handled
 // asynchronously.
-func (k *K8sWatcher) handleKubeAPIServerServiceEPChanges(desiredIPs map[string]struct{}) {
+func (k *K8sWatcher) handleKubeAPIServerServiceEPChanges(desiredIPs map[string]struct{}, uid k8sTypes.UID) {
 	// Use CustomResource as the source similar to the way the CiliumNode
 	// (pkg/node/manager.Manager) handler does because the ipcache entry needs
 	// to be overwrite-able by this handler and the CiliumNode handler. If we
@@ -133,10 +134,12 @@ func (k *K8sWatcher) handleKubeAPIServerServiceEPChanges(desiredIPs map[string]s
 		labels.LabelKubeAPIServer,
 		desiredIPs,
 		src,
+		uid,
 	)
 
 	for ip := range desiredIPs {
-		k.ipcache.UpsertMetadata(ip, labels.LabelKubeAPIServer)
+		// TODO: Replace this with source.KubeAPIServer
+		k.ipcache.UpsertMetadata(ip, labels.LabelKubeAPIServer, source.CustomResource, uid)
 	}
 
 	k.ipcache.TriggerLabelInjection(src)
@@ -156,5 +159,5 @@ func (k *K8sWatcher) addKubeAPIServerServiceEPs(ep *slim_corev1.Endpoints) {
 		}
 	}
 
-	k.handleKubeAPIServerServiceEPChanges(desiredIPs)
+	k.handleKubeAPIServerServiceEPChanges(desiredIPs, ep.ObjectMeta.GetUID())
 }

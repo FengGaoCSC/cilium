@@ -9,6 +9,7 @@ import (
 	"path"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/pkg/annotation"
@@ -45,6 +46,7 @@ func ParseCiliumNode(n *ciliumv2.CiliumNode) (node Node) {
 		Labels:          n.ObjectMeta.Labels,
 		NodeIdentity:    uint32(n.Spec.NodeIdentity),
 		WireguardPubKey: n.ObjectMeta.Annotations[annotation.WireguardPubKey],
+		UID:             n.ObjectMeta.UID,
 	}
 
 	for _, cidrString := range n.Spec.IPAM.PodCIDRs {
@@ -127,6 +129,7 @@ func (n *Node) ToCiliumNode() *ciliumv2.CiliumNode {
 			Name:        n.Name,
 			Labels:      n.Labels,
 			Annotations: annotations,
+			UID:         n.UID,
 		},
 		Spec: ciliumv2.NodeSpec{
 			Addresses: ipAddrs,
@@ -215,6 +218,9 @@ type Node struct {
 
 	// WireguardPubKey is the WireGuard public key of this node
 	WireguardPubKey string
+
+	// UID is the UID for the corresponding CiliumNode resource
+	UID k8sTypes.UID
 }
 
 // Fullname returns the node's full name including the cluster name if a
