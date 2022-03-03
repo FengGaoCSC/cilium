@@ -258,6 +258,11 @@ func (ipc *IPCache) upsertLocked(
 		newNamedPorts = k8sMeta.NamedPorts
 	}
 
+	// FIXME: WireGuard hack
+	if newIdentity.ID == identity.ReservedIdentityKubeAPIServer {
+		hostKey = uint8(1)
+	}
+
 	scopedLog := log
 	if option.Config.Debug {
 		scopedLog = log.WithFields(logrus.Fields{
