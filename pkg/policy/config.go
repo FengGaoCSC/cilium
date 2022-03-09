@@ -4,16 +4,22 @@
 package policy
 
 import (
+	"github.com/google/uuid"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
+
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/metrics"
 )
 
 var (
 	log          = logging.DefaultLogger.WithField(logfields.LogSubsys, "policy")
 	mutex        lock.RWMutex // Protects enablePolicy
 	enablePolicy string       // Whether policy enforcement is enabled.
+
+	uuidForPolicyAPI = k8sTypes.UID(uuid.New().String())
 )
 
 // SetPolicyEnabled sets the policy enablement configuration. Valid values are:
@@ -47,10 +53,40 @@ type AddOptions struct {
 
 	// The source of this policy, one of api, fqdn or k8s
 	Source string
+
+	// UID is a unique identifier for the resource that added the policy.
+	UID k8sTypes.UID
+}
+
+func (a *AddOptions) GetUID() k8sTypes.UID {
+	if a != nil {
+		// IPCache relies on consistent UID for insert, delete
+		// operations
+		if a.Source == metrics.LabelEventSourceAPI {
+			return uuidForPolicyAPI
+		}
+		return a.UID
+	}
+	return ""
 }
 
 // DeleteOptions are options which can be passed to PolicyAdd
 type DeleteOptions struct {
 	// The source of this policy, one of api, fqdn or k8s
 	Source string
+
+	// UID is a unique identifier for the resource that added the policy.
+	UID k8sTypes.UID
+}
+
+func (a *DeleteOptions) GetUID() k8sTypes.UID {
+	if a != nil {
+		// IPCache relies on consistent UID for insert, delete
+		// operations
+		if a.Source == metrics.LabelEventSourceAPI {
+			return uuidForPolicyAPI
+		}
+		return a.UID
+	}
+	return ""
 }

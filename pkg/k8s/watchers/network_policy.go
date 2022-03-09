@@ -86,7 +86,11 @@ func (k *K8sWatcher) addK8sNetworkPolicyV1(k8sNP *slim_networkingv1.NetworkPolic
 	}
 	scopedLog = scopedLog.WithField(logfields.K8sNetworkPolicyName, k8sNP.ObjectMeta.Name)
 
-	opts := policy.AddOptions{Replace: true, Source: metrics.LabelEventSourceK8s}
+	opts := policy.AddOptions{
+		Replace: true,
+		Source:  metrics.LabelEventSourceK8s,
+		UID:     k8sNP.ObjectMeta.GetUID(),
+	}
 	if _, err := k.policyManager.PolicyAdd(rules, &opts); err != nil {
 		metrics.PolicyImportErrorsTotal.Inc()
 		scopedLog.WithError(err).WithFields(logrus.Fields{
@@ -126,6 +130,7 @@ func (k *K8sWatcher) deleteK8sNetworkPolicyV1(k8sNP *slim_networkingv1.NetworkPo
 	})
 	if _, err := k.policyManager.PolicyDelete(labels, &policy.DeleteOptions{
 		Source: metrics.LabelEventSourceK8s,
+		UID:    k8sNP.ObjectMeta.GetUID(),
 	}); err != nil {
 		scopedLog.WithError(err).Error("Error while deleting k8s NetworkPolicy")
 		return err

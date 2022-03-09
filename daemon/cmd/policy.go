@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/go-openapi/runtime/middleware"
-	"github.com/google/uuid"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/cilium/api/v1/models"
 	. "github.com/cilium/cilium/api/v1/server/restapi/policy"
@@ -28,6 +28,7 @@ import (
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/labels"
+	"github.com/cilium/cilium/pkg/labels/cidr"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	bpfIPCache "github.com/cilium/cilium/pkg/maps/ipcache"
 	"github.com/cilium/cilium/pkg/metrics"
@@ -36,6 +37,7 @@ import (
 	"github.com/cilium/cilium/pkg/policy"
 	policyAPI "github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/safetime"
+	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/trigger"
 )
 
@@ -245,7 +247,8 @@ func (d *Daemon) PolicyAdd(rules policyAPI.Rules, opts *policy.AddOptions) (newR
 // was not able to be imported.
 func (d *Daemon) policyAdd(sourceRules policyAPI.Rules, opts *policy.AddOptions, resChan chan interface{}) {
 	policyAddStartTime := time.Now()
-	logger := log.WithField("policyAddRequest", uuid.New().String())
+	uid := opts.GetUID()
+	logger := log.WithField("policyAddRequest", uid)
 
 	if opts != nil && opts.Generated {
 		logger.WithField(logfields.CiliumNetworkPolicy, sourceRules.String()).Debug("Policy Add Request")
@@ -280,25 +283,6 @@ func (d *Daemon) policyAdd(sourceRules policyAPI.Rules, opts *policy.AddOptions,
 			}
 			return
 		}
-	}
-
-	// Any newly allocated identities MUST be upserted to the ipcache if no error is returned.
-	// With SelectiveRegeneration this is postponed to the rule reaction queue to be done
-	// after the affected endpoints have been regenerated, otherwise new identities are
-	// upserted to the ipcache before we return.
-	//
-	// Release of these identities will be tied to the corresponding policy
-	// in the policy.Repository and released upon policyDelete().
-	newlyAllocatedIdentities := make(map[string]*identity.Identity)
-	if _, err := d.ipcache.AllocateCIDRs(prefixes, newlyAllocatedIdentities); err != nil {
-		_ = d.prefixLengths.Delete(prefixes)
-		logger.WithError(err).WithField("prefixes", prefixes).Warn(
-			"Failed to allocate identities for CIDRs during policy add")
-		resChan <- &PolicyAddResult{
-			newRev: 0,
-			err:    err,
-		}
-		return
 	}
 
 	// No errors past this point!
@@ -416,7 +400,8 @@ func (d *Daemon) policyAdd(sourceRules policyAPI.Rules, opts *policy.AddOptions,
 			epsToBumpRevision: endpointsToBumpRevision,
 			endpointsToRegen:  endpointsToRegen,
 			newRev:            newRev,
-			upsertIdentities:  newlyAllocatedIdentities,
+			upsertPrefixes:    prefixes,
+			uid:               uid,
 		}
 
 		ev := eventqueue.NewEvent(r)
@@ -428,6 +413,18 @@ func (d *Daemon) policyAdd(sourceRules policyAPI.Rules, opts *policy.AddOptions,
 			log.WithError(err).WithField(logfields.PolicyRevision, newRev).Error("enqueue of RuleReactionEvent failed")
 		}
 	} else {
+		// Any newly allocated identities MUST be upserted to the ipcache if no error is returned.
+		// With SelectiveRegeneration this is postponed to the rule reaction queue to be done
+		// after the affected endpoints have been regenerated, otherwise new identities are
+		// upserted to the ipcache before we return.
+		//
+		// Release of these identities will be tied to the corresponding policy
+		// in the policy.Repository and released upon policyDelete().
+		//
+		// CIDR Identity allocation cannot fail, so don't check errors here.
+		newlyAllocatedIdentities := make(map[string]*identity.Identity)
+		_, _ = d.ipcache.AllocateCIDRs(prefixes, newlyAllocatedIdentities)
+
 		// Regenerate all endpoints unconditionally.
 		d.TriggerPolicyUpdates(false, "policy rules added")
 		// TODO: Remove 'enable-selective-regeneration' agent option.  Without selective
@@ -448,8 +445,9 @@ type PolicyReactionEvent struct {
 	epsToBumpRevision *policy.EndpointSet
 	endpointsToRegen  *policy.EndpointSet
 	newRev            uint64
-	upsertIdentities  map[string]*identity.Identity // deferred CIDR identity upserts, if any
-	releasePrefixes   []*net.IPNet                  // deferred CIDR identity deletes, if any
+	upsertPrefixes    []*net.IPNet
+	releasePrefixes   []*net.IPNet
+	uid               k8sTypes.UID
 }
 
 // Handle implements pkg/eventqueue/EventHandler interface.
@@ -457,7 +455,7 @@ func (r *PolicyReactionEvent) Handle(res chan interface{}) {
 	// Wait until we have calculated which endpoints need to be selected
 	// across multiple goroutines.
 	r.wg.Wait()
-	r.d.reactToRuleUpdates(r.epsToBumpRevision, r.endpointsToRegen, r.newRev, r.upsertIdentities, r.releasePrefixes)
+	r.d.reactToRuleUpdates(r.epsToBumpRevision, r.endpointsToRegen, r.newRev, r.upsertPrefixes, r.releasePrefixes, r.uid)
 }
 
 // reactToRuleUpdates does the following:
@@ -466,14 +464,12 @@ func (r *PolicyReactionEvent) Handle(res chan interface{}) {
 //   in allEps, to revision rev.
 // * wait for the regenerations to be finished
 // * upsert or delete CIDR identities to the ipcache, as needed.
-func (d *Daemon) reactToRuleUpdates(epsToBumpRevision, epsToRegen *policy.EndpointSet, rev uint64, upsertIdentities map[string]*identity.Identity, releasePrefixes []*net.IPNet) {
+func (d *Daemon) reactToRuleUpdates(epsToBumpRevision, epsToRegen *policy.EndpointSet, rev uint64, upsertPrefixes, releasePrefixes []*net.IPNet, uid k8sTypes.UID) {
 	var enqueueWaitGroup sync.WaitGroup
 
-	// Release CIDR identities before regenerations have been started, if any. This makes sure
-	// the stale identities are not used in policy map classifications after we regenerate the
-	// endpoints below.
-	if len(releasePrefixes) != 0 {
-		d.ipcache.ReleaseCIDRIdentitiesByCIDR(releasePrefixes)
+	// TODO: Should this be guaranteed synchronous with ipcache updates?
+	for _, c := range releasePrefixes {
+		d.ipcache.RemoveLabels(c.String(), cidr.GetCIDRLabels(c), source.CustomResource, uid)
 	}
 
 	// Bump revision of endpoints which don't need to be regenerated.
@@ -504,11 +500,16 @@ func (d *Daemon) reactToRuleUpdates(epsToBumpRevision, epsToRegen *policy.Endpoi
 
 	enqueueWaitGroup.Wait()
 
-	// Upsert new identities after regeneration has completed, if any. This makes sure the
-	// policy maps are ready to classify packets using the newly allocated identities before
-	// they are upserted to the ipcache here.
-	if upsertIdentities != nil {
-		d.ipcache.UpsertGeneratedIdentities(upsertIdentities)
+	// Allocate identities for new CIDRs (if necessary),
+	// Update the endpoint policymaps,
+	// Update the ipcache to point this CIDR to the new identities.
+	for _, c := range upsertPrefixes {
+		// Eventually (async) create any identities necessary to implement this CIDR policy,
+		// Make sure that the selectorccache is updated with these identities + policymaps updated in BPF
+		// THEN update ipcache with the IP->Identtiy mappings
+		//
+		// TODO: Consider breaking down the source here into one specific to CIDR policy (or even CNP/CCNP)
+		d.ipcache.UpsertLabels(c.String(), cidr.GetCIDRLabels(c), source.CustomResource, uid)
 	}
 }
 
@@ -644,6 +645,7 @@ func (d *Daemon) policyDelete(labels labels.LabelArray, opts *policy.DeleteOptio
 			endpointsToRegen:  endpointsToRegen,
 			newRev:            rev,
 			releasePrefixes:   prefixes,
+			uid:               opts.GetUID(),
 		}
 
 		ev := eventqueue.NewEvent(r)

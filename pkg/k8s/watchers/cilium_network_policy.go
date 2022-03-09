@@ -174,6 +174,7 @@ func (k *K8sWatcher) addCiliumNetworkPolicyV2(ciliumNPClient clientset.Interface
 			rev, policyImportErr = k.policyManager.PolicyAdd(rules, &policy.AddOptions{
 				ReplaceWithLabels: cnp.GetIdentityLabels(),
 				Source:            metrics.LabelEventSourceK8s,
+				UID:               cnp.ObjectMeta.GetUID(),
 			})
 		}
 	}
@@ -230,6 +231,7 @@ func (k *K8sWatcher) deleteCiliumNetworkPolicyV2(cnp *types.SlimCNP) error {
 
 	_, err = k.policyManager.PolicyDelete(cnp.GetIdentityLabels(), &policy.DeleteOptions{
 		Source: metrics.LabelEventSourceK8s,
+		UID:    cnp.ObjectMeta.GetUID(),
 	})
 	if err == nil {
 		scopedLog.Info("Deleted CiliumNetworkPolicy")
