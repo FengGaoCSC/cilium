@@ -124,7 +124,9 @@ func (k *K8sWatcher) deleteK8sNetworkPolicyV1(k8sNP *slim_networkingv1.NetworkPo
 		logfields.K8sAPIVersion:        k8sNP.TypeMeta.APIVersion,
 		logfields.Labels:               logfields.Repr(labels),
 	})
-	if _, err := k.policyManager.PolicyDelete(labels); err != nil {
+	if _, err := k.policyManager.PolicyDelete(labels, &policy.DeleteOptions{
+		Source: metrics.LabelEventSourceK8s,
+	}); err != nil {
 		scopedLog.WithError(err).Error("Error while deleting k8s NetworkPolicy")
 		return err
 	}

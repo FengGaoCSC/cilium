@@ -48,3 +48,9 @@ type AddOptions struct {
 	// The source of this policy, one of api, fqdn or k8s
 	Source string
 }
+
+// DeleteOptions are options which can be passed to PolicyAdd
+type DeleteOptions struct {
+	// The source of this policy, one of api, fqdn or k8s
+	Source string
+}
