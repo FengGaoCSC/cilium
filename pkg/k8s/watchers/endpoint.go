@@ -138,8 +138,7 @@ func (k *K8sWatcher) handleKubeAPIServerServiceEPChanges(desiredIPs map[string]s
 	)
 
 	for ip := range desiredIPs {
-		// TODO: Replace this with source.KubeAPIServer
-		k.ipcache.UpsertMetadata(ip, labels.LabelKubeAPIServer, source.CustomResource, uid)
+		k.ipcache.UpsertMetadata(ip, labels.LabelKubeAPIServer, source.KubeAPIServer, uid)
 	}
 
 	k.ipcache.TriggerLabelInjection()
