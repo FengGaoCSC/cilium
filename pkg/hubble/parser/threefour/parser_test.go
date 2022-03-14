@@ -179,6 +179,8 @@ func TestL34Decode(t *testing.T) {
 	assert.Equal(t, int32(api.TraceFromHost), f.GetEventType().GetSubType())
 	assert.Equal(t, flowpb.Verdict_FORWARDED, f.GetVerdict())
 	assert.Equal(t, &flowpb.TCPFlags{ACK: true}, f.L4.GetTCP().GetFlags())
+	assert.Equal(t, uint32(3029893479), f.L4.GetTCP().GetAck())
+	assert.Equal(t, uint32(720359964), f.L4.GetTCP().GetSeq())
 
 	assert.Equal(t, flowpb.TraceObservationPoint_FROM_HOST, f.GetTraceObservationPoint())
 

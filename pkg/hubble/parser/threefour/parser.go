@@ -456,6 +456,8 @@ func decodeTCP(tcp *layers.TCP) (l4 *pb.Layer4, src, dst uint16) {
 					PSH: tcp.PSH, ACK: tcp.ACK, URG: tcp.URG,
 					ECE: tcp.ECE, CWR: tcp.CWR, NS: tcp.NS,
 				},
+				Seq: tcp.Seq,
+				Ack: tcp.Ack,
 			},
 		},
 	}, uint16(tcp.SrcPort), uint16(tcp.DstPort)
