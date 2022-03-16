@@ -28,6 +28,11 @@ var (
 	// ErrLocalIdentityAllocatorUninitialized is an error that's returned when
 	// the local identity allocator is uninitialized.
 	ErrLocalIdentityAllocatorUninitialized = errors.New("local identity allocator uninitialized")
+
+	// defaultQueuedPrefixes is the default size of the buffer for prefixes
+	// used for triggering ipcache updates. It does not govern batching,
+	// only slice memory allocation.
+	defaultQueuedPrefixes = 100
 )
 
 // metadata contains the ipcache metadata. Mainily it holds a map which maps IP
@@ -69,12 +74,41 @@ type metadata struct {
 	// applyChangesMU protects InjectLabels and RemoveLabelsExcluded from being
 	// run in parallel
 	applyChangesMU lock.Mutex
+
+	// queued* handle updates into the IPCache. Whenever a label is added
+	// or removed from a specific IP prefix, that prefix is added into the
+	// corresponding queuedLabelAdds or queuedLabelDels slice. Each time
+	// label injection is triggered, it will take these slices of prefixes
+	// to update in the ipcache and process them.
+	queuedChangesMU lock.Mutex
+	queuedLabelAdds []string
+	queuedLabelDels []string
 }
 
 func newMetadata() *metadata {
 	return &metadata{
-		m: make(map[string]prefixInfo),
+		m:               make(map[string]prefixInfo),
+		queuedLabelAdds: make([]string, 0, defaultQueuedPrefixes),
+		queuedLabelDels: make([]string, 0, defaultQueuedPrefixes),
 	}
+}
+
+func (m *metadata) dequeuePrefixUpdates() (prefixLabelAdds, prefixLabelDels []string) {
+	m.queuedChangesMU.Lock()
+	prefixLabelAdds = m.queuedLabelAdds
+	m.queuedLabelAdds = make([]string, 0, len(prefixLabelAdds))
+	prefixLabelDels = m.queuedLabelDels
+	m.queuedLabelDels = make([]string, 0, len(prefixLabelDels))
+	m.queuedChangesMU.Unlock()
+
+	return
+}
+
+func (m *metadata) enqueuePrefixUpdates(prefixLabelAdds, prefixLabelDels []string) {
+	m.queuedChangesMU.Lock()
+	m.queuedLabelAdds = append(m.queuedLabelAdds, prefixLabelAdds...)
+	m.queuedLabelDels = append(m.queuedLabelDels, prefixLabelDels...)
+	m.queuedChangesMU.Unlock()
 }
 
 // UpsertMetadata upserts a given IP and its corresponding labels associated
