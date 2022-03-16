@@ -704,12 +704,13 @@ func sourceByLabels(d source.Source, lbls labels.Labels) source.Source {
 //            | (2)    +------+--------+   (2) |
 //            +------->|Label Injector |<------+
 //           Trigger   +-------+-------+ Trigger
-//                         (4) |W
-//                             |
-//                             v
-//                           +---+
-//                           |IPC|
-//                           +---+
+//                    (4) |W    (5) |W
+//                        |         |
+//                        v         v
+//                   +--------+   +---+
+//                   |Policy &|   |IPC|
+//                   |datapath|   +---+
+//                   +--------+
 //      legend:
 //      * W means write
 //      * R means read
