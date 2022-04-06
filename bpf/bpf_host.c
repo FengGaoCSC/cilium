@@ -1152,7 +1152,7 @@ out:
 			return DROP_INVALID;
 
 		info = lookup_ip4_remote_endpoint(ip4->daddr);
-		if (((ctx->mark & 0x4d2) != 0x4d2) && info != NULL && info->key) {
+		if (((ctx->mark & 0x4d2) != 0x4d2) && info != NULL && info->key && info->sec_label != WORLD_ID) {
 		        //trace_printk(fmt, sizeof(fmt), ip4->saddr, ip4->daddr, ctx->mark);
 			return ctx_redirect(ctx, WG_IFINDEX, 0);
 		}
