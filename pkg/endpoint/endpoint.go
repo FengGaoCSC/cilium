@@ -443,7 +443,7 @@ func createEndpoint(owner regeneration.Owner, proxy EndpointProxy, allocator cac
 		OpLabels:        pkgLabels.NewOpLabels(),
 		DNSRules:        nil,
 		DNSHistory:      fqdn.NewDNSCacheWithLimit(option.Config.ToFQDNsMinTTL, option.Config.ToFQDNsMaxIPsPerHost),
-		DNSZombies:      fqdn.NewDNSZombieMappings(option.Config.ToFQDNsMaxDeferredConnectionDeletes),
+		DNSZombies:      fqdn.NewDNSZombieMappings(option.Config.ToFQDNsMaxDeferredConnectionDeletes, option.Config.ToFQDNsMaxIPsPerHost),
 		state:           "",
 		status:          NewEndpointStatus(),
 		hasBPFProgram:   make(chan struct{}, 0),
