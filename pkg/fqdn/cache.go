@@ -5,7 +5,7 @@ package fqdn
 
 import (
 	"encoding/json"
-	"net"
+	"net/netip"
 	"regexp"
 	"sort"
 	"time"
@@ -43,7 +43,7 @@ type cacheEntry struct {
 	TTL int `json:"ttl,omitempty"`
 
 	// IPs are the IPs associated with Name for this cacheEntry.
-	IPs []net.IP `json:"ips,omitempty"`
+	IPs []netip.Addr `json:"ips,omitempty"`
 }
 
 // isExpiredBy returns true if entry is no longer valid at pointInTime
@@ -60,7 +60,7 @@ func (entry *cacheEntry) isExpiredBy(pointInTime time.Time) bool {
 // The DNS name in the entries is not checked, but is assumed to be the same
 // for all entries.
 // Note: They are guarded by the DNSCache mutex.
-type ipEntries map[string]*cacheEntry
+type ipEntries map[netip.Addr]*cacheEntry
 
 // nameEntries maps a DNS name to the cache entry that inserted it into the
 // cache. It used in reverse DNS lookups. It is similar to ipEntries, above,
@@ -69,14 +69,13 @@ type nameEntries map[string]*cacheEntry
 
 // getIPs returns a sorted list of non-expired unique IPs.
 // This needs a read-lock
-func (s ipEntries) getIPs(now time.Time) []net.IP {
-	ips := make([]net.IP, 0, len(s)) // worst case size
+func (s ipEntries) getIPs(now time.Time) []netip.Addr {
+	ips := make([]netip.Addr, 0, len(s)) // worst case size
 	for ip, entry := range s {
 		if entry != nil && !entry.isExpiredBy(now) {
-			ips = append(ips, net.ParseIP(ip))
+			ips = append(ips, ip)
 		}
 	}
-
 	return ip.KeepUniqueIPs(ips) // sorts IPs
 }
 
@@ -101,7 +100,7 @@ type DNSCache struct {
 	// IP->dnsNames lookup
 	// This map is subordinate to forward, above. An IP inserted into forward, or
 	// expired in forward, should also be added/removed in reverse.
-	reverse map[string]nameEntries
+	reverse map[netip.Addr]nameEntries
 
 	// LastCleanup is the latest time for which entries have been expired. It is
 	// used as "now" when doing lookups and advanced by calls to .GC
@@ -141,7 +140,7 @@ type DNSCache struct {
 func NewDNSCache(minTTL int) *DNSCache {
 	c := &DNSCache{
 		forward: make(map[string]ipEntries),
-		reverse: make(map[string]nameEntries),
+		reverse: make(map[netip.Addr]nameEntries),
 		// lastCleanup is populated on the first insert
 		cleanup:      map[int64][]string{},
 		overLimit:    map[string]bool{},
@@ -174,7 +173,7 @@ func (c *DNSCache) DisableCleanupTrack() {
 // name is used as is and may be an unqualified name (e.g. myservice.namespace).
 // ips may be an IPv4 or IPv6 IP. Duplicates will be removed.
 // ttl is the DNS TTL for ips and is a seconds value.
-func (c *DNSCache) Update(lookupTime time.Time, name string, ips []net.IP, ttl int) bool {
+func (c *DNSCache) Update(lookupTime time.Time, name string, ips []netip.Addr, ttl int) bool {
 	if c.minTTL > ttl {
 		ttl = c.minTTL
 	}
@@ -200,7 +199,7 @@ func (c *DNSCache) updateWithEntry(entry *cacheEntry) bool {
 	entries, exists := c.forward[entry.Name]
 	if !exists {
 		changed = true
-		entries = make(map[string]*cacheEntry)
+		entries = make(map[netip.Addr]*cacheEntry)
 		c.forward[entry.Name] = entries
 	}
 
@@ -237,7 +236,7 @@ func (c *DNSCache) addNameToCleanup(entry *cacheEntry) {
 // cleanups begin from that time.
 // It returns the list of names that have expired data and a map of removed DNS
 // cache entries, keyed by IP.
-func (c *DNSCache) cleanupExpiredEntries(expires time.Time) (affectedNames []string, removed map[string][]*cacheEntry) {
+func (c *DNSCache) cleanupExpiredEntries(expires time.Time) (affectedNames []string, removed map[netip.Addr][]*cacheEntry) {
 	if c.lastCleanup.IsZero() {
 		return nil, nil
 	}
@@ -252,7 +251,7 @@ func (c *DNSCache) cleanupExpiredEntries(expires time.Time) (affectedNames []str
 		c.lastCleanup = c.lastCleanup.Add(time.Second).Truncate(time.Second)
 	}
 
-	removed = make(map[string][]*cacheEntry)
+	removed = make(map[netip.Addr][]*cacheEntry)
 	for _, name := range KeepUniqueNames(toCleanNames) {
 		if entries, exists := c.forward[name]; exists {
 			affectedNames = append(affectedNames, name)
@@ -268,12 +267,12 @@ func (c *DNSCache) cleanupExpiredEntries(expires time.Time) (affectedNames []str
 // cleanupOverLimitEntries returns the names that has reached the max number of
 // IP per host. Internally the function sort the entries by the expiration
 // time.
-func (c *DNSCache) cleanupOverLimitEntries() (affectedNames []string, removed map[string][]*cacheEntry) {
+func (c *DNSCache) cleanupOverLimitEntries() (affectedNames []string, removed map[netip.Addr][]*cacheEntry) {
 	type IPEntry struct {
-		ip    string
+		ip    netip.Addr
 		entry *cacheEntry
 	}
-	removed = make(map[string][]*cacheEntry)
+	removed = make(map[netip.Addr][]*cacheEntry)
 
 	// For global cache the limit maybe is not used at all.
 	if c.perHostLimit == 0 {
@@ -324,13 +323,13 @@ func (c *DNSCache) GC(now time.Time, zombies *DNSZombieMappings) (affectedNames 
 
 	if zombies != nil {
 		// Iterate over 2 maps
-		for _, m := range []map[string][]*cacheEntry{
+		for _, m := range []map[netip.Addr][]*cacheEntry{
 			expiredEntries,
 			overLimitEntries,
 		} {
-			for ipStr, entries := range m {
+			for ip, entries := range m {
 				for _, entry := range entries {
-					zombies.Upsert(entry.ExpirationTime, ipStr, entry.Name)
+					zombies.Upsert(entry.ExpirationTime, ip, entry.Name)
 				}
 			}
 		}
@@ -395,7 +394,7 @@ func (c *DNSCache) ReplaceFromCacheByNames(namesToUpdate []string, updates ...*D
 // Lookup returns a set of unique IPs that are currently unexpired for name, if
 // any exist. An empty list indicates no valid records exist. The IPs are
 // returned sorted.
-func (c *DNSCache) Lookup(name string) (ips []net.IP) {
+func (c *DNSCache) Lookup(name string) (ips []netip.Addr) {
 	c.RLock()
 	defer c.RUnlock()
 
@@ -404,7 +403,7 @@ func (c *DNSCache) Lookup(name string) (ips []net.IP) {
 
 // lookupByTime takes a timestamp for expiration comparisons, and is only
 // intended for testing.
-func (c *DNSCache) lookupByTime(now time.Time, name string) (ips []net.IP) {
+func (c *DNSCache) lookupByTime(now time.Time, name string) (ips []netip.Addr) {
 	entries, found := c.forward[name]
 	if !found {
 		return nil
@@ -415,14 +414,14 @@ func (c *DNSCache) lookupByTime(now time.Time, name string) (ips []net.IP) {
 
 // LookupByRegexp returns all non-expired cache entries that match re as a map
 // of name -> IPs
-func (c *DNSCache) LookupByRegexp(re *regexp.Regexp) (matches map[string][]net.IP) {
+func (c *DNSCache) LookupByRegexp(re *regexp.Regexp) (matches map[string][]netip.Addr) {
 	return c.lookupByRegexpByTime(c.lastCleanup, re)
 }
 
 // lookupByRegexpByTime takes a timestamp for expiration comparisons, and is
 // only intended for testing.
-func (c *DNSCache) lookupByRegexpByTime(now time.Time, re *regexp.Regexp) (matches map[string][]net.IP) {
-	matches = make(map[string][]net.IP)
+func (c *DNSCache) lookupByRegexpByTime(now time.Time, re *regexp.Regexp) (matches map[string][]netip.Addr) {
+	matches = make(map[string][]netip.Addr)
 
 	c.RLock()
 	defer c.RUnlock()
@@ -442,7 +441,7 @@ func (c *DNSCache) lookupByRegexpByTime(now time.Time, re *regexp.Regexp) (match
 // maintains the latest-expiring entry per-name per-IP. This means that multiple
 // names referrring to the same IP will expire from the cache at different times,
 // and only 1 entry for each name-IP pair is internally retained.
-func (c *DNSCache) LookupIP(ip net.IP) (names []string) {
+func (c *DNSCache) LookupIP(ip netip.Addr) (names []string) {
 	c.RLock()
 	defer c.RUnlock()
 
@@ -451,9 +450,8 @@ func (c *DNSCache) LookupIP(ip net.IP) (names []string) {
 
 // lookupIPByTime takes a timestamp for expiration comparisons, and is
 // only intended for testing.
-func (c *DNSCache) lookupIPByTime(now time.Time, ip net.IP) (names []string) {
-	ipKey := ip.String()
-	cacheEntries, found := c.reverse[ipKey]
+func (c *DNSCache) lookupIPByTime(now time.Time, ip netip.Addr) (names []string) {
+	cacheEntries, found := c.reverse[ip]
 	if !found {
 		return nil
 	}
@@ -475,11 +473,10 @@ func (c *DNSCache) lookupIPByTime(now time.Time, ip net.IP) (names []string) {
 func (c *DNSCache) updateWithEntryIPs(entries ipEntries, entry *cacheEntry) bool {
 	added := false
 	for _, ip := range entry.IPs {
-		ipStr := ip.String()
-		old, exists := entries[ipStr]
+		old, exists := entries[ip]
 		if old == nil || !exists || old.isExpiredBy(entry.ExpirationTime) {
-			entries[ipStr] = entry
-			c.upsertReverse(ipStr, entry)
+			entries[ip] = entry
+			c.upsertReverse(ip, entry)
 			c.addNameToCleanup(entry)
 			added = true
 		}
@@ -515,7 +512,7 @@ func (c *DNSCache) removeExpired(entries ipEntries, now time.Time, expireLookups
 // later than the already-stored entry.
 // It is assumed that entry includes ip.
 // This needs a write lock
-func (c *DNSCache) upsertReverse(ip string, entry *cacheEntry) {
+func (c *DNSCache) upsertReverse(ip netip.Addr, entry *cacheEntry) {
 	entries, exists := c.reverse[ip]
 	if entries == nil || !exists {
 		entries = make(map[string]*cacheEntry)
@@ -527,7 +524,7 @@ func (c *DNSCache) upsertReverse(ip string, entry *cacheEntry) {
 // remove removes the reference between ip and the name stored in entry from
 // the DNS cache (both in forward and reverse maps). This assumes the write
 // lock is taken.
-func (c *DNSCache) remove(ip string, entry *cacheEntry) {
+func (c *DNSCache) remove(ip netip.Addr, entry *cacheEntry) {
 	c.removeForward(ip, entry)
 	c.removeReverse(ip, entry)
 }
@@ -537,7 +534,7 @@ func (c *DNSCache) remove(ip string, entry *cacheEntry) {
 // outright.
 // It is assumed that entry includes ip.
 // This needs a write lock.
-func (c *DNSCache) removeForward(ip string, entry *cacheEntry) {
+func (c *DNSCache) removeForward(ip netip.Addr, entry *cacheEntry) {
 	entries, exists := c.forward[entry.Name]
 	if entries == nil || !exists {
 		return
@@ -549,7 +546,7 @@ func (c *DNSCache) removeForward(ip string, entry *cacheEntry) {
 }
 
 // removeReverse is the equivalent of removeForward() but for the reverse map.
-func (c *DNSCache) removeReverse(ip string, entry *cacheEntry) {
+func (c *DNSCache) removeReverse(ip netip.Addr, entry *cacheEntry) {
 	entries, exists := c.reverse[ip]
 	if entries == nil || !exists {
 		return
@@ -688,7 +685,7 @@ func (c *DNSCache) UnmarshalJSON(raw []byte) error {
 	defer c.Unlock()
 
 	c.forward = make(map[string]ipEntries)
-	c.reverse = make(map[string]nameEntries)
+	c.reverse = make(map[netip.Addr]nameEntries)
 
 	for _, newLookup := range lookups {
 		c.updateWithEntry(newLookup)
@@ -717,7 +714,7 @@ type DNSZombieMapping struct {
 
 	// IP is an address that is pending for delete but may be in-use by a
 	// connection.
-	IP net.IP `json:"ip,omitempty"`
+	IP netip.Addr `json:"ip,omitempty"`
 
 	// AliveAt is the last time this IP was marked alive via
 	// DNSZombieMappings.MarkAlive.
@@ -751,7 +748,7 @@ func (zombie *DNSZombieMapping) DeepCopy() *DNSZombieMapping {
 // breaking connections that outlast the DNS TTL.
 type DNSZombieMappings struct {
 	lock.Mutex
-	deletes        map[string]*DNSZombieMapping // map[ip]toDelete
+	deletes        map[netip.Addr]*DNSZombieMapping // map[ip]toDelete
 	lastCTGCUpdate time.Time
 	max            int // max allowed zombies
 
@@ -762,7 +759,7 @@ type DNSZombieMappings struct {
 // NewDNSZombieMappings constructs a DNSZombieMappings that is read to use
 func NewDNSZombieMappings(max, perHostLimit int) *DNSZombieMappings {
 	return &DNSZombieMappings{
-		deletes:      make(map[string]*DNSZombieMapping),
+		deletes:      make(map[netip.Addr]*DNSZombieMapping),
 		max:          max,
 		perHostLimit: perHostLimit,
 	}
@@ -771,18 +768,18 @@ func NewDNSZombieMappings(max, perHostLimit int) *DNSZombieMappings {
 // Upsert enqueues the ip -> qname as a possible deletion
 // updatedExisting is true when an earlier enqueue existed and was updated
 // If an existing entry is updated, the later expiryTime is applied to the existing entry.
-func (zombies *DNSZombieMappings) Upsert(expiryTime time.Time, ipStr string, qname ...string) (updatedExisting bool) {
+func (zombies *DNSZombieMappings) Upsert(expiryTime time.Time, ip netip.Addr, qname ...string) (updatedExisting bool) {
 	zombies.Lock()
 	defer zombies.Unlock()
 
-	zombie, updatedExisting := zombies.deletes[ipStr]
+	zombie, updatedExisting := zombies.deletes[ip]
 	if !updatedExisting {
 		zombie = &DNSZombieMapping{
 			Names:           KeepUniqueNames(qname),
-			IP:              net.ParseIP(ipStr),
+			IP:              ip,
 			DeletePendingAt: expiryTime,
 		}
-		zombies.deletes[ipStr] = zombie
+		zombies.deletes[ip] = zombie
 	} else {
 		zombie.Names = KeepUniqueNames(append(zombie.Names, qname...))
 		// Keep the latest expiry time
@@ -953,7 +950,7 @@ func (zombies *DNSZombieMappings) GC() (alive, dead []*DNSZombieMapping) {
 
 	// Delete the zombies we collected above from the internal map
 	for _, zombie := range dead {
-		delete(zombies.deletes, zombie.IP.String())
+		delete(zombies.deletes, zombie.IP)
 	}
 
 	return alive, dead
@@ -961,11 +958,11 @@ func (zombies *DNSZombieMappings) GC() (alive, dead []*DNSZombieMapping) {
 
 // MarkAlive makes an zombie alive and not dead. When now is later than the
 // time set with SetCTGCTime the zombie remains alive.
-func (zombies *DNSZombieMappings) MarkAlive(now time.Time, ip net.IP) {
+func (zombies *DNSZombieMappings) MarkAlive(now time.Time, ip netip.Addr) {
 	zombies.Lock()
 	defer zombies.Unlock()
 
-	if zombie, exists := zombies.deletes[ip.String()]; exists {
+	if zombie, exists := zombies.deletes[ip]; exists {
 		zombie.AliveAt = now
 	}
 }
@@ -999,14 +996,14 @@ func (zombies *DNSZombieMappings) SetCTGCTime(ctGCStart time.Time) {
 //   that expired before the current time.
 // nameMatch will remove that specific DNS name from zombies that include it,
 // deleting it when no DNS names remain.
-func (zombies *DNSZombieMappings) ForceExpire(expireLookupsBefore time.Time, nameMatch *regexp.Regexp, cidr *net.IPNet) (namesAffected []string) {
+func (zombies *DNSZombieMappings) ForceExpire(expireLookupsBefore time.Time, nameMatch *regexp.Regexp, prefix *netip.Prefix) (namesAffected []string) {
 	zombies.Lock()
 	defer zombies.Unlock()
-	return zombies.forceExpireLocked(expireLookupsBefore, nameMatch, cidr)
+	return zombies.forceExpireLocked(expireLookupsBefore, nameMatch, prefix)
 
 }
 
-func (zombies *DNSZombieMappings) forceExpireLocked(expireLookupsBefore time.Time, nameMatch *regexp.Regexp, cidr *net.IPNet) (namesAffected []string) {
+func (zombies *DNSZombieMappings) forceExpireLocked(expireLookupsBefore time.Time, nameMatch *regexp.Regexp, prefix *netip.Prefix) (namesAffected []string) {
 	var toDelete []*DNSZombieMapping
 
 	for _, zombie := range zombies.deletes {
@@ -1016,8 +1013,8 @@ func (zombies *DNSZombieMappings) forceExpireLocked(expireLookupsBefore time.Tim
 			continue
 		}
 
-		// If cidr is provided, skip zombies with IPs outside the range
-		if cidr != nil && !cidr.Contains(zombie.IP) {
+		// If prefix is provided, skip zombies with IPs outside the range
+		if prefix != nil && !prefix.Contains(zombie.IP) {
 			continue
 		}
 
@@ -1041,7 +1038,7 @@ func (zombies *DNSZombieMappings) forceExpireLocked(expireLookupsBefore time.Tim
 
 	// Delete the zombies that are now empty
 	for _, zombie := range toDelete {
-		delete(zombies.deletes, zombie.IP.String())
+		delete(zombies.deletes, zombie.IP)
 	}
 
 	return namesAffected
@@ -1051,7 +1048,7 @@ func (zombies *DNSZombieMappings) forceExpireLocked(expireLookupsBefore time.Tim
 // new DNS lookup.
 // The error return is for errors compiling the internal regexp. This should
 // never happen.
-func (zombies *DNSZombieMappings) ForceExpireByNameIP(expireLookupsBefore time.Time, name string, ips ...net.IP) error {
+func (zombies *DNSZombieMappings) ForceExpireByNameIP(expireLookupsBefore time.Time, name string, ips ...netip.Addr) error {
 	reStr := matchpattern.ToRegexp(name)
 	re, err := re.CompileRegex(reStr)
 	if err != nil {
@@ -1061,16 +1058,18 @@ func (zombies *DNSZombieMappings) ForceExpireByNameIP(expireLookupsBefore time.T
 	zombies.Lock()
 	defer zombies.Unlock()
 	for _, ip := range ips {
-		cidr := net.IPNet{Mask: net.CIDRMask(len(ip)*8, len(ip)*8)}
-		cidr.IP = ip.Mask(cidr.Mask)
-		zombies.forceExpireLocked(expireLookupsBefore, re, &cidr)
+		prefix, err := ip.Prefix(ip.BitLen())
+		if err != nil {
+			continue
+		}
+		zombies.forceExpireLocked(expireLookupsBefore, re, &prefix)
 	}
 	return nil
 }
 
 // CIDRMatcherFunc is a function passed to (*DNSZombieMappings).DumpAlive,
 // called on each zombie to determine whether it should be returned.
-type CIDRMatcherFunc func(ip net.IP) bool
+type CIDRMatcherFunc func(ip netip.Addr) bool
 
 // DumpAlive returns copies of still-alive zombies matching cidrMatcher.
 func (zombies *DNSZombieMappings) DumpAlive(cidrMatcher CIDRMatcherFunc) (alive []*DNSZombieMapping) {
@@ -1103,7 +1102,7 @@ func (zombies *DNSZombieMappings) MarshalJSON() ([]byte, error) {
 	// The JSON package cannot serialize private fields so we have to make a
 	// proxy type here.
 	aux := struct {
-		Deletes map[string]*DNSZombieMapping `json:"deletes,omitempty"`
+		Deletes map[netip.Addr]*DNSZombieMapping `json:"deletes,omitempty"`
 	}{
 		Deletes: zombies.deletes,
 	}
@@ -1123,7 +1122,7 @@ func (zombies *DNSZombieMappings) UnmarshalJSON(raw []byte) error {
 	// The JSON package cannot deserialize private fields so we have to make a
 	// proxy type here.
 	aux := struct {
-		Deletes map[string]*DNSZombieMapping `json:"deletes,omitempty"`
+		Deletes map[netip.Addr]*DNSZombieMapping `json:"deletes,omitempty"`
 	}{
 		Deletes: zombies.deletes,
 	}

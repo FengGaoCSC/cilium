@@ -732,12 +732,12 @@ func (s *IPTestSuite) TestKeepUniqueIPs(c *C) {
 	c.Assert(len(ips), Equals, 0, Commentf("Non-empty slice returned with empty input"))
 
 	// test all duplicate
-	ips = KeepUniqueIPs([]net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("1.1.1.1"), net.ParseIP("1.1.1.1")})
+	ips = KeepUniqueIPs([]netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("1.1.1.1")})
 	c.Assert(len(ips), Equals, 1, Commentf("Too many IPs returned for only 1 unique"))
 	c.Assert(ips[0].String(), Equals, "1.1.1.1", Commentf("Incorrect unique IP returned"))
 
 	// test all unique
-	ipSource := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("2.2.2.2"), net.ParseIP("3.3.3.3")}
+	ipSource := []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("2.2.2.2"), netip.MustParseAddr("3.3.3.3")}
 	ips = KeepUniqueIPs(ipSource)
 	c.Assert(len(ips), Equals, 3, Commentf("Too few IPs returned for only 3 uniques"))
 	for i := range ipSource {
@@ -745,7 +745,7 @@ func (s *IPTestSuite) TestKeepUniqueIPs(c *C) {
 	}
 
 	// test mixed
-	ipSource = []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("2.2.2.2"), net.ParseIP("3.3.3.3"), net.ParseIP("2.2.2.2")}
+	ipSource = []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("2.2.2.2"), netip.MustParseAddr("3.3.3.3"), netip.MustParseAddr("2.2.2.2")}
 	ips = KeepUniqueIPs(ipSource)
 	c.Assert(len(ips), Equals, 3, Commentf("Too few IPs returned for only 3 uniques"))
 	for i := range ipSource[:3] {
@@ -756,13 +756,14 @@ func (s *IPTestSuite) TestKeepUniqueIPs(c *C) {
 // Note: each "op" works on size things
 func (s *IPTestSuite) BenchmarkKeepUniqueIPs(c *C) {
 	size := 1000
-	ipsOrig := make([]net.IP, 0, size)
+	ipsOrig := make([]netip.Addr, 0, size)
 	for i := 0; i < size; i++ {
-		ipsOrig = append(ipsOrig, net.IPv4(byte(i>>24), byte(i>>16), byte(i>>8), byte(i>>0)))
+		ipsOrig = append(ipsOrig, netip.AddrFrom4([4]byte{byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i >> 0)}))
 	}
-	ips := make([]net.IP, 0, len(ipsOrig))
-
+	ips := make([]netip.Addr, 0, len(ipsOrig))
 	copy(ips, ipsOrig)
+
+	c.ResetTimer()
 	for i := 0; i < c.N; i++ {
 		c.StopTimer()
 		rand.Shuffle(len(ips), func(i, j int) {

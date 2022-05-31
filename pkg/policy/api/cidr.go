@@ -5,6 +5,7 @@ package api
 
 import (
 	"net"
+	"net/netip"
 	"strings"
 
 	"github.com/cilium/cilium/pkg/ip"
@@ -156,11 +157,11 @@ func ComputeResultantCIDRSet(cidrs CIDRRuleSlice) CIDRSlice {
 
 // IPsToCIDRRules generates CIDRRules for the IPs passed in./
 // This function will mark the rule to Generated true by default.
-func IPsToCIDRRules(ips []net.IP) (cidrRules []CIDRRule) {
+func IPsToCIDRRules(ips []netip.Addr) (cidrRules []CIDRRule) {
 	for _, ip := range ips {
 		rule := CIDRRule{ExceptCIDRs: make([]CIDR, 0)}
 		rule.Generated = true
-		if ip.To4() != nil {
+		if ip.Is4() {
 			rule.Cidr = CIDR(ip.String() + "/32")
 		} else {
 			rule.Cidr = CIDR(ip.String() + "/128")

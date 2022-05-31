@@ -750,14 +750,14 @@ func partitionCIDR(targetCIDR net.IPNet, excludeCIDR net.IPNet) ([]*net.IPNet, [
 // will not overwrite a valid element with another. To overwrite an element i
 // with j, i must have come before j AND we decided it was a duplicate of the
 // element at i-1.
-func KeepUniqueIPs(ips []net.IP) []net.IP {
+func KeepUniqueIPs(ips []netip.Addr) []netip.Addr {
 	sort.Slice(ips, func(i, j int) bool {
-		return bytes.Compare(ips[i], ips[j]) == -1
+		return ips[i].Compare(ips[j]) == -1
 	})
 
 	returnIPs := ips[:0] // len==0 but cap==cap(ips)
 	for readIdx, ip := range ips {
-		if len(returnIPs) == 0 || !returnIPs[len(returnIPs)-1].Equal(ips[readIdx]) {
+		if len(returnIPs) == 0 || returnIPs[len(returnIPs)-1] != ips[readIdx] {
 			returnIPs = append(returnIPs, ip)
 		}
 	}

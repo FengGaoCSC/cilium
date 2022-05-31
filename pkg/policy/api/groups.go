@@ -6,7 +6,7 @@ package api
 import (
 	"context"
 	"fmt"
-	"net"
+	"net/netip"
 	"sync"
 
 	"github.com/cilium/cilium/pkg/ip"
@@ -22,7 +22,7 @@ var (
 
 // GroupProviderFunc is a func that need to be register to be able to
 // register a new provider in the platform.
-type GroupProviderFunc func(context.Context, *ToGroups) ([]net.IP, error)
+type GroupProviderFunc func(context.Context, *ToGroups) ([]netip.Addr, error)
 
 // ToGroups structure to store all kinds of new integrations that needs a new
 // derivative policy.
@@ -47,8 +47,7 @@ func RegisterToGroupsProvider(providerName string, callback GroupProviderFunc) {
 // GetCidrSet will return the CIDRRule for the rule using the callbacks that
 // are register in the platform.
 func (group *ToGroups) GetCidrSet(ctx context.Context) ([]CIDRRule, error) {
-
-	var ips []net.IP
+	var ips []netip.Addr
 	// Get per  provider CIDRSet
 	if group.AWS != nil {
 		callbackInterface, ok := providers.Load(AWSProvider)

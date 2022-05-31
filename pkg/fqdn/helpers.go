@@ -4,7 +4,7 @@
 package fqdn
 
 import (
-	"net"
+	"net/netip"
 	"regexp"
 
 	"github.com/sirupsen/logrus"
@@ -22,15 +22,15 @@ import (
 // FQDNSelector. Returns the mapping of DNSName to set of IPs which back said
 // DNS name, the set of FQDNSelectors which do not map to any IPs, and the set
 // of FQDNSelectors mapping to a set of IPs.
-func (n *NameManager) MapSelectorsToIPsLocked(fqdnSelectors map[api.FQDNSelector]struct{}) (selectorsMissingIPs []api.FQDNSelector, selectorIPMapping map[api.FQDNSelector][]net.IP) {
+func (n *NameManager) MapSelectorsToIPsLocked(fqdnSelectors map[api.FQDNSelector]struct{}) (selectorsMissingIPs []api.FQDNSelector, selectorIPMapping map[api.FQDNSelector][]netip.Addr) {
 	missing := make(map[api.FQDNSelector]struct{}) // a set to dedup missing dnsNames
-	selectorIPMapping = make(map[api.FQDNSelector][]net.IP)
+	selectorIPMapping = make(map[api.FQDNSelector][]netip.Addr)
 
 	log.WithField("fqdnSelectors", fqdnSelectors).Debug("mapSelectorsToIPs")
 
 	// Map each FQDNSelector to set of CIDRs
 	for ToFQDN := range fqdnSelectors {
-		ipsSelected := make([]net.IP, 0)
+		ipsSelected := make([]netip.Addr, 0)
 		// lookup matching DNS names
 		if len(ToFQDN.MatchName) > 0 {
 			dnsName := prepareMatchName(ToFQDN.MatchName)
