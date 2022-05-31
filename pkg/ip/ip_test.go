@@ -860,6 +860,72 @@ func (s *IPTestSuite) TestGetIPFromListByFamily(c *C) {
 	}
 }
 
+func (s *IPTestSuite) TestPrefixToIPs(c *C) {
+	tests := []struct {
+		prefix  string
+		ips     []string
+		wantErr bool
+	}{
+		{
+			prefix:  "",
+			wantErr: true,
+		},
+		{
+			prefix:  "foobar",
+			wantErr: true,
+		},
+		{
+			prefix:  "::/",
+			wantErr: true,
+		},
+		{
+			prefix:  "10.0.0.1/128",
+			wantErr: true,
+		},
+		{
+			prefix: "10.0.0.1/32",
+			ips:    []string{"10.0.0.1"},
+		},
+		{
+			prefix: "10.0.0.1/31",
+			ips:    []string{"10.0.0.0", "10.0.0.1"},
+		},
+		{
+			prefix: "10.1.0.0/30",
+			ips:    []string{"10.1.0.0", "10.1.0.1", "10.1.0.2", "10.1.0.3"},
+		},
+		{
+			prefix: "192.168.0.0/28",
+			ips:    []string{"192.168.0.0", "192.168.0.1", "192.168.0.2", "192.168.0.3", "192.168.0.4", "192.168.0.5", "192.168.0.6", "192.168.0.7", "192.168.0.8", "192.168.0.9", "192.168.0.10", "192.168.0.11", "192.168.0.12", "192.168.0.13", "192.168.0.14", "192.168.0.15"},
+		},
+		{
+			prefix: "::1/128",
+			ips:    []string{"::1"},
+		},
+		{
+			prefix: "::1/127",
+			ips:    []string{"::", "::1"},
+		},
+		{
+			prefix: "fd00::0/127",
+			ips:    []string{"fd00::", "fd00::1"},
+		},
+		{
+			prefix: "fd00:42::0/126",
+			ips:    []string{"fd00:42::", "fd00:42::1", "fd00:42::2", "fd00:42::3"},
+		},
+	}
+	for _, tt := range tests {
+		got, err := PrefixToIPs(tt.prefix)
+		if !tt.wantErr {
+			c.Assert(err, IsNil)
+		} else {
+			c.Assert(err, Not(IsNil))
+		}
+		c.Assert(got, checker.DeepEquals, tt.ips)
+	}
+}
+
 func (s *IPTestSuite) TestGetIPAtIndex(c *C) {
 	type args struct {
 		cidr  string
