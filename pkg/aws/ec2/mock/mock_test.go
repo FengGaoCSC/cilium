@@ -134,13 +134,13 @@ func (e *MockSuite) TestGetNextSubnet(c *check.C) {
 	c.Assert(subnet.String(), checker.Equals, "10.128.0.0/9")
 }
 
-func (e *MockSuite) TestPrefixToIps(c *check.C) {
+func (e *MockSuite) TestPrefixToIPs(c *check.C) {
 	_, cidrTest, _ := net.ParseCIDR("10.128.0.0/9")
 	cidrSet, _ := cidrset.NewCIDRSet(cidrTest, 28)
 	subnet, err := cidrSet.AllocateNext()
 	c.Assert(err, check.IsNil)
 	subnetStr := subnet.String()
-	ips, _ := ip.PrefixToIps(subnetStr)
+	ips, _ := ip.PrefixToIPs(subnetStr)
 	c.Assert(ips[0], checker.Equals, "10.128.0.0")
 	c.Assert(ips[len(ips)-1], checker.Equals, "10.128.0.15")
 }

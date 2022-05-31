@@ -288,8 +288,8 @@ func PrefixCeil(numIPs int, multiple int) int {
 	return quotient
 }
 
-// PrefixToIps converts the given prefix to an array containing all IPs in the prefix / CIDR block.
-func PrefixToIps(prefixCidr string) ([]string, error) {
+// PrefixToIPs converts the given prefix to an array containing all IPs in the prefix / CIDR block.
+func PrefixToIPs(prefixCidr string) ([]string, error) {
 	var prefixIps []string
 	_, ipNet, err := net.ParseCIDR(prefixCidr)
 	if err != nil {
