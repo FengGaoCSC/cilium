@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"strings"
 
@@ -295,7 +296,7 @@ type Service struct {
 	// Whenever creating a new service we should make sure that the FrontendIPs are
 	// sorted, so we always generate the same string representation.
 	// +deepequal-gen=false
-	FrontendIPs []net.IP
+	FrontendIPs []netip.Addr
 	IsHeadless  bool
 
 	// IncludeExternal is true when external endpoints from other clusters
@@ -449,7 +450,7 @@ func parseIPs(externalIPs []string) map[string]net.IP {
 }
 
 // NewService returns a new Service with the Ports map initialized.
-func NewService(ips []net.IP, externalIPs, loadBalancerIPs, loadBalancerSourceRanges []string,
+func NewService(ips []netip.Addr, externalIPs, loadBalancerIPs, loadBalancerSourceRanges []string,
 	headless bool, trafficPolicy loadbalancer.SVCTrafficPolicy,
 	healthCheckNodePort uint16, labels, selector map[string]string,
 	namespace string, svcType loadbalancer.SVCType) *Service {

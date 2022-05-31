@@ -840,7 +840,7 @@ func datapathSVCs(svc *k8s.Service, endpoints *k8s.Endpoints) (svcs []loadbalanc
 func hashSVCMap(svcs []loadbalancer.SVC) map[string]loadbalancer.L3n4Addr {
 	m := map[string]loadbalancer.L3n4Addr{}
 	for _, svc := range svcs {
-		m[svc.Frontend.L3n4Addr.Hash()] = svc.Frontend.L3n4Addr
+		m[svc.Frontend.L3n4Addr] = svc.Frontend.L3n4Addr
 	}
 	return m
 }

@@ -5,6 +5,7 @@ package types
 
 import (
 	"net"
+	"net/netip"
 
 	"github.com/cilium/cilium/pkg/cidr"
 )
@@ -30,7 +31,7 @@ type NodeAddressingFamily interface {
 
 	// LoadBalancerNodeAddresses lists all addresses on which HostPort and
 	// NodePort services should be responded to
-	LoadBalancerNodeAddresses() []net.IP
+	LoadBalancerNodeAddresses() []netip.Addr
 }
 
 // NodeAddressing implements addressing of a node

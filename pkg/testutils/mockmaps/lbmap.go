@@ -118,7 +118,7 @@ func (m *LBMockMap) UpdateBackendWithState(b lb.Backend) error {
 	if !found {
 		return fmt.Errorf("update failed : backend %d doesn't exist", id)
 	}
-	if b.ID != be.ID || b.Port != be.Port || !b.IP.Equal(be.IP) {
+	if b.ID != be.ID || b.Port != be.Port || b.IP != be.IP {
 		return fmt.Errorf("backend in the map  %+v doesn't match %+v: only backend"+
 			"state can be updated", be.String(), b.String())
 	}

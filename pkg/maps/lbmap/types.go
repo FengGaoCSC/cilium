@@ -5,6 +5,7 @@ package lbmap
 
 import (
 	"net"
+	"net/netip"
 
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/cidr"
@@ -178,7 +179,8 @@ type BackendIDByServiceIDSet map[uint16]map[loadbalancer.BackendID]struct{} // s
 type SourceRangeSetByServiceID map[uint16][]*cidr.CIDR // svc ID => src range CIDRs
 
 func svcFrontend(svcKey ServiceKey, svcValue ServiceValue) *loadbalancer.L3n4AddrID {
-	feL3n4Addr := loadbalancer.NewL3n4Addr(loadbalancer.NONE, svcKey.GetAddress(), svcKey.GetPort(), svcKey.GetScope())
+	ip, _ := netip.AddrFromSlice(svcKey.GetAddress())
+	feL3n4Addr := loadbalancer.NewL3n4Addr(loadbalancer.NONE, ip, svcKey.GetPort(), svcKey.GetScope())
 	feL3n4AddrID := &loadbalancer.L3n4AddrID{
 		L3n4Addr: *feL3n4Addr,
 		ID:       loadbalancer.ID(svcValue.GetRevNat()),
@@ -187,7 +189,7 @@ func svcFrontend(svcKey ServiceKey, svcValue ServiceValue) *loadbalancer.L3n4Add
 }
 
 func svcBackend(backendID loadbalancer.BackendID, backend BackendValue) *loadbalancer.Backend {
-	beIP := backend.GetAddress()
+	beIP, _ := netip.AddrFromSlice(backend.GetAddress())
 	bePort := backend.GetPort()
 	beProto := loadbalancer.NONE
 	beState := loadbalancer.GetBackendStateFromFlags(backend.GetFlags())

@@ -10,6 +10,7 @@ package k8s
 
 import (
 	net "net"
+	netip "net/netip"
 
 	cidr "github.com/cilium/cilium/pkg/cidr"
 	loadbalancer "github.com/cilium/cilium/pkg/loadbalancer"
@@ -88,13 +89,9 @@ func (in *Service) DeepCopyInto(out *Service) {
 	*out = *in
 	if in.FrontendIPs != nil {
 		in, out := &in.FrontendIPs, &out.FrontendIPs
-		*out = make([]net.IP, len(*in))
+		*out = make([]netip.Addr, len(*in))
 		for i := range *in {
-			if (*in)[i] != nil {
-				in, out := &(*in)[i], &(*out)[i]
-				*out = make(net.IP, len(*in))
-				copy(*out, *in)
-			}
+			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
 	if in.Ports != nil {

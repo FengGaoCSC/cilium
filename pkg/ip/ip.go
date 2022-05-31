@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"math/big"
 	"net"
+	"net/netip"
 	"sort"
 )
 
@@ -859,15 +860,15 @@ func IsIPv6(ip net.IP) bool {
 }
 
 // SortIPList sorts the provided net.IP slice in place.
-func SortIPList(ipList []net.IP) {
+func SortIPList(ipList []netip.Addr) {
 	sort.Slice(ipList, func(i, j int) bool {
-		return bytes.Compare(ipList[i], ipList[j]) < 0
+		return ipList[i].Compare(ipList[j]) < 0
 	})
 }
 
-// getSortedIPList returns a new net.IP slice in which the IPs are sorted.
-func getSortedIPList(ipList []net.IP) []net.IP {
-	sortedIPList := make([]net.IP, len(ipList))
+// getSortedIPList returns a new netip.Add slice in which the IPs are sorted.
+func getSortedIPList(ipList []netip.Addr) []netip.Addr {
+	sortedIPList := make([]netip.Addr, len(ipList))
 	for i := 0; i < len(ipList); i++ {
 		sortedIPList[i] = ipList[i]
 	}
@@ -878,7 +879,7 @@ func getSortedIPList(ipList []net.IP) []net.IP {
 
 // SortedIPListsAreEqual compares two lists of sorted IPs. If any differ it returns
 // false.
-func SortedIPListsAreEqual(a, b []net.IP) bool {
+func SortedIPListsAreEqual(a, b []netip.Addr) bool {
 	// The IP set is definitely different if the lengths are different.
 	if len(a) != len(b) {
 		return false
@@ -887,7 +888,7 @@ func SortedIPListsAreEqual(a, b []net.IP) bool {
 	// Lengths are equal, so each member in one set must be in the other
 	// If any IPs at the same index differ the sorted IP list are not equal.
 	for i := range a {
-		if !a[i].Equal(b[i]) {
+		if a[i] != b[i] {
 			return false
 		}
 	}
@@ -897,7 +898,7 @@ func SortedIPListsAreEqual(a, b []net.IP) bool {
 // UnsortedIPListsAreEqual returns true if the list of net.IP provided is same
 // without considering the order of the IPs in the list. The function will first
 // attempt to sort both the IP lists and then validate equality for sorted lists.
-func UnsortedIPListsAreEqual(ipList1, ipList2 []net.IP) bool {
+func UnsortedIPListsAreEqual(ipList1, ipList2 []netip.Addr) bool {
 	// The IP set is definitely different if the lengths are different.
 	if len(ipList1) != len(ipList2) {
 		return false

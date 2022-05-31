@@ -6,7 +6,7 @@
 package service
 
 import (
-	"net"
+	"net/netip"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -35,28 +35,29 @@ func (e *IDAllocTestSuite) TearDownTest(c *C) {
 }
 
 var (
+	lo6       = netip.MustParseAddr("::1")
 	l3n4Addr1 = loadbalancer.L3n4Addr{
-		IP:     net.IPv6loopback,
+		IP:     lo6,
 		L4Addr: loadbalancer.L4Addr{Port: 0, Protocol: "UDP"},
 	}
 	l3n4Addr2 = loadbalancer.L3n4Addr{
-		IP:     net.IPv6loopback,
+		IP:     lo6,
 		L4Addr: loadbalancer.L4Addr{Port: 1, Protocol: "TCP"},
 	}
 	l3n4Addr3 = loadbalancer.L3n4Addr{
-		IP:     net.IPv6loopback,
+		IP:     lo6,
 		L4Addr: loadbalancer.L4Addr{Port: 1, Protocol: "UDP"},
 	}
 	l3n4Addr4 = loadbalancer.L3n4Addr{
-		IP:     net.IPv6loopback,
+		IP:     lo6,
 		L4Addr: loadbalancer.L4Addr{Port: 2, Protocol: "UDP"},
 	}
 	l3n4Addr5 = loadbalancer.L3n4Addr{
-		IP:     net.ParseIP("::2"),
+		IP:     netip.MustParseAddr("::2"),
 		L4Addr: loadbalancer.L4Addr{Port: 2, Protocol: "UDP"},
 	}
 	l3n4Addr6 = loadbalancer.L3n4Addr{
-		IP:     net.ParseIP("::3"),
+		IP:     netip.MustParseAddr("::3"),
 		L4Addr: loadbalancer.L4Addr{Port: 2, Protocol: "UDP"},
 	}
 	wantL3n4AddrID = &loadbalancer.L3n4AddrID{
@@ -199,7 +200,7 @@ func (s *IDAllocTestSuite) TestBackendID(c *C) {
 
 func (s *IDAllocTestSuite) BenchmarkAllocation(c *C) {
 	addr := loadbalancer.L3n4Addr{
-		IP:     net.IPv6loopback,
+		IP:     netip.MustParseAddr("::1"),
 		L4Addr: loadbalancer.L4Addr{Port: 0, Protocol: "UDP"},
 	}
 

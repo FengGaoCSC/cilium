@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"sort"
 	"strconv"
 
@@ -60,7 +61,7 @@ func New(maglev bool, maglevTableSize int) *LBBPFMap {
 
 type UpsertServiceParams struct {
 	ID   uint16
-	IP   net.IP
+	IP   netip.Addr
 	Port uint16
 
 	// PreferredBackends is a subset of ActiveBackends
@@ -607,7 +608,7 @@ func (*LBBPFMap) DumpBackendMaps() ([]*loadbalancer.Backend, error) {
 	}
 
 	for backendID, backendVal := range backendValueMap {
-		ip := backendVal.GetAddress()
+		ip, _ := netip.AddrFromSlice(backendVal.GetAddress())
 		port := backendVal.GetPort()
 		proto := loadbalancer.NONE
 		state := loadbalancer.GetBackendStateFromFlags(backendVal.GetFlags())
@@ -722,17 +723,16 @@ func updateServiceEndpoint(key ServiceKey, value ServiceValue) error {
 	return nil
 }
 
-type svcMap map[string]loadbalancer.SVC
+type svcMap map[loadbalancer.L3n4Addr]loadbalancer.SVC
 
 // addFE adds the give 'fe' to the svcMap without any backends. If it does not
 // yet exist, an entry is created. Otherwise, the existing entry is left
 // unchanged.
 func (svcs svcMap) addFE(fe *loadbalancer.L3n4AddrID) *loadbalancer.SVC {
-	hash := fe.Hash()
-	lbsvc, ok := svcs[hash]
+	lbsvc, ok := svcs[fe.L3n4Addr]
 	if !ok {
 		lbsvc = loadbalancer.SVC{Frontend: *fe}
-		svcs[hash] = lbsvc
+		svcs[fe.L3n4Addr] = lbsvc
 	}
 	return &lbsvc
 }
@@ -744,8 +744,7 @@ func (svcs svcMap) addFE(fe *loadbalancer.L3n4AddrID) *loadbalancer.SVC {
 // remaining be elements will be kept on the same index and, in case the new array is
 // larger than the number of backends, some elements will be empty.
 func (svcs svcMap) addFEnBE(fe *loadbalancer.L3n4AddrID, be *loadbalancer.Backend, beIndex int) *loadbalancer.SVC {
-	hash := fe.Hash()
-	lbsvc, ok := svcs[hash]
+	lbsvc, ok := svcs[fe.L3n4Addr]
 	if !ok {
 		var bes []loadbalancer.Backend
 		if beIndex == 0 {
@@ -773,7 +772,7 @@ func (svcs svcMap) addFEnBE(fe *loadbalancer.L3n4AddrID, be *loadbalancer.Backen
 		}
 	}
 
-	svcs[hash] = lbsvc
+	svcs[fe.L3n4Addr] = lbsvc
 	return &lbsvc
 }
 

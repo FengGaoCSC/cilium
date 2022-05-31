@@ -6,6 +6,7 @@ package lbmap
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"unsafe"
 
 	"github.com/cilium/cilium/pkg/bpf"
@@ -236,17 +237,14 @@ type Service4Key struct {
 	Pad         pad2uint8  `align:"pad"`
 }
 
-func NewService4Key(ip net.IP, port uint16, proto u8proto.U8proto, scope uint8, slot uint16) *Service4Key {
-	key := Service4Key{
+func NewService4Key(ip netip.Addr, port uint16, proto u8proto.U8proto, scope uint8, slot uint16) *Service4Key {
+	return &Service4Key{
+		Address:     ip.As4(),
 		Port:        port,
 		Proto:       uint8(proto),
 		Scope:       scope,
 		BackendSlot: slot,
 	}
-
-	copy(key.Address[:], ip.To4())
-
-	return &key
 }
 
 func (k *Service4Key) String() string {
@@ -396,21 +394,17 @@ type Backend4Value struct {
 	Flags   uint8           `align:"flags"`
 }
 
-func NewBackend4Value(ip net.IP, port uint16, proto u8proto.U8proto, state loadbalancer.BackendState) (*Backend4Value, error) {
-	ip4 := ip.To4()
-	if ip4 == nil {
+func NewBackend4Value(ip netip.Addr, port uint16, proto u8proto.U8proto, state loadbalancer.BackendState) (*Backend4Value, error) {
+	if !ip.Is4() {
 		return nil, fmt.Errorf("Not an IPv4 address")
 	}
-	flags := loadbalancer.NewBackendFlags(state)
 
-	val := Backend4Value{
-		Port:  port,
-		Proto: proto,
-		Flags: flags,
-	}
-	copy(val.Address[:], ip.To4())
-
-	return &val, nil
+	return &Backend4Value{
+		Address: ip.As4(),
+		Port:    port,
+		Proto:   proto,
+		Flags:   loadbalancer.NewBackendFlags(state),
+	}, nil
 }
 
 func (v *Backend4Value) String() string {
@@ -442,7 +436,7 @@ type Backend4V2 struct {
 	Value *Backend4Value
 }
 
-func NewBackend4V2(id loadbalancer.BackendID, ip net.IP, port uint16, proto u8proto.U8proto,
+func NewBackend4V2(id loadbalancer.BackendID, ip netip.Addr, port uint16, proto u8proto.U8proto,
 	state loadbalancer.BackendState) (*Backend4V2, error) {
 	val, err := NewBackend4Value(ip, port, proto, state)
 	if err != nil {

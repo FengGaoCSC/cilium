@@ -5,7 +5,7 @@ package loadbalancer
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"sort"
 	"strings"
 
@@ -497,11 +497,30 @@ func NewL4Addr(protocol L4Type, number uint16) *L4Addr {
 //
 // +deepequal-gen=true
 // +deepequal-gen:private-method=true
+// +k8s:deepcopy-gen=false
 type L3n4Addr struct {
 	// +deepequal-gen=false
-	IP net.IP
+	IP netip.Addr
 	L4Addr
 	Scope uint8
+}
+
+// DeepCopyInto is a deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *L3n4Addr) DeepCopyInto(out *L3n4Addr) {
+	*out = *in
+	out.IP = in.IP
+	out.L4Addr = in.L4Addr
+	return
+}
+
+// DeepCopy is a deepcopy function, copying the receiver, creating a new L3n4Addr.
+func (in *L3n4Addr) DeepCopy() *L3n4Addr {
+	if in == nil {
+		return nil
+	}
+	out := new(L3n4Addr)
+	in.DeepCopyInto(out)
+	return out
 }
 
 // DeepEqual returns true if both the receiver and 'o' are deeply equal.
@@ -509,16 +528,13 @@ func (l *L3n4Addr) DeepEqual(o *L3n4Addr) bool {
 	if l == nil {
 		return o == nil
 	}
-	return l.IP.Equal(o.IP) && l.deepEqual(o)
+	return l.IP == o.IP && l.deepEqual(o)
 }
 
 // NewL3n4Addr creates a new L3n4Addr.
-func NewL3n4Addr(protocol L4Type, ip net.IP, portNumber uint16, scope uint8) *L3n4Addr {
+func NewL3n4Addr(protocol L4Type, ip netip.Addr, portNumber uint16, scope uint8) *L3n4Addr {
 	lbport := NewL4Addr(protocol, portNumber)
-
-	addr := L3n4Addr{IP: ip, L4Addr: *lbport, Scope: scope}
-
-	return &addr
+	return &L3n4Addr{IP: ip, L4Addr: *lbport, Scope: scope}
 }
 
 func NewL3n4AddrFromModel(base *models.FrontendAddress) (*L3n4Addr, error) {
@@ -542,9 +558,9 @@ func NewL3n4AddrFromModel(base *models.FrontendAddress) (*L3n4Addr, error) {
 	}
 
 	l4addr := NewL4Addr(proto, base.Port)
-	ip := net.ParseIP(base.IP)
-	if ip == nil {
-		return nil, fmt.Errorf("invalid IP address \"%s\"", base.IP)
+	ip, err := netip.ParseAddr(base.IP)
+	if err != nil {
+		return nil, fmt.Errorf("invalid IP address %q: %w", base.IP, err)
 	}
 
 	if base.Scope == models.FrontendAddressScopeExternal {
@@ -552,7 +568,7 @@ func NewL3n4AddrFromModel(base *models.FrontendAddress) (*L3n4Addr, error) {
 	} else if base.Scope == models.FrontendAddressScopeInternal {
 		scope = ScopeInternal
 	} else {
-		return nil, fmt.Errorf("invalid scope \"%s\"", base.Scope)
+		return nil, fmt.Errorf("invalid scope %q", base.Scope)
 	}
 
 	return &L3n4Addr{IP: ip, L4Addr: *l4addr, Scope: scope}, nil
@@ -560,7 +576,7 @@ func NewL3n4AddrFromModel(base *models.FrontendAddress) (*L3n4Addr, error) {
 
 // NewBackend creates the Backend struct instance from given params.
 // The default state for the returned Backend is BackendStateActive.
-func NewBackend(id BackendID, protocol L4Type, ip net.IP, portNumber uint16) *Backend {
+func NewBackend(id BackendID, protocol L4Type, ip netip.Addr, portNumber uint16) *Backend {
 	lbport := NewL4Addr(protocol, portNumber)
 	b := Backend{
 		ID:        BackendID(id),
@@ -574,17 +590,15 @@ func NewBackend(id BackendID, protocol L4Type, ip net.IP, portNumber uint16) *Ba
 
 // NewBackendWithState creates the Backend struct instance from given params,
 // and sets the restore state for the Backend.
-func NewBackendWithState(id BackendID, protocol L4Type, ip net.IP, portNumber uint16,
+func NewBackendWithState(id BackendID, protocol L4Type, ip netip.Addr, portNumber uint16,
 	state BackendState, restored bool) *Backend {
 	lbport := NewL4Addr(protocol, portNumber)
-	b := Backend{
+	return &Backend{
 		ID:                   id,
 		L3n4Addr:             L3n4Addr{IP: ip, L4Addr: *lbport},
 		State:                state,
 		RestoredFromDatapath: restored,
 	}
-
-	return &b
 }
 
 func NewBackendFromBackendModel(base *models.BackendAddress) (*Backend, error) {
@@ -594,9 +608,9 @@ func NewBackendFromBackendModel(base *models.BackendAddress) (*Backend, error) {
 
 	// FIXME: Should this be NONE ?
 	l4addr := NewL4Addr(NONE, base.Port)
-	ip := net.ParseIP(*base.IP)
-	if ip == nil {
-		return nil, fmt.Errorf("invalid IP address \"%s\"", *base.IP)
+	ip, err := netip.ParseAddr(*base.IP)
+	if err != nil {
+		return nil, fmt.Errorf("invalid IP address %q: %w", *base.IP, err)
 	}
 	state, err := GetBackendState(base.State)
 	if err != nil {
@@ -618,9 +632,9 @@ func NewL3n4AddrFromBackendModel(base *models.BackendAddress) (*L3n4Addr, error)
 
 	// FIXME: Should this be NONE ?
 	l4addr := NewL4Addr(NONE, base.Port)
-	ip := net.ParseIP(*base.IP)
-	if ip == nil {
-		return nil, fmt.Errorf("invalid IP address \"%s\"", *base.IP)
+	ip, err := netip.ParseAddr(*base.IP)
+	if err != nil {
+		return nil, fmt.Errorf("invalid IP address %q: %w", *base.IP, err)
 	}
 	return &L3n4Addr{IP: ip, L4Addr: *l4addr}, nil
 }
@@ -690,28 +704,9 @@ func (a *L3n4Addr) StringID() string {
 	return a.String()
 }
 
-// Hash calculates a unique string of the L3n4Addr e.g for use as a key in maps.
-// Note: the resulting string is meant to be used as a key for maps and is not
-// readable by a human eye when printed out.
-func (a L3n4Addr) Hash() string {
-	const lenProto = 0 // proto is omitted for now
-	const lenScope = 1 // scope is uint8 which is an alias for byte
-	const lenPort = 2  // port is uint16 which is 2 bytes
-
-	b := make([]byte, net.IPv6len+lenProto+lenScope+lenPort)
-	copy(b, a.IP.To16())
-	// FIXME: add Protocol once we care about protocols
-	// scope is a uint8 which is an alias for byte so a cast is safe
-	b[net.IPv6len+lenProto] = byte(a.Scope)
-	// port is a uint16, so 2 bytes
-	b[net.IPv6len+lenProto+lenScope] = byte(a.Port >> 8)
-	b[net.IPv6len+lenProto+lenScope+1] = byte(a.Port & 0xff)
-	return string(b)
-}
-
 // IsIPv6 returns true if the IP address in the given L3n4Addr is IPv6 or not.
 func (a *L3n4Addr) IsIPv6() bool {
-	return a.IP.To4() == nil
+	return a.IP.Is6()
 }
 
 // L3n4AddrID is used to store, as an unique L3+L4 plus the assigned ID, in the
@@ -733,7 +728,7 @@ func (l *L3n4AddrID) DeepEqual(o *L3n4AddrID) bool {
 }
 
 // NewL3n4AddrID creates a new L3n4AddrID.
-func NewL3n4AddrID(protocol L4Type, ip net.IP, portNumber uint16, scope uint8, id ID) *L3n4AddrID {
+func NewL3n4AddrID(protocol L4Type, ip netip.Addr, portNumber uint16, scope uint8, id ID) *L3n4AddrID {
 	l3n4Addr := NewL3n4Addr(protocol, ip, portNumber, scope)
 	return &L3n4AddrID{L3n4Addr: *l3n4Addr, ID: id}
 }

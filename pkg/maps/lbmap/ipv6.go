@@ -6,6 +6,7 @@ package lbmap
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"unsafe"
 
 	"github.com/cilium/cilium/pkg/bpf"
@@ -131,17 +132,14 @@ type Service6Key struct {
 	Pad         pad2uint8  `align:"pad"`
 }
 
-func NewService6Key(ip net.IP, port uint16, proto u8proto.U8proto, scope uint8, slot uint16) *Service6Key {
-	key := Service6Key{
+func NewService6Key(ip netip.Addr, port uint16, proto u8proto.U8proto, scope uint8, slot uint16) *Service6Key {
+	return &Service6Key{
+		Address:     ip.As16(),
 		Port:        port,
 		Proto:       uint8(proto),
 		Scope:       scope,
 		BackendSlot: slot,
 	}
-
-	copy(key.Address[:], ip.To16())
-
-	return &key
 }
 
 func (k *Service6Key) String() string {
@@ -290,21 +288,17 @@ type Backend6Value struct {
 	Flags   uint8           `align:"flags"`
 }
 
-func NewBackend6Value(ip net.IP, port uint16, proto u8proto.U8proto, state loadbalancer.BackendState) (*Backend6Value, error) {
-	ip6 := ip.To16()
-	if ip6 == nil {
+func NewBackend6Value(ip netip.Addr, port uint16, proto u8proto.U8proto, state loadbalancer.BackendState) (*Backend6Value, error) {
+	if !ip.Is6() {
 		return nil, fmt.Errorf("Not an IPv6 address")
 	}
-	flags := loadbalancer.NewBackendFlags(state)
 
-	val := Backend6Value{
-		Port:  port,
-		Proto: proto,
-		Flags: flags,
-	}
-	copy(val.Address[:], ip.To16())
-
-	return &val, nil
+	return &Backend6Value{
+		Address: ip.As16(),
+		Port:    port,
+		Proto:   proto,
+		Flags:   loadbalancer.NewBackendFlags(state),
+	}, nil
 }
 
 func (v *Backend6Value) String() string {
@@ -336,7 +330,7 @@ type Backend6V2 struct {
 	Value *Backend6Value
 }
 
-func NewBackend6V2(id loadbalancer.BackendID, ip net.IP, port uint16, proto u8proto.U8proto,
+func NewBackend6V2(id loadbalancer.BackendID, ip netip.Addr, port uint16, proto u8proto.U8proto,
 	state loadbalancer.BackendState) (*Backend6V2, error) {
 	val, err := NewBackend6Value(ip, port, proto, state)
 	if err != nil {

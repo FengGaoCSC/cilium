@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"math/rand"
 	"net"
+	"net/netip"
 	"sort"
 	"testing"
 
@@ -818,8 +819,8 @@ func (s *IPTestSuite) TestIPVersion(c *C) {
 }
 
 func (s *IPTestSuite) TestIPListEquals(c *C) {
-	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("fd00::1"), net.ParseIP("8.8.8.8")}
-	sorted := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8"), net.ParseIP("fd00::1")}
+	ips := []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("fd00::1"), netip.MustParseAddr("8.8.8.8")}
+	sorted := []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("fd00::1")}
 
 	sortedIPs := getSortedIPList(ips)
 	c.Assert(SortedIPListsAreEqual(sorted, sortedIPs), checker.Equals, true)

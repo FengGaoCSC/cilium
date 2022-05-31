@@ -7,6 +7,7 @@ package service
 
 import (
 	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -73,24 +74,24 @@ func (m *ManagerTestSuite) TearDownTest(c *C) {
 }
 
 var (
-	surrogateFE = *lb.NewL3n4AddrID(lb.TCP, net.IPv4zero, 80, lb.ScopeExternal, 0)
-	frontend1   = *lb.NewL3n4AddrID(lb.TCP, net.ParseIP("1.1.1.1"), 80, lb.ScopeExternal, 0)
-	frontend2   = *lb.NewL3n4AddrID(lb.TCP, net.ParseIP("1.1.1.2"), 80, lb.ScopeExternal, 0)
-	frontend3   = *lb.NewL3n4AddrID(lb.TCP, net.ParseIP("f00d::1"), 80, lb.ScopeExternal, 0)
+	surrogateFE = *lb.NewL3n4AddrID(lb.TCP, netip.MustParseAddr("0.0.0.0"), 80, lb.ScopeExternal, 0)
+	frontend1   = *lb.NewL3n4AddrID(lb.TCP, netip.MustParseAddr("1.1.1.1"), 80, lb.ScopeExternal, 0)
+	frontend2   = *lb.NewL3n4AddrID(lb.TCP, netip.MustParseAddr("1.1.1.2"), 80, lb.ScopeExternal, 0)
+	frontend3   = *lb.NewL3n4AddrID(lb.TCP, netip.MustParseAddr("f00d::1"), 80, lb.ScopeExternal, 0)
 	backends1   = []lb.Backend{
-		*lb.NewBackend(0, lb.TCP, net.ParseIP("10.0.0.1"), 8080),
-		*lb.NewBackend(0, lb.TCP, net.ParseIP("10.0.0.2"), 8080),
+		*lb.NewBackend(0, lb.TCP, netip.MustParseAddr("10.0.0.1"), 8080),
+		*lb.NewBackend(0, lb.TCP, netip.MustParseAddr("10.0.0.2"), 8080),
 	}
 	backends2 = []lb.Backend{
-		*lb.NewBackend(0, lb.TCP, net.ParseIP("10.0.0.2"), 8080),
-		*lb.NewBackend(0, lb.TCP, net.ParseIP("10.0.0.3"), 8080),
+		*lb.NewBackend(0, lb.TCP, netip.MustParseAddr("10.0.0.2"), 8080),
+		*lb.NewBackend(0, lb.TCP, netip.MustParseAddr("10.0.0.3"), 8080),
 	}
 	backends3 = []lb.Backend{
-		*lb.NewBackend(0, lb.TCP, net.ParseIP("fd00::2"), 8080),
-		*lb.NewBackend(0, lb.TCP, net.ParseIP("fd00::3"), 8080),
+		*lb.NewBackend(0, lb.TCP, netip.MustParseAddr("fd00::2"), 8080),
+		*lb.NewBackend(0, lb.TCP, netip.MustParseAddr("fd00::3"), 8080),
 	}
 	backends4 = []lb.Backend{
-		*lb.NewBackend(0, lb.TCP, net.ParseIP("10.0.0.4"), 8080),
+		*lb.NewBackend(0, lb.TCP, netip.MustParseAddr("10.0.0.4"), 8080),
 	}
 )
 
@@ -395,10 +396,10 @@ func (m *ManagerTestSuite) TestRestoreServices(c *C) {
 	c.Assert(err, IsNil)
 
 	// Backends have been restored
-	c.Assert(len(m.svc.backendByHash), Equals, 3)
+	c.Assert(len(m.svc.backendByIP), Equals, 3)
 	backends := append(backends1, backends2...)
 	for _, b := range backends {
-		_, found := m.svc.backendByHash[b.Hash()]
+		_, found := m.svc.backendByIP[b.IP]
 		c.Assert(found, Equals, true)
 	}
 
@@ -506,20 +507,20 @@ func (m *ManagerTestSuite) TestHealthCheckNodePort(c *C) {
 	// Create two frontends, one for LoadBalaner and one for ClusterIP.
 	// This is used to emulate how we get K8s services from the K8s watcher,
 	// i.e. one service per frontend (even if it is logically the same service)
-	loadBalancerIP := *lb.NewL3n4AddrID(lb.TCP, net.ParseIP("1.1.1.1"), 80, lb.ScopeExternal, 0)
-	clusterIP := *lb.NewL3n4AddrID(lb.TCP, net.ParseIP("10.20.30.40"), 80, lb.ScopeExternal, 0)
+	loadBalancerIP := *lb.NewL3n4AddrID(lb.TCP, netip.MustParseAddr("1.1.1.1"), 80, lb.ScopeExternal, 0)
+	clusterIP := *lb.NewL3n4AddrID(lb.TCP, netip.MustParseAddr("10.20.30.40"), 80, lb.ScopeExternal, 0)
 
 	// Create two node-local backends
-	localBackend1 := *lb.NewBackend(0, lb.TCP, net.ParseIP("10.0.0.1"), 8080)
-	localBackend2 := *lb.NewBackend(0, lb.TCP, net.ParseIP("10.0.0.2"), 8080)
+	localBackend1 := *lb.NewBackend(0, lb.TCP, netip.MustParseAddr("10.0.0.1"), 8080)
+	localBackend2 := *lb.NewBackend(0, lb.TCP, netip.MustParseAddr("10.0.0.2"), 8080)
 	localBackend1.NodeName = nodeTypes.GetName()
 	localBackend2.NodeName = nodeTypes.GetName()
 	localBackends := []lb.Backend{localBackend1, localBackend2}
 
 	// Create three remote backends
-	remoteBackend1 := *lb.NewBackend(0, lb.TCP, net.ParseIP("10.0.0.3"), 8080)
-	remoteBackend2 := *lb.NewBackend(0, lb.TCP, net.ParseIP("10.0.0.4"), 8080)
-	remoteBackend3 := *lb.NewBackend(0, lb.TCP, net.ParseIP("10.0.0.5"), 8080)
+	remoteBackend1 := *lb.NewBackend(0, lb.TCP, netip.MustParseAddr("10.0.0.3"), 8080)
+	remoteBackend2 := *lb.NewBackend(0, lb.TCP, netip.MustParseAddr("10.0.0.4"), 8080)
+	remoteBackend3 := *lb.NewBackend(0, lb.TCP, netip.MustParseAddr("10.0.0.5"), 8080)
 	remoteBackend1.NodeName = "not-" + nodeTypes.GetName()
 	remoteBackend2.NodeName = "not-" + nodeTypes.GetName()
 	remoteBackend3.NodeName = "not-" + nodeTypes.GetName()
@@ -966,9 +967,9 @@ func (m *ManagerTestSuite) TestRestoreServiceWithTerminatingBackends(c *C) {
 	c.Assert(err, IsNil)
 
 	// Backends including terminating ones have been restored
-	c.Assert(len(m.svc.backendByHash), Equals, 3)
+	c.Assert(len(m.svc.backendByIP), Equals, 3)
 	for _, b := range backends1 {
-		_, found := m.svc.backendByHash[b.Hash()]
+		_, found := m.svc.backendByIP[b.IP]
 		c.Assert(found, Equals, true)
 	}
 
@@ -1168,7 +1169,7 @@ func (m *ManagerTestSuite) TestRestoreServiceWithBackendStates(c *C) {
 	c.Assert(created, Equals, true)
 	c.Assert(id1, Equals, lb.ID(1))
 	c.Assert(len(m.lbmap.ServiceByID[uint16(id1)].Backends), Equals, len(backends))
-	c.Assert(len(m.svc.backendByHash), Equals, len(backends))
+	c.Assert(len(m.svc.backendByIP), Equals, len(backends))
 
 	// Update backend states.
 	var updates []lb.Backend
@@ -1189,10 +1190,10 @@ func (m *ManagerTestSuite) TestRestoreServiceWithBackendStates(c *C) {
 	c.Assert(err, IsNil)
 
 	// Check that backends along with their states have been restored
-	c.Assert(len(m.svc.backendByHash), Equals, len(backends))
+	c.Assert(len(m.svc.backendByIP), Equals, len(backends))
 	statesMatched := 0
 	for _, b := range backends {
-		be, found := m.svc.backendByHash[b.Hash()]
+		be, found := m.svc.backendByIP[b.IP]
 		c.Assert(found, Equals, true)
 		if be.String() == b.String() {
 			c.Assert(be.State, Equals, b.State, Commentf("before %+v restored %+v", b, be))
@@ -1303,14 +1304,14 @@ func Test_filterServiceBackends(t *testing.T) {
 }
 
 type mockNodeAddressingFamily struct {
-	ips []net.IP
+	ips []netip.Addr
 }
 
 func (n *mockNodeAddressingFamily) Router() net.IP                    { panic("Not implemented") }
 func (n *mockNodeAddressingFamily) PrimaryExternal() net.IP           { panic("Not implemented") }
 func (n *mockNodeAddressingFamily) AllocationCIDR() *cidr.CIDR        { panic("Not implemented") }
 func (n *mockNodeAddressingFamily) LocalAddresses() ([]net.IP, error) { panic("Not implemented") }
-func (n *mockNodeAddressingFamily) LoadBalancerNodeAddresses() []net.IP {
+func (n *mockNodeAddressingFamily) LoadBalancerNodeAddresses() []netip.Addr {
 	return n.ips
 }
 
@@ -1350,8 +1351,8 @@ func (m *ManagerTestSuite) TestSyncServices(c *C) {
 
 	// With no addresses all frontends (except surrogates) should be removed.
 	nodeAddrs := &mockNodeAddressing{
-		ip4: &mockNodeAddressingFamily{[]net.IP{}},
-		ip6: &mockNodeAddressingFamily{[]net.IP{}},
+		ip4: &mockNodeAddressingFamily{[]netip.Addr{}},
+		ip6: &mockNodeAddressingFamily{[]netip.Addr{}},
 	}
 	m.svc.SyncServicesOnDeviceChange(nodeAddrs)
 	c.Assert(len(m.svc.svcByID), Equals, 1)
@@ -1364,8 +1365,8 @@ func (m *ManagerTestSuite) TestSyncServices(c *C) {
 	c.Assert(len(m.svc.svcByID), Equals, 2)
 
 	nodeAddrs = &mockNodeAddressing{
-		ip4: &mockNodeAddressingFamily{[]net.IP{frontend1.IP, frontend2.IP}},
-		ip6: &mockNodeAddressingFamily{[]net.IP{frontend3.IP}},
+		ip4: &mockNodeAddressingFamily{[]netip.Addr{frontend1.IP, frontend2.IP}},
+		ip6: &mockNodeAddressingFamily{[]netip.Addr{frontend3.IP}},
 	}
 	m.svc.SyncServicesOnDeviceChange(nodeAddrs)
 	c.Assert(len(m.svc.svcByID), Equals, 4)
