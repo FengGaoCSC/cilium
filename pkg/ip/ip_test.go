@@ -333,7 +333,7 @@ func (s *IPTestSuite) TestNetsByRange(c *C) {
 		createIPRange("10.64.0.0", "10.95.255.255"),
 		createIPRange("10.112.0.0", "10.127.255.255"),
 		createIPRange("10.0.0.0", "10.255.255.255")}
-	sort.Sort(NetsByRange(ranges))
+	sort.Sort(netsByRange(ranges))
 	// Ensure that length of ranges isn't modified first.
 	c.Assert(len(ranges), Equals, len(expectedRanges))
 	for k := range ranges {
@@ -344,7 +344,7 @@ func (s *IPTestSuite) TestNetsByRange(c *C) {
 		createIPRange("10.255.255.254", "10.255.255.255")}
 	expectedRanges = []*netWithRange{createIPRange("10.0.0.0", "10.255.255.255"),
 		createIPRange("10.255.255.254", "10.255.255.255")}
-	sort.Sort(NetsByRange(ranges))
+	sort.Sort(netsByRange(ranges))
 	// Ensure that length of ranges isn't modified first.
 	c.Assert(len(ranges), Equals, len(expectedRanges))
 	for k := range ranges {
@@ -506,8 +506,8 @@ func (s *IPTestSuite) TestRangeToCIDRs(c *C) {
 	}
 
 	// Sort both so we can compare easily
-	sort.Sort(NetsByMask(expected))
-	sort.Sort(NetsByMask(ipNets))
+	sort.Sort(netsByMask(expected))
+	sort.Sort(netsByMask(ipNets))
 	c.Assert(len(ipNets), Equals, len(expected))
 }
 
@@ -542,47 +542,47 @@ func (s *IPTestSuite) TestPreviousIP(c *C) {
 func (s *IPTestSuite) TestNextIP(c *C) {
 	expectedNext := net.ParseIP("10.0.0.0")
 	ip := net.ParseIP("9.255.255.255")
-	nextIP := GetNextIP(ip)
+	nextIP := getNextIP(ip)
 	c.Assert(nextIP, checker.DeepEquals, expectedNext)
 
 	// Check that overflow does not occur.
 	ip = net.ParseIP("255.255.255.255")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = ip
 	c.Assert(nextIP, checker.DeepEquals, expectedNext)
 
 	ip = net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = ip
 	c.Assert(nextIP, checker.DeepEquals, expectedNext)
 
 	ip = net.IP([]byte{0xa, 0, 0, 0})
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = net.IP([]byte{0xa, 0, 0, 1})
 	c.Assert(nextIP, checker.DeepEquals, expectedNext)
 
 	ip = net.IP([]byte{0xff, 0xff, 0xff, 0xff})
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = net.IP([]byte{0xff, 0xff, 0xff, 0xff})
 	c.Assert(nextIP, checker.DeepEquals, expectedNext)
 
 	ip = net.ParseIP("10.0.0.0")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = net.ParseIP("10.0.0.1")
 	c.Assert(nextIP, checker.DeepEquals, expectedNext)
 
 	ip = net.ParseIP("0:0:0:0:ffff:ffff:ffff:ffff")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = net.ParseIP("0:0:0:1:0:0:0:0")
 	c.Assert(nextIP, checker.DeepEquals, expectedNext)
 
 	ip = net.ParseIP("ffff:ffff:ffff:fffe:ffff:ffff:ffff:ffff")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = net.ParseIP("ffff:ffff:ffff:ffff:0:0:0:0")
 	c.Assert(nextIP, checker.DeepEquals, expectedNext)
 
 	ip = net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:fffe")
-	nextIP = GetNextIP(ip)
+	nextIP = getNextIP(ip)
 	expectedNext = net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")
 	c.Assert(nextIP, checker.DeepEquals, expectedNext)
 }

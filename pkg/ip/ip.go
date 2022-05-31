@@ -44,15 +44,15 @@ var (
 	upperIPv6         = []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 )
 
-// NetsByMask is used to sort a list of IP networks by the size of their masks.
+// netsByMask is used to sort a list of IP networks by the size of their masks.
 // Implements sort.Interface.
-type NetsByMask []*net.IPNet
+type netsByMask []*net.IPNet
 
-func (s NetsByMask) Swap(i, j int) {
+func (s netsByMask) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s NetsByMask) Less(i, j int) bool {
+func (s netsByMask) Less(i, j int) bool {
 	iPrefixSize, _ := s[i].Mask.Size()
 	jPrefixSize, _ := s[j].Mask.Size()
 	if iPrefixSize == jPrefixSize {
@@ -61,24 +61,23 @@ func (s NetsByMask) Less(i, j int) bool {
 	return iPrefixSize < jPrefixSize
 }
 
-func (s NetsByMask) Len() int {
+func (s netsByMask) Len() int {
 	return len(s)
 }
 
-// Assert that NetsByMask implements sort.Interface.
-var _ sort.Interface = NetsByMask{}
-var _ sort.Interface = NetsByRange{}
+// Assert that netsByMask implements sort.Interface.
+var _ sort.Interface = netsByMask{}
 
-// NetsByRange is used to sort a list of ranges, first by their last IPs, then by
+// netsByRange is used to sort a list of ranges, first by their last IPs, then by
 // their first IPs
 // Implements sort.Interface.
-type NetsByRange []*netWithRange
+type netsByRange []*netWithRange
 
-func (s NetsByRange) Swap(i, j int) {
+func (s netsByRange) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s NetsByRange) Less(i, j int) bool {
+func (s netsByRange) Less(i, j int) bool {
 	// First compare by last IP.
 	lastComparison := bytes.Compare(*s[i].Last, *s[j].Last)
 	if lastComparison < 0 {
@@ -100,9 +99,12 @@ func (s NetsByRange) Less(i, j int) bool {
 	return false
 }
 
-func (s NetsByRange) Len() int {
+func (s netsByRange) Len() int {
 	return len(s)
 }
+
+// Assert that netsByRange implements sort.Interface.
+var _ sort.Interface = netsByRange{}
 
 // removeRedundantCIDRs removes CIDRs which are contained within other given CIDRs.
 func removeRedundantCIDRs(CIDRs []*net.IPNet) []*net.IPNet {
@@ -148,10 +150,9 @@ func removeRedundantCIDRs(CIDRs []*net.IPNet) []*net.IPNet {
 // the set of CIDRs which were removed. Both input slices may be modified by
 // calling this function.
 func RemoveCIDRs(allowCIDRs, removeCIDRs []*net.IPNet) []*net.IPNet {
-
 	// Ensure that we iterate through the provided CIDRs in order of largest
 	// subnet first.
-	sort.Sort(NetsByMask(removeCIDRs))
+	sort.Sort(netsByMask(removeCIDRs))
 
 	// Remove CIDRs which are contained within CIDRs that we want to remove;
 	// such CIDRs are redundant.
@@ -296,7 +297,7 @@ func PrefixToIPs(prefixCidr string) ([]string, error) {
 		return prefixIps, err
 	}
 	netWithRange := ipNetToRange(*ipNet)
-	for ip := *netWithRange.First; !ip.Equal(*netWithRange.Last); ip = GetNextIP(ip) {
+	for ip := *netWithRange.First; !ip.Equal(*netWithRange.Last); ip = getNextIP(ip) {
 		prefixIps = append(prefixIps, ip.String())
 	}
 
@@ -358,9 +359,9 @@ func getPreviousIP(ip net.IP) net.IP {
 	return previousIP
 }
 
-// GetNextIP returns the next IP from the given IP address. If the given IP is
+// getNextIP returns the next IP from the given IP address. If the given IP is
 // the last IP of a v4 or v6 range, the same IP is returned.
-func GetNextIP(ip net.IP) net.IP {
+func getNextIP(ip net.IP) net.IP {
 	if ip.Equal(upperIPv4) || ip.Equal(upperIPv6) {
 		return ip
 	}
@@ -454,7 +455,7 @@ type netWithRange struct {
 func mergeAdjacentCIDRs(ranges []*netWithRange) []*netWithRange {
 	// Sort the ranges. This sorts first by the last IP, then first IP, then by
 	// the IP network in the list itself
-	sort.Sort(NetsByRange(ranges))
+	sort.Sort(netsByRange(ranges))
 
 	// Merge adjacent CIDRs if possible.
 	for i := len(ranges) - 1; i > 0; i-- {
@@ -585,7 +586,7 @@ func rangeToCIDRs(firstIP, lastIP net.IP) []*net.IPNet {
 	if bytes.Compare(*lastIPSpanning, lastIP) > 0 {
 		// Split on the next IP of the last IP so that the left list of IPs
 		// of the partition include the lastIP.
-		nextFirstRangeIP := GetNextIP(lastIP)
+		nextFirstRangeIP := getNextIP(lastIP)
 		var bitLen int
 		if nextFirstRangeIP.To4() != nil {
 			bitLen = ipv4BitLen
