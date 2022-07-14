@@ -7,6 +7,7 @@ import (
 	"context"
 	"time"
 
+	"go.uber.org/multierr"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -121,6 +122,36 @@ func DeleteResources() env.Func {
 
 		return ctx, nil
 	}
+}
+
+// GatherOutput runs command in every log gatherer pod in the cluster and
+// returns a map of outputs indexed by host IP.
+func GatherOutput(ctx context.Context, cfg *envconf.Config, command []string) (map[string][]byte, error) {
+	client := cfg.Client()
+	r, err := resources.New(client.RESTConfig())
+	if err != nil {
+		return nil, err
+	}
+
+	podList := &v1.PodList{}
+	if err := r.List(ctx, podList, resources.WithLabelSelector(
+		labels.FormatLabels(map[string]string{
+			"k8s-app": k8sAppName,
+		}),
+	)); err != nil {
+		return nil, err
+	}
+
+	outputs := make(map[string][]byte)
+	var errs error
+	for _, pod := range podList.Items {
+		if output, err := e2ehelpers.ExecInPodOutput(ctx, client, namespace, pod.Name, pod.Status.ContainerStatuses[0].Name, command); err != nil {
+			errs = multierr.Append(errs, err)
+		} else {
+			outputs[pod.Status.HostIP] = output
+		}
+	}
+	return outputs, errs
 }
 
 // Setup sets up the log gatherer.

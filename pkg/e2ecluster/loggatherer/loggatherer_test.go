@@ -63,6 +63,20 @@ func TestLogGatherer(t *testing.T) {
 			}
 			return ctx
 		}).
+		Assess("GatherOutput", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			if outputs, err := loggatherer.GatherOutput(ctx, cfg, []string{"ls"}); err != nil {
+				t.Error(err)
+			} else if len(outputs) == 0 {
+				t.Error("no outputs")
+			} else {
+				for hostIP, output := range outputs {
+					if len(output) == 0 {
+						t.Errorf("%s: zero length output", hostIP)
+					}
+				}
+			}
+			return ctx
+		}).
 		Feature()
 	testenv.Test(t, feature)
 }
