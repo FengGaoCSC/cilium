@@ -711,6 +711,9 @@ contributors across the globe, there is almost always someone available to help.
 | sleepAfterInit | bool | `false` | Do not run Cilium agent when running with clean mode. Useful to completely uninstall Cilium as it will stop Cilium from starting and create artifacts in the node. |
 | socketLB | object | `{"enabled":false}` | Configure socket LB |
 | socketLB.enabled | bool | `false` | Enable socket LB |
+| srv6 | object | `{"enabled":false,"encapMode":"reduced"}` | Configure SRv6 support. |
+| srv6.enabled | bool | `false` | Enable SRv6 encapsulation support. |
+| srv6.encapMode | string | `"reduced"` | Specify SRv6 SID encapsulation. |
 | startupProbe.failureThreshold | int | `105` | failure threshold of startup probe. 105 x 2s translates to the old behaviour of the readiness probe (120s delay + 30 x 3s) |
 | startupProbe.periodSeconds | int | `2` | interval between checks of the startup probe |
 | svcSourceRangeCheck | bool | `true` | Enable check of service source ranges (currently, only for LoadBalancer). |

@@ -29,6 +29,34 @@ const (
 	// CESName is the full name of Cilium Endpoint Slice
 	CESName = CESPluralName + "." + CustomResourceDefinitionGroup
 
+	// Cilium SRv6 Egress Policy (CSREP)
+
+	// CSREPSingularName is the singular name of Cilium SRv6 Egress Policy
+	CSREPSingularName = "ciliumsrv6egresspolicy"
+
+	// CSREPPluralName is the plural name of Cilium SRv6 Egress Policy
+	CSREPPluralName = "ciliumsrv6egresspolicies"
+
+	// CSREPKindDefinition is the kind name of Cilium SRv6 Egress Policy
+	CSREPKindDefinition = "CiliumSRv6EgressPolicy"
+
+	// CSREPName is the full name of Cilium SRv6 Egress Policy
+	CSREPName = CSREPPluralName + "." + CustomResourceDefinitionGroup
+
+	// Cilium SRv6 VRF (CSRVRF)
+
+	// CSRVRFSingularName is the singular name of Cilium SRv6 VRF
+	CSRVRFSingularName = "ciliumsrv6vrf"
+
+	// CSRVRFPluralName is the plural name of Cilium SRv6 VRF
+	CSRVRFPluralName = "ciliumsrv6vrfs"
+
+	// CSRVRFKindDefinition is the kind name of Cilium SRv6 VRF
+	CSRVRFKindDefinition = "CiliumSRv6VRF"
+
+	// CSRVRFName is the full name of Cilium SRv6 VRF
+	CSRVRFName = CSRVRFPluralName + "." + CustomResourceDefinitionGroup
+
 	// Cilium BGP Peering Policy (BGPP)
 
 	// BGPPPluralName is the plural name of Cilium BGP Peering Policy
@@ -124,6 +152,10 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&CiliumEndpointSlice{},
 		&CiliumEndpointSliceList{},
+		&CiliumSRv6EgressPolicy{},
+		&CiliumSRv6EgressPolicyList{},
+		&CiliumSRv6VRF{},
+		&CiliumSRv6VRFList{},
 		&CiliumBGPPeeringPolicy{},
 		&CiliumBGPPeeringPolicyList{},
 		&CiliumLoadBalancerIPPool{},

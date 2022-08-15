@@ -70,6 +70,13 @@ var ignoredELFPrefixes = []string{
 	"cilium_l2_responder_v4",     // Global
 	"tc",                         // Program Section
 	"xdp",                        // Program Section
+	"cilium_srv6_policy_v4",      // Global
+	"cilium_srv6_policy_v6",      // Global
+	"cilium_srv6_vrf_v4",         // Global
+	"cilium_srv6_vrf_v6",         // Global
+	"cilium_srv6_state_v4",       // Global
+	"cilium_srv6_state_v6",       // Global
+	"cilium_srv6_sid",            // Global
 	".BTF",                       // Debug
 	".BTF.ext",                   // Debug
 	".debug_ranges",              // Debug

@@ -92,6 +92,8 @@ rules:
   - ciliumlocalredirectpolicies
   - ciliumnetworkpolicies
   - ciliumnodes
+  - ciliumsrv6egresspolicies
+  - ciliumsrv6vrfs
   - ciliumnodeconfigs
   - ciliumcidrgroups
   - ciliuml2announcementpolicies
@@ -119,6 +121,7 @@ rules:
   - ciliumidentities
   - ciliumendpoints
   - ciliumnodes
+  - ciliumsrv6egresspolicies
   verbs:
   - create
 - apiGroups:
@@ -132,6 +135,7 @@ rules:
   - cilium.io
   resources:
   - ciliumendpoints
+  - ciliumsrv6egresspolicies
   verbs:
   - delete
   - get

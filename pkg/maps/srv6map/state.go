@@ -8,6 +8,7 @@ import (
 	"net"
 
 	"github.com/cilium/cilium/pkg/ebpf"
+	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/types"
 )
 
@@ -30,6 +31,11 @@ type StateKey struct {
 
 func (k *StateKey) String() string {
 	return fmt.Sprintf("%s %s", k.InnerSrc, k.InnerDst)
+}
+
+// IsIPv6 returns true if the key is for an IPv6 endpoint.
+func (k *StateKey) IsIPv6() bool {
+	return ip.IsIPv6(*k.InnerSrc) && ip.IsIPv6(*k.InnerDst)
 }
 
 // StateValue implements the bpf.MapValue interface. It contains the

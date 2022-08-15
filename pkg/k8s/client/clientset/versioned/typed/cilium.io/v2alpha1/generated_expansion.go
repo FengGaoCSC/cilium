@@ -18,3 +18,7 @@ type CiliumLoadBalancerIPPoolExpansion interface{}
 type CiliumNodeConfigExpansion interface{}
 
 type CiliumPodIPPoolExpansion interface{}
+
+type CiliumSRv6EgressPolicyExpansion interface{}
+
+type CiliumSRv6VRFExpansion interface{}

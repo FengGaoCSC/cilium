@@ -916,6 +916,13 @@ healthChecking: true
 # -- TCP port for the agent health API. This is not the port for cilium-health.
 healthPort: 9879
 
+# -- Configure SRv6 support.
+srv6:
+  # -- Enable SRv6 encapsulation support.
+  enabled: false
+  # -- Specify SRv6 SID encapsulation.
+  encapMode: reduced
+
 # -- Configure the host firewall.
 hostFirewall:
   # -- Enables the enforcement of host policies in the eBPF datapath.

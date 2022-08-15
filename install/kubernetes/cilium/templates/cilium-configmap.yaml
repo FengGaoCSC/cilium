@@ -639,6 +639,15 @@ data:
   enable-nat46x64-gateway: {{ .Values.nat46x64Gateway.enabled | quote }}
 {{- end }}
 
+{{- if and .Values.srv6 .Values.srv6.enabled }}
+  enable-srv6: {{ .Values.srv6.enabled | quote }}
+
+  {{- if and .Values.srv6 .Values.srv6.encapMode }}
+  srv6-encap-mode: {{ .Values.srv6.encapMode | quote }}
+  {{- end}}
+
+{{- end}}
+
 {{- if and .Values.hostFirewall .Values.hostFirewall.enabled }}
   enable-host-firewall: {{ .Values.hostFirewall.enabled | quote }}
 {{- end}}

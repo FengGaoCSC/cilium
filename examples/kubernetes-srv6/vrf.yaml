@@ -1,0 +1,22 @@
+apiVersion: cilium.io/v2alpha1
+kind: CiliumSRv6VRF
+metadata:
+  name: srv6-vrf42
+spec:
+  vrfID: 42
+  importRouteTarget: 64500:1
+  exportRouteTarget: 64500:1
+  rules:
+  - selectors:
+    - podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    destinationCIDRs:
+    - 2001:db8:80::/48
+    - 10.164.0.0/24
+  - selectors:
+    - podSelector:
+        matchLabels:
+          type: web
+    destinationCIDRs:
+    - 0.0.0.0/0

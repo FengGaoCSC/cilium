@@ -117,6 +117,20 @@ annotations:
       displayName: Cilium Load Balancer IP Pool
       description: |
         Defining a Cilium Load Balancer IP Pool instructs Cilium to assign IPs to LoadBalancer Services.
+    - kind: CiliumSRv6EgressPolicy
+      version: v2alpha1
+      name: ciliumsrv6egresspolicies.cilium.io
+      displayName: Cilium SRv6 Egress Policy
+      description: |
+        Defining a Cilium SRv6 Egress Policy instructs the datapath to associate
+        a particular pod's egress traffic with a particular VRF and SID.
+    - kind: CiliumSRv6VRF
+      version: v2alpha1
+      name: ciliumsrv6vrfs.cilium.io
+      displayName: Cilium SRv6 VRF
+      description: |
+        Defining a Cilium SRv6 VRF determines whether a particular pod's egress
+        traffic belongs to a particular VRF.
     - kind: CiliumNodeConfig
       version: v2alpha1
       name: ciliumnodeconfigs.cilium.io

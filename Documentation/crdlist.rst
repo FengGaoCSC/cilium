@@ -15,3 +15,5 @@
 - CiliumNode
 - CiliumNodeConfig
 - CiliumPodIPPool
+- CiliumSRv6EgressPolicy
+- CiliumSRv6VRF

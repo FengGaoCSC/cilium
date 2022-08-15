@@ -61,6 +61,12 @@ const (
 	// CESCRDName is the full name of the CES CRD.
 	CESCRDName = k8sconstv2alpha1.CESKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
 
+	// CSREPCRDName is the full name of the CSREP CRD.
+	CSREPCRDName = k8sconstv2alpha1.CSREPKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
+
+	// CSRVRFCRDName is the full name of the CSRVRF CRD.
+	CSRVRFCRDName = k8sconstv2alpha1.CSRVRFKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
+
 	// CCECCRDName is the full name of the CCEC CRD.
 	CCECCRDName = k8sconstv2.CCECKindDefinition + "/" + k8sconstv2.CustomResourceDefinitionVersion
 
@@ -169,6 +175,14 @@ func CustomResourceDefinitionList() map[string]*CRDList {
 			Name:     CPIPCRDName,
 			FullName: k8sconstv2alpha1.CPIPName,
 		},
+		synced.CRDResourceName(k8sconstv2alpha1.CSREPName): {
+			Name:     CSREPCRDName,
+			FullName: k8sconstv2alpha1.CSREPName,
+		},
+		synced.CRDResourceName(k8sconstv2alpha1.CSRVRFName): {
+			Name:     CSRVRFCRDName,
+			FullName: k8sconstv2alpha1.CSRVRFName,
+		},
 	}
 }
 
@@ -226,6 +240,12 @@ var (
 	//go:embed crds/v2/ciliumenvoyconfigs.yaml
 	crdsv2Ciliumenvoyconfigs []byte
 
+	//go:embed crds/v2alpha1/ciliumsrv6egresspolicies.yaml
+	crdsv2Alpha1Ciliumsrv6egresspolicies []byte
+
+	//go:embed crds/v2alpha1/ciliumsrv6vrfs.yaml
+	crdsv2Alpha1Ciliumsrv6vrfs []byte
+
 	//go:embed crds/v2alpha1/ciliumbgppeeringpolicies.yaml
 	crdsv2Alpha1Ciliumbgppeeringpolicies []byte
 
@@ -276,6 +296,10 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv2Ciliumegressgatewaypolicies
 	case CESCRDName:
 		crdBytes = crdsv2Alpha1Ciliumendpointslices
+	case CSREPCRDName:
+		crdBytes = crdsv2Alpha1Ciliumsrv6egresspolicies
+	case CSRVRFCRDName:
+		crdBytes = crdsv2Alpha1Ciliumsrv6vrfs
 	case CCECCRDName:
 		crdBytes = crdsv2Ciliumclusterwideenvoyconfigs
 	case CECCRDName:

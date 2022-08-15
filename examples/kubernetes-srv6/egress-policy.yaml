@@ -1,0 +1,10 @@
+apiVersion: cilium.io/v2alpha1
+kind: CiliumSRv6EgressPolicy
+metadata:
+  name: egress-policy
+spec:
+  vrfID: 42
+  destinationCIDRs:
+  - 2001:db8:80::/48
+  - 10.164.0.0/24
+  destinationSID: 2650:a8:f1:5:4:3:2:1

@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/unix"
+	netutils "k8s.io/utils/net"
 
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/types"
@@ -43,6 +44,11 @@ func (k *PolicyKey) String() string {
 // policy key.
 func (k *PolicyKey) Match(vrfID uint32, cidr *net.IPNet) bool {
 	return k.VRFID == vrfID && k.DestCIDR.String() == cidr.String()
+}
+
+// IsIPv6 returns true if the key is for an IPv6 destination CIDR.
+func (k *PolicyKey) IsIPv6() bool {
+	return netutils.IsIPv6CIDR(k.DestCIDR)
 }
 
 type PolicyValue struct {
@@ -118,18 +124,44 @@ type srv6PolicyMap struct {
 
 type PolicyKey4 struct {
 	// PrefixLen is full 32 bits of VRF ID + DestCIDR's mask bits
-	PrefixLen uint32 `align:"lpm"`
+	PrefixLen uint32
 
-	VRFID    uint32     `align:"vrf_id"`
-	DestCIDR types.IPv4 `align:"dst_cidr"`
+	VRFID    uint32
+	DestCIDR types.IPv4
 }
 
 type PolicyKey6 struct {
 	// PrefixLen is full 32 bits of VRF ID + DestCIDR's mask bits
-	PrefixLen uint32 `align:"lpm"`
+	PrefixLen uint32
 
-	VRFID    uint32     `align:"vrf_id"`
-	DestCIDR types.IPv6 `align:"dst_cidr"`
+	VRFID    uint32
+	DestCIDR types.IPv6
+}
+
+// toIPv4 converts the generic PolicyKey into an IPv4 policy key, to be used
+// with BPF maps.
+func (k *PolicyKey) toIPv4() PolicyKey4 {
+	result := PolicyKey4{}
+	ones, _ := k.DestCIDR.Mask.Size()
+
+	result.VRFID = k.VRFID
+	copy(result.DestCIDR[:], k.DestCIDR.IP.To4())
+	result.PrefixLen = policyStaticPrefixBits + uint32(ones)
+
+	return result
+}
+
+// toIPv6 converts the generic PolicyKey into an IPv6 policy key, to be used
+// with BPF maps.
+func (k *PolicyKey) toIPv6() PolicyKey6 {
+	result := PolicyKey6{}
+	ones, _ := k.DestCIDR.Mask.Size()
+
+	result.VRFID = k.VRFID
+	copy(result.DestCIDR[:], k.DestCIDR.IP.To16())
+	result.PrefixLen = policyStaticPrefixBits + uint32(ones)
+
+	return result
 }
 
 func (k *PolicyKey4) getDestCIDR() *net.IPNet {
@@ -144,6 +176,21 @@ func (k *PolicyKey6) getDestCIDR() *net.IPNet {
 		IP:   k.DestCIDR.IP(),
 		Mask: net.CIDRMask(int(k.PrefixLen-policyStaticPrefixBits), 128),
 	}
+}
+
+func (m *srv6PolicyMap) Update(key PolicyKey, sid types.IPv6) error {
+	val := PolicyValue{SID: sid}
+	if key.IsIPv6() {
+		return m.Map.Update(key.toIPv6(), val, 0)
+	}
+	return m.Map.Update(key.toIPv4(), val, 0)
+}
+
+func (m *srv6PolicyMap) Delete(key PolicyKey) error {
+	if key.IsIPv6() {
+		return m.Map.Delete(key.toIPv6())
+	}
+	return m.Map.Delete(key.toIPv4())
 }
 
 // SRv6PolicyIterateCallback represents the signature of the callback function
@@ -181,4 +228,13 @@ func (m srv6PolicyMap) IterateWithCallback6(cb SRv6PolicyIterateCallback) error 
 
 			cb(&key, value)
 		})
+}
+
+// GetPolicyMap returns the appropriate egress policy map (IPv4 or IPv6)
+// for the given key.
+func GetPolicyMap(key PolicyKey) *srv6PolicyMap {
+	if key.IsIPv6() {
+		return SRv6PolicyMap6
+	}
+	return SRv6PolicyMap4
 }

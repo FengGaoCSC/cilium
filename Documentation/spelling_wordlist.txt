@@ -434,6 +434,7 @@ enableOpenMetrics
 enableRuntimeDeviceDetection
 enableXTSocketFallback
 enablement
+encapMode
 endPort
 endian
 endianness

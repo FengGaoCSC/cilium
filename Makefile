@@ -248,7 +248,9 @@ CRDS_CILIUM_V2ALPHA1 := ciliumendpointslices \
                         ciliumnodeconfigs \
                         ciliumcidrgroups \
                         ciliuml2announcementpolicies \
-                        ciliumpodippools
+                        ciliumpodippools \
+                        ciliumsrv6egresspolicies \
+                        ciliumsrv6vrfs
 CRDS_ISOVALENT_V1ALPHA1 := isovalentfqdngroups \
                            isovalentsrv6sidmanagers \
                            isovalentsrv6locatorpools \
