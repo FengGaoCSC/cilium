@@ -35,6 +35,9 @@ type ServerWithConfig struct {
 
 	// Holds any announced Service routes.
 	ServiceAnnouncements map[resource.Key][]*types.Path
+
+	// Holds any announced VPNv4 Announcements for SRv6 L3VPN.
+	SRv6L3VPNAnnouncements map[uint32]VPNv4Advertisement
 }
 
 // NewServerWithConfig will start an underlying BgpServer utilizing types.ServerParameters
@@ -52,9 +55,10 @@ func NewServerWithConfig(ctx context.Context, params types.ServerParameters) (*S
 	}
 
 	return &ServerWithConfig{
-		Server:               s,
-		Config:               nil,
-		PodCIDRAnnouncements: []*types.Path{},
-		ServiceAnnouncements: make(map[resource.Key][]*types.Path),
+		Server:                 s,
+		Config:                 nil,
+		PodCIDRAnnouncements:   []*types.Path{},
+		ServiceAnnouncements:   make(map[resource.Key][]*types.Path),
+		SRv6L3VPNAnnouncements: make(map[uint32]VPNv4Advertisement),
 	}, nil
 }

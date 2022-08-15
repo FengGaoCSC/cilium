@@ -85,6 +85,12 @@ type Attributes struct {
 	RouterID string
 	// The local BGP port to listen on.
 	LocalPort int32
+	// If true, the host which included this annotation is responsible for
+	// writing CiliumSRv6EgressPolicy resources to the cluster.
+	//
+	// This is only utilized if the BGP Control Plane on the host is configured
+	// to map SRv6 Egress Policies.
+	SRv6Responder bool
 }
 
 // AnnotationMap coorelates a parsed Annotations structure with the local
@@ -192,6 +198,12 @@ func parseAnnotation(key string, value string) (int64, Attributes, error) {
 				return 0, out, ErrAttrib{key, kv[0], "local port must be smaller then 65535"}
 			}
 			out.LocalPort = int32(port)
+		case "srv6-responder":
+			b, err := strconv.ParseBool(kv[1])
+			if err != nil {
+				return 0, out, ErrAttrib{key, kv[0], "could not parse boolean value"}
+			}
+			out.SRv6Responder = b
 		}
 	}
 	return asn, out, nil

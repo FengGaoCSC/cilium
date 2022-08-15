@@ -12,7 +12,7 @@ import (
 )
 
 // BGPRouterManager provides a declarative API for defining
-// BGP peers.
+// BGP peers and interacting with lower level BGP server details.
 type BGPRouterManager interface {
 	// ConfigurePeers evaluates the provided CiliumBGPPeeringPolicy
 	// and the implementation will configure itself to apply this policy.

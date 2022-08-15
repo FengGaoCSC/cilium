@@ -424,6 +424,7 @@ func TestPolicySelection(t *testing.T) {
 				if (tt.err == nil) != (err == nil) {
 					t.Fatalf("expected err: %v", (tt.err == nil))
 				}
+
 				if want != nil {
 					if policy == nil {
 						t.Fatalf("got: <nil>, want: %+v", *want)

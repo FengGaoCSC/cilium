@@ -68,6 +68,9 @@ type Controller struct {
 	BGPMgr BGPRouterManager
 
 	workerpool *workerpool.WorkerPool
+
+	// Shutdowner can be used to trigger a shutdown of hive
+	Shutdowner hive.Shutdowner
 }
 
 // ControllerParams contains all parameters needed to construct a Controller
@@ -255,8 +258,6 @@ func PolicySelection(ctx context.Context, labels map[string]string, policies []*
 		}
 	}
 
-	// no policy was discovered, tell router manager to withdrawal peers if they
-	// are configured.
 	return selectedPolicy, nil
 }
 

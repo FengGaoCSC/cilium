@@ -120,6 +120,14 @@ spec:
                       maximum: 4294967295
                       minimum: 0
                       type: integer
+                    mapSRv6VRFs:
+                      description: "MapSRv6VRFs instructs the BGP Control Plane to
+                        create CiliumSRv6EgressPolicy resources when this virtual
+                        router receives VPNv4 NLRI advertisements. \n The BGP Control
+                        Plane will create CiliumSRv6EgressPolicy(s) when VPNv4 NLRI
+                        contain Route Target attributes and these attributes have
+                        a valid CiliumSRv6VRF mapping defined."
+                      type: boolean
                     neighbors:
                       description: Neighbors is a list of neighboring BGP peers for
                         this virtual router

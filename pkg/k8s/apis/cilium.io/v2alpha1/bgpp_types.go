@@ -211,6 +211,15 @@ type CiliumBGPVirtualRouter struct {
 	//
 	// +kubebuilder:validation:Optional
 	ServiceSelector *slimv1.LabelSelector `json:"serviceSelector,omitempty"`
+	// MapSRv6VRFs instructs the BGP Control Plane to create CiliumSRv6EgressPolicy
+	// resources when this virtual router receives VPNv4 NLRI advertisements.
+	//
+	// The BGP Control Plane will create CiliumSRv6EgressPolicy(s) when
+	// VPNv4 NLRI contain Route Target attributes and these attributes have a
+	// valid CiliumSRv6VRF mapping defined.
+	//
+	// +kubebuilder:validation:Optional
+	MapSRv6VRFs bool `json:"mapSRv6VRFs"`
 	// Neighbors is a list of neighboring BGP peers for this virtual router
 	//
 	// +kubebuilder:validation:Required

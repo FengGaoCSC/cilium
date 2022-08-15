@@ -4,15 +4,24 @@
 package manager
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"io"
+	"net"
 	"net/netip"
+	"strconv"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/cilium/cilium/pkg/bgpv1/agent"
+	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
+	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
@@ -23,6 +32,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
+
+	srv6 "github.com/cilium/cilium/pkg/srv6"
 )
 
 type ReconcileParams struct {
@@ -47,7 +58,14 @@ var ConfigReconcilers = cell.ProvidePrivate(
 	NewNeighborReconciler,
 	NewExportPodCIDRReconciler,
 	NewLBServiceReconciler,
+	NewExportVRFReconciler,
+	NewImportVRFReconciler,
 )
+
+type PreflightReconcilerParams struct {
+	cell.In
+	BGPCPSignaler *signaler.BGPCPSignaler
+}
 
 type PreflightReconcilerOut struct {
 	cell.Out
@@ -66,11 +84,15 @@ type PreflightReconcilerOut struct {
 //
 // permanent configurations for BgpServers (ones that cannot be changed after creation)
 // are router ID and local listening port.
-type PreflightReconciler struct{}
+type PreflightReconciler struct {
+	signaler *signaler.BGPCPSignaler
+}
 
-func NewPreflightReconciler() PreflightReconcilerOut {
+func NewPreflightReconciler(params PreflightReconcilerParams) PreflightReconcilerOut {
 	return PreflightReconcilerOut{
-		Reconciler: &PreflightReconciler{},
+		Reconciler: &PreflightReconciler{
+			signaler: params.BGPCPSignaler,
+		},
 	}
 }
 
@@ -150,6 +172,11 @@ func (r *PreflightReconciler) Reconcile(ctx context.Context, p ReconcileParams) 
 			RouteSelectionOptions: &types.RouteSelectionOptions{
 				AdvertiseInactiveRoutes: true,
 			},
+		},
+		OnFIBEvent: func() {
+			if r.signaler != nil {
+				r.signaler.Event(struct{}{})
+			}
 		},
 	}
 
@@ -733,4 +760,370 @@ func serviceLabelSet(svc *slim_corev1.Service) labels.Labels {
 	svcLabels["io.kubernetes.service.name"] = svc.Name
 	svcLabels["io.kubernetes.service.namespace"] = svc.Namespace
 	return labels.Set(svcLabels)
+}
+
+type exportVRFReconcilerOut struct {
+	cell.Out
+
+	Reconciler ConfigReconciler `group:"bgp-config-reconciler"`
+}
+
+type exportVRFReconcilerParams struct {
+	cell.In
+
+	SRv6Manager *srv6.Manager
+}
+
+type ExportVRFReconciler struct {
+	srv6Manager *srv6.Manager
+}
+
+func NewExportVRFReconciler(params exportVRFReconcilerParams) exportVRFReconcilerOut {
+	return exportVRFReconcilerOut{
+		Reconciler: &ExportVRFReconciler{
+			srv6Manager: params.SRv6Manager,
+		},
+	}
+}
+
+func (r *ExportVRFReconciler) Priority() int {
+	return 50
+}
+
+// VPNv4Advertisement is a container object which associates a VRF information and VPNv4 Prefixes
+//
+// The Path field is the advertised path object which can be forwarded to BGP server's
+// WithdrawPath method, making withdrawing an advertised route simple.
+type VPNv4Advertisement struct {
+	VRF   *srv6.VRF
+	Paths []*types.Path
+}
+
+func (r *ExportVRFReconciler) Reconcile(ctx context.Context, p ReconcileParams) error {
+	var (
+		toCreate []*srv6.VRF
+		toRemove []*VPNv4Advertisement
+		ipv4Nets []*net.IPNet
+		vrfs     []*srv6.VRF
+		l        = log.WithFields(
+			logrus.Fields{
+				"component": "manager.reconcileExportedVRFs",
+			},
+		)
+	)
+
+	if r.srv6Manager == nil {
+		l.Info("SRv6 sub-system is not enabled, performing no action.")
+		return nil
+	}
+
+	// parse Node annotations into helper Annotation map
+	annoMap, err := agent.NewAnnotationMap(p.Node.Annotations)
+	if err != nil {
+		return fmt.Errorf("failed to parse Node annotations for virtual router with ASN %v: %w", p.DesiredConfig.LocalASN, err)
+	}
+	if !annoMap[p.DesiredConfig.LocalASN].SRv6Responder {
+		l.Infof("Node %s is not an SRv6 Responder, will not write CiliumSRv6EgressPolicy CRDs to cluster.", p.Node.Name)
+		return nil
+	}
+
+	// collect VRFs from SRv6Manager.
+	vrfs = r.srv6Manager.GetAllVRFs()
+
+	// collect PodCIDR IPv4 addresses to export.
+	for _, cidr := range p.Node.ToCiliumNode().Spec.IPAM.PodCIDRs {
+		i, net, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return fmt.Errorf("failed to parse provided podCIDR string into IPNet")
+		}
+		if i.To4() == nil {
+			continue
+		}
+		ipv4Nets = append(ipv4Nets, net)
+	}
+
+	// record which Advertisements we need to remove since their VRF Export Route
+	// target has changed, or they do not exist.
+	for _, advert := range p.CurrentServer.SRv6L3VPNAnnouncements {
+		shouldRemove := true
+		for _, v := range vrfs {
+			if (advert.VRF.VRFID == v.VRFID) && (advert.VRF.ExportRouteTarget == v.ExportRouteTarget) {
+				shouldRemove = false
+				break
+			}
+		}
+		if shouldRemove {
+			toRemove = append(toRemove, &advert)
+		}
+	}
+
+	for _, v := range vrfs {
+		// determine if this sc has an advertisement for the provided VRF.
+		advert, ok := p.CurrentServer.SRv6L3VPNAnnouncements[v.VRFID]
+		if ok {
+			// if we have an advert, but the incoming VRF has a different
+			// ExportRouteTarget, mark it as create.
+			if v.ExportRouteTarget != advert.VRF.ExportRouteTarget {
+				toCreate = append(toCreate, v)
+			}
+			continue
+		}
+		toCreate = append(toCreate, v)
+	}
+
+	l.WithFields(logrus.Fields{
+		"toRemove": len(toRemove),
+		"toCreate": len(toCreate),
+	}).Info("Reconciling VPNv4 Advertisements")
+
+	// remove no longer exists advertisements
+	for _, advert := range toRemove {
+		for _, path := range advert.Paths {
+			if err := p.CurrentServer.Server.WithdrawPath(ctx, types.PathRequest{Path: path}); err != nil {
+				l.WithField("vrfID", advert.VRF.VRFID).WithError(err).
+					Error("Failed remove advertised VRF VPNv4 route.")
+			}
+		}
+		delete(p.CurrentServer.SRv6L3VPNAnnouncements, advert.VRF.VRFID)
+	}
+
+	// create necessary advertisement.
+	for _, v := range toCreate {
+		vpnv4Paths, err := mapVRFToVPNv4Paths(ipv4Nets, v)
+		if err != nil {
+			l.WithField("vrfID", v.VRFID).WithError(err).Error("Failed map VRF VPNv4 paths.")
+			continue
+		}
+		advert := VPNv4Advertisement{
+			VRF: v,
+		}
+		for _, path := range vpnv4Paths {
+			resp, err := p.CurrentServer.Server.AdvertisePath(ctx, types.PathRequest{Path: path})
+			if err != nil {
+				l.WithField("vrfID", v.VRFID).WithError(err).Error("Failed advertise VRF VPNv4 path.")
+				continue
+			}
+			advert.Paths = append(advert.Paths, resp.Path)
+			l.WithField("vrfID", v.VRFID).Infof("Advertised VRF VPNv4 path %s.", resp.Path.NLRI)
+		}
+		p.CurrentServer.SRv6L3VPNAnnouncements[advert.VRF.VRFID] = advert
+	}
+
+	return nil
+}
+
+type importedVRFReconcilerOut struct {
+	cell.Out
+
+	Reconciler ConfigReconciler `group:"bgp-config-reconciler"`
+}
+
+type importedVRFReconcilerParams struct {
+	cell.In
+
+	SRv6Manager    *srv6.Manager
+	PolicyResource resource.Resource[*v2alpha1api.CiliumBGPPeeringPolicy]
+	Clientset      client.Clientset
+}
+
+type ImportedVRFReconciler struct {
+	srv6Manager *srv6.Manager
+	policies    resource.Resource[*v2alpha1api.CiliumBGPPeeringPolicy]
+	clientset   client.Clientset
+}
+
+func NewImportVRFReconciler(params importedVRFReconcilerParams) importedVRFReconcilerOut {
+	return importedVRFReconcilerOut{
+		Reconciler: &ImportedVRFReconciler{
+			srv6Manager: params.SRv6Manager,
+			policies:    params.PolicyResource,
+			clientset:   params.Clientset,
+		},
+	}
+}
+
+func (r *ImportedVRFReconciler) Priority() int {
+	return 50
+}
+
+func (r *ImportedVRFReconciler) Reconcile(ctx context.Context, p ReconcileParams) error {
+	var (
+		l = log.WithFields(
+			logrus.Fields{
+				"component": "manager.reconcileImportedVRFs",
+			},
+		)
+		toCreate []*srv6.EgressPolicy
+		toRemove []*srv6.EgressPolicy
+	)
+
+	if !p.DesiredConfig.MapSRv6VRFs {
+		l.Infof("VRouter %d will not map learned VPNv4 routes.", p.DesiredConfig.LocalASN)
+		return nil
+	}
+
+	vrfs := r.srv6Manager.GetAllVRFs()
+
+	curPolicies := r.srv6Manager.GetEgressPolicies()
+	l.WithField("count", len(curPolicies)).Debug("Discovered current egress policies")
+
+	newPolicies, err := mapSRv6EgressPolicy(ctx, p.CurrentServer, vrfs)
+	if err != nil {
+		return fmt.Errorf("failed to map VRFs into SRv6 egress policies: %w", err)
+	}
+
+	// an nset member which book keeps which universe it exists in.
+	type member struct {
+		// present in new policies universe
+		a bool
+		// present in current policies universe
+		b bool
+		p *srv6.EgressPolicy
+	}
+
+	// set of unique policies
+	pset := map[string]*member{}
+
+	// evaluate new policies
+	for i, p := range newPolicies {
+
+		var (
+			h  *member
+			ok bool
+		)
+
+		key, err := keyifySRv6Policy(p)
+		if err != nil {
+			return fmt.Errorf("%s %w", "failed to create key from EgressPolicy", err)
+		}
+
+		if h, ok = pset[key]; !ok {
+			pset[key] = &member{
+				a: true,
+				p: newPolicies[i],
+			}
+			continue
+		}
+		h.a = true
+	}
+	// evaluate current policies
+	for i, p := range curPolicies {
+		var (
+			h  *member
+			ok bool
+		)
+
+		key, err := keyifySRv6Policy(p)
+		if err != nil {
+			return fmt.Errorf("%s %w", "failed to create key from EgressPolicy", err)
+		}
+
+		if h, ok = pset[key]; !ok {
+			pset[key] = &member{
+				b: true,
+				p: curPolicies[i],
+			}
+			continue
+		}
+		h.b = true
+	}
+
+	for _, m := range pset {
+		// present in new policies but not in current, create
+		if m.a && !m.b {
+			toCreate = append(toCreate, m.p)
+		}
+		// present in current policies but not new, remove.
+		if m.b && !m.a {
+			toRemove = append(toRemove, m.p)
+		}
+	}
+	l.WithField("count", len(toCreate)).Info("Number of SRv6 egress policies to create.")
+	l.WithField("count", len(toRemove)).Info("Number of SRv6 egress policies to remove.")
+
+	clientSet := r.clientset.CiliumV2alpha1().CiliumSRv6EgressPolicies()
+
+	mkName := func(p *srv6.EgressPolicy) (string, error) {
+		const prefix = "bgp-control-plane"
+
+		key, err := keyifySRv6Policy(p)
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("%s-%s", prefix, key), nil
+	}
+
+	var name string
+
+	for _, p := range toCreate {
+		destCIDRs := []v2alpha1api.CIDR{}
+		for _, c := range p.DstCIDRs {
+			destCIDRs = append(destCIDRs, v2alpha1api.CIDR(c.String()))
+		}
+
+		name, err = mkName(p)
+		if err != nil {
+			return fmt.Errorf("failed to create EgressPolicy name: %w", err)
+		}
+
+		egressPol := &v2alpha1api.CiliumSRv6EgressPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "cilium.io/v2alpha1",
+				Kind:       "CiliumSRv6EgressPolicy",
+			},
+			Spec: v2alpha1api.CiliumSRv6EgressPolicySpec{
+				VRFID:            p.VRFID,
+				DestinationCIDRs: []v2alpha1api.CIDR(destCIDRs),
+				DestinationSID:   p.SID.IP().String(),
+			},
+		}
+		l.WithField("policy", egressPol).Debug("Writing egress policy to Kubernetes")
+		res, err := clientSet.Create(ctx, egressPol, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to write egress policy to Kubernetes: %w", err)
+		}
+		l.WithField("policy", res).Debug("Resulting egress policy")
+	}
+
+	for _, p := range toRemove {
+		name, err = mkName(p)
+		if err != nil {
+			return fmt.Errorf("failed to create EgressPolicy name: %w", err)
+		}
+
+		l.WithField("policy", p).Debug("Removing egress policy from Kubernetes")
+		err := clientSet.Delete(ctx, name, metav1.DeleteOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to remove egress policy: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// keyifySRv6Policy creates a string key for a SRv6PolicyConfig.
+func keyifySRv6Policy(p *srv6.EgressPolicy) (string, error) {
+	b := &bytes.Buffer{}
+
+	id := strconv.FormatUint(uint64(p.VRFID), 10)
+	if _, err := b.Write([]byte(id)); err != nil {
+		return "", err
+	}
+
+	for _, cidr := range p.DstCIDRs {
+		if _, err := b.Write([]byte(cidr.String())); err != nil {
+			return "", err
+		}
+	}
+
+	h := sha256.New()
+	if _, err := io.Copy(h, b); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }

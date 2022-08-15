@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/pkg/bgpv1/agent"
+	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
@@ -40,7 +41,8 @@ type LocalASNMap map[int64]*ServerWithConfig
 type bgpRouterManagerParams struct {
 	cell.In
 
-	Reconcilers []ConfigReconciler `group:"bgp-config-reconciler"`
+	Reconcilers   []ConfigReconciler `group:"bgp-config-reconciler"`
+	BGPCPSignaler *signaler.BGPCPSignaler
 }
 
 // BGPRouterManager implements the pkg.bgpv1.agent.BGPRouterManager interface.
@@ -76,6 +78,7 @@ type BGPRouterManager struct {
 	lock.RWMutex
 	Servers     LocalASNMap
 	Reconcilers []ConfigReconciler
+	signaler    *signaler.BGPCPSignaler
 }
 
 // NewBGPRouterManager constructs a GoBGP-backed BGPRouterManager.
@@ -94,6 +97,7 @@ func NewBGPRouterManager(params bgpRouterManagerParams) agent.BGPRouterManager {
 	return &BGPRouterManager{
 		Servers:     make(LocalASNMap),
 		Reconcilers: params.Reconcilers,
+		signaler:    params.BGPCPSignaler,
 	}
 }
 
@@ -233,6 +237,9 @@ func (m *BGPRouterManager) registerBGPServer(ctx context.Context, c *v2alpha1api
 			RouteSelectionOptions: &types.RouteSelectionOptions{
 				AdvertiseInactiveRoutes: true,
 			},
+		},
+		OnFIBEvent: func() {
+			m.signaler.Event(struct{}{})
 		},
 	}
 

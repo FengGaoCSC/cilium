@@ -32,6 +32,7 @@ import (
 	"github.com/cilium/cilium/pkg/pprof"
 	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/signal"
+	"github.com/cilium/cilium/pkg/srv6"
 	"github.com/cilium/cilium/pkg/statedb"
 )
 
@@ -153,5 +154,8 @@ var (
 
 		// Multi-network support, enabling pods to be attached to multiple network interfaces
 		multinetwork.Cell,
+
+		// srv6 is the SRv6 subsystem which implements SRv6 related functionality.
+		srv6.Cell,
 	)
 )

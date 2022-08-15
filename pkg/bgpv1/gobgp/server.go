@@ -94,16 +94,39 @@ func NewGoBGPServerWithConfig(ctx context.Context, log *logrus.Entry, params typ
 	}
 
 	// will log out any peer changes.
-	watchRequest := &gobgp.WatchEventRequest{
+	watchRequestPeer := &gobgp.WatchEventRequest{
 		Peer: &gobgp.WatchEventRequest_Peer{},
 	}
-	err := s.WatchEvent(ctx, watchRequest, func(r *gobgp.WatchEventResponse) {
+	err := s.WatchEvent(ctx, watchRequestPeer, func(r *gobgp.WatchEventResponse) {
 		if p := r.GetPeer(); p != nil && p.Type == gobgp.WatchEventResponse_PeerEvent_STATE {
 			logger.l.Info(p)
 		}
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure logging for virtual router with local-asn %v: %w", startReq.Global.Asn, err)
+	}
+
+	watchRequestTable := &gobgp.WatchEventRequest{
+		Table: &gobgp.WatchEventRequest_Table{
+			Filters: []*gobgp.WatchEventRequest_Table_Filter{
+				{
+					Type: gobgp.WatchEventRequest_Table_Filter_ADJIN,
+					Init: true,
+				},
+				{
+					Type: gobgp.WatchEventRequest_Table_Filter_BEST,
+					Init: true,
+				},
+			},
+		},
+	}
+	err = s.WatchEvent(ctx, watchRequestTable, func(_ *gobgp.WatchEventResponse) {
+		if params.OnFIBEvent != nil {
+			params.OnFIBEvent()
+		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure table watching for virtual router with local-asn %v: %w", startReq.Global.Asn, err)
 	}
 
 	return &GoBGPServer{
@@ -120,6 +143,7 @@ func (g *GoBGPServer) AddNeighbor(ctx context.Context, n types.NeighborRequest) 
 	if err != nil {
 		return err
 	}
+
 	peerReq := &gobgp.AddPeerRequest{
 		Peer: peer,
 	}

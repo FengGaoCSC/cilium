@@ -706,6 +706,12 @@ const (
 	// CGroupId is the numerical cgroup id
 	CGroupID = "cgroupID"
 
+	// VRF is the VRF used for the SRv6 lookups.
+	VRF = "vrf"
+
+	// SID is the segment identifier used in SRv6.
+	SID = "sid"
+
 	// Expected is an expected value
 	Expected = "expected"
 
