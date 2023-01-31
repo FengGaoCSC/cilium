@@ -28,8 +28,6 @@ TESTPKGS ?= ./...
 SWAGGER_VERSION := v0.30.3
 SWAGGER := $(CONTAINER_ENGINE) run -u $(shell id -u):$(shell id -g) --rm -v $(CURDIR):$(CURDIR) -w $(CURDIR) --entrypoint swagger quay.io/goswagger/swagger:$(SWAGGER_VERSION)
 
-GOTEST_BASE := -test.v -timeout 600s
-GOTEST_COVER_OPTS += -coverprofile=coverage.out
 BENCH_EVAL := "."
 BENCH ?= $(BENCH_EVAL)
 BENCHFLAGS_EVAL := -bench=$(BENCH) -run=^$ -benchtime=10s
@@ -40,14 +38,6 @@ SKIP_K8S_CODE_GEN_CHECK ?= "true"
 SKIP_CUSTOMVET_CHECK ?= "false"
 
 JOB_BASE_NAME ?= cilium_test
-
-GO_VERSION := $(shell cat GO_VERSION)
-GO_MAJOR_AND_MINOR_VERSION := $(shell sed 's/\([0-9]\+\).\([0-9]\+\)\(.[0-9]\+\)\?/\1.\2/' GO_VERSION)
-GO_IMAGE_VERSION := $(shell awk -F. '{ z=$$3; if (z == "") z=0; print $$1 "." $$2 "." z}' GO_VERSION)
-GO_INSTALLED_MAJOR_AND_MINOR_VERSION := $(shell $(GO) version | sed 's/go version go\([0-9]\+\).\([0-9]\+\)\(.[0-9]\+\)\?.*/\1.\2/')
-
-GO_CONTAINER := $(CONTAINER_ENGINE) run --rm -v $(CURDIR):$(CURDIR) -w $(CURDIR) golang:$(GO_VERSION)
-GOIMPORTS_VERSION ?= v0.1.12
 
 TEST_LDFLAGS=-ldflags "-X github.com/cilium/cilium/pkg/kvstore.consulDummyAddress=https://consul:8443 \
 	-X github.com/cilium/cilium/pkg/kvstore.etcdDummyAddress=http://etcd:4002 \
@@ -620,6 +610,7 @@ licenses-all: ## Generate file with all the License from dependencies.
 	@$(GO) run ./tools/licensegen > LICENSE.all || ( rm -f LICENSE.all ; false )
 
 check-go-version: ## Check locally install Go version against required Go version.
+	echo $(ROOT_DIR)
 ifneq ($(GO_MAJOR_AND_MINOR_VERSION),$(GO_INSTALLED_MAJOR_AND_MINOR_VERSION))
 	@echo "Installed Go version $(GO_INSTALLED_MAJOR_AND_MINOR_VERSION) does not match requested Go version $(GO_MAJOR_AND_MINOR_VERSION)"
 	@exit 1
