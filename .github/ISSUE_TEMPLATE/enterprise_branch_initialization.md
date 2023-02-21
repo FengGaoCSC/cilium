@@ -14,8 +14,6 @@ sprinkles that make up the enterprise edition.
 On a high level, we need to introduce the [atlantis] configuration, adjust CI
 to now care about `-ce` branches and add some automation details. 
 
-
-
 ## Prepare the branch
 
 - [ ] Create a PR that updates the `.github/workflows/mirror-upstream.yaml`
@@ -50,11 +48,20 @@ than to have it be perfect from the get-go, as not having this branch blocks
 forward porting work of enterprise-only features. Don't forget to get all the
 plugins enabled again before shipping a release, though! :ship:
 
-## CI
+## CI and Makefiles
 
 - [ ] Change all references to `1.X` to `1.X-ce` in
       `.github/workflows/build-image-*.yaml`, for inspiration again see [this PR
       for v1.13].
+- [ ] Add the enterprise variants of the Makefile definitions:
+  - [ ] `install/kubernetes/Makefile.enterprise.values`: Base it on the OSS
+        `Makefile.values`, but replace the image registries with their Isovalent
+        counterparts, i.e. `quay.io/cilium` becomes `quay.io/isovalent` or
+        `quay.io/isovalent-dev` as appropriate. See [this diff] for reference.
+  - [ ] `install/kubernetes/Makefile.enterprise.digests` is just a copy of the
+        OSS variant.
+  - [ ] Change `install/kubernetes/Makefile` so that `MAKEFILE_VALUES` points to
+        the newly created `Makefile.enterprise.values`.
 
 ## Forward port Workflows with pull_request targets
 
@@ -70,6 +77,7 @@ Here's a likely not exhaustive list of what needs to come with:
 
 [v1.13]: https://github.com/cilium/cilium/tree/v1.13
 [atlantis]: https://github.com/isovalent/atlantis/
+[this diff]: https://github.com/isovalent/cilium/pull/746#issuecomment-1437703837
 [this PR for v1.13]: https://github.com/isovalent/cilium/pull/574
 [`BRANCHES`]: https://github.com/isovalent/cilium/blob/db3697989ca5224b246e358867107cc28c3d25ba/.github/workflows/mirror-upstream.yaml#L28
 [`PATHSPEC`]: https://github.com/isovalent/cilium/blob/db3697989ca5224b246e358867107cc28c3d25ba/.github/workflows/mirror-upstream.yaml#L65
