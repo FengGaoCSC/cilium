@@ -63,6 +63,11 @@ plugins enabled again before shipping a release, though! :ship:
   - [ ] Change `install/kubernetes/Makefile` so that `MAKEFILE_VALUES` points to
         the newly created `Makefile.enterprise.values`.
 
+## Update Hubble enterprise CLI version
+- [ ] Make sure that `images/cilium/download-hubble-enterprise.sh` has the
+      newest version of Hubble enterprise CLI set. (Check them on
+      https://github.com/isovalent/hubble-releases/releases/)
+
 ## Forward port Workflows with pull_request targets
 
 Most of the GitHub workflow definitions can live in the `default` branch, but
