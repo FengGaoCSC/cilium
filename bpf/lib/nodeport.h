@@ -46,6 +46,10 @@ struct dsr_opt_v4 {
 	__u32 addr;
 };
 
+__attribute__((noinline)) int foobar_lol(const struct __ctx_buff *ctx __maybe_unused) {
+	return ctx->ingress_ifindex;
+}
+
 static __always_inline bool nodeport_uses_dsr(__u8 nexthdr __maybe_unused)
 {
 # if defined(ENABLE_DSR) && !defined(ENABLE_DSR_HYBRID)
@@ -1666,6 +1670,10 @@ int tail_nodeport_nat_ingress_ipv4(struct __ctx_buff *ctx)
 		.addr = IPV4_DIRECT_ROUTING,
 	};
 	int ret;
+
+	if (foobar_lol(ctx) == 0) {
+		return 0;
+	}
 
 	ret = snat_v4_rev_nat(ctx, &target);
 	if (IS_ERR(ret)) {
