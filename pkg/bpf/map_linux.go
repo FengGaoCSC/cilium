@@ -163,29 +163,6 @@ func NewMap(name string, mapType MapType, mapKey MapKey, keySize int,
 	}
 }
 
-// NewPerCPUHashMap creates a new Map type of "per CPU hash" - object representing a BPF map
-// The number of cpus is used to have the size representation of a value when
-// a lookup is made on this map types.
-func NewPerCPUHashMap(name string, mapKey MapKey, keySize int, mapValue MapValue, valueSize, cpus, maxEntries int, flags uint32, innerID uint32, dumpParser DumpParser) *Map {
-	m := &Map{
-		MapInfo: MapInfo{
-			MapType:       MapTypePerCPUHash,
-			MapKey:        mapKey,
-			KeySize:       uint32(keySize),
-			MapValue:      mapValue,
-			ReadValueSize: uint32(valueSize * cpus),
-			ValueSize:     uint32(valueSize),
-			MaxEntries:    uint32(maxEntries),
-			Flags:         flags,
-			InnerID:       innerID,
-			OwnerProgType: ProgTypeUnspec,
-		},
-		name:       path.Base(name),
-		DumpParser: dumpParser,
-	}
-	return m
-}
-
 // WithNonPersistent turns the map non-persistent and returns the map
 func (m *Map) WithNonPersistent() *Map {
 	m.NonPersistent = true
