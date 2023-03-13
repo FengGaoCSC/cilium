@@ -240,99 +240,35 @@ func shuffleMaps(realized, backup, pending string) error {
 	return nil
 }
 
-// garbageCollect implements GC of the ipcache map in one of two ways:
-//
-// On Linux 4.9, 4.10 or 4.16 and later:
+// garbageCollect implements GC of the ipcache map in the following way:
 //
 //	Periodically sweep through every element in the BPF map and check it
 //	against the in-memory copy of the map. If it doesn't exist in memory,
 //	delete the entry.
 //
-// On Linux 4.11 to 4.15:
-//
-//	Create a brand new map, populate it with all of the IPCache entries from
-//	the in-memory cache, delete the old map, and trigger regeneration of all
-//	BPF programs so that they pick up the new map.
-//
 // Returns an error if garbage collection failed to occur.
 func (l *BPFListener) garbageCollect(ctx context.Context) (*sync.WaitGroup, error) {
 	log.Debug("Running garbage collection for BPF IPCache")
 
-	if ipcacheMap.SupportsDelete() {
-		// Since controllers run asynchronously, need to make sure
-		// IPIdentityCache is not being updated concurrently while we
-		// do GC;
-		l.ipcache.RLock()
-		defer l.ipcache.RUnlock()
+	// Since controllers run asynchronously, need to make sure
+	// IPIdentityCache is not being updated concurrently while we
+	// do GC;
+	l.ipcache.RLock()
+	defer l.ipcache.RUnlock()
 
-		keysToRemove := map[string]*ipcacheMap.Key{}
-		if err := l.bpfMap.DumpWithCallback(l.updateStaleEntriesFunction(keysToRemove)); err != nil {
-			return nil, fmt.Errorf("error dumping ipcache BPF map: %s", err)
+	keysToRemove := map[string]*ipcacheMap.Key{}
+	if err := l.bpfMap.DumpWithCallback(l.updateStaleEntriesFunction(keysToRemove)); err != nil {
+		return nil, fmt.Errorf("error dumping ipcache BPF map: %s", err)
+	}
+
+	// Remove all keys which are not in in-memory cache from BPF map
+	// for consistency.
+	for _, k := range keysToRemove {
+		log.WithFields(logrus.Fields{logfields.BPFMapKey: k}).
+			Debug("deleting from ipcache BPF map")
+		if err := l.bpfMap.DeleteWithOverwrite(k); err != nil {
+			return nil, fmt.Errorf("error deleting key %s from ipcache BPF map: %s", k, err)
 		}
-
-		// Remove all keys which are not in in-memory cache from BPF map
-		// for consistency.
-		for _, k := range keysToRemove {
-			log.WithFields(logrus.Fields{logfields.BPFMapKey: k}).
-				Debug("deleting from ipcache BPF map")
-			if err := l.bpfMap.DeleteWithOverwrite(k); err != nil {
-				return nil, fmt.Errorf("error deleting key %s from ipcache BPF map: %s", k, err)
-			}
-		}
-	} else {
-		// Since controllers run asynchronously, need to make sure
-		// IPIdentityCache is not being updated concurrently while we
-		// do GC;
-		l.ipcache.RLock()
-
-		// Populate the map at the new path
-		pendingMapName := fmt.Sprintf("%s_pending", ipcacheMap.Name)
-		pendingMap := ipcacheMap.NewMap(pendingMapName)
-		if _, err := pendingMap.OpenOrCreate(); err != nil {
-			l.ipcache.RUnlock()
-			return nil, fmt.Errorf("Unable to create %s map: %s", pendingMapName, err)
-		}
-		pendingListener := newListener(pendingMap, l.datapath, nil, l.ipcache)
-		l.ipcache.DumpToListenerLocked(pendingListener)
-		err := pendingMap.Close()
-		if err != nil {
-			log.WithError(err).WithField("map-name", pendingMapName).Warning("unable to close map")
-		}
-
-		// Move the maps around on the filesystem so that BPF reload
-		// will pick up the new paths without requiring recompilation.
-		backupMapName := fmt.Sprintf("%s_old", ipcacheMap.Name)
-		if err := shuffleMaps(ipcacheMap.Name, backupMapName, pendingMapName); err != nil {
-			l.ipcache.RUnlock()
-			return nil, err
-		}
-
-		// Reopen the ipcache map so that new writes and reads will use
-		// the new map
-		if err := ipcacheMap.Reopen(); err != nil {
-			handleMapShuffleFailure(backupMapName, ipcacheMap.Name)
-			l.ipcache.RUnlock()
-			return nil, err
-		}
-
-		// Unlock the ipcache as in order for
-		// TriggerReloadWithoutCompile() to succeed, other endpoint
-		// regenerations which are blocking on the ipcache lock may
-		// need to succeed first (#11946)
-		l.ipcache.RUnlock()
-
-		wg, err := l.datapath.TriggerReloadWithoutCompile("datapath ipcache")
-		if err != nil {
-			// We can't really undo the map rename again as ipcache
-			// operations had already been permitted so the backup
-			// map is potentially outdated. Fail hard to restart
-			// the agent so we reconstruct the ipcache from
-			// scratch.
-			log.WithError(err).Fatal("Endpoint datapath reload triggered by ipcache GC failed. Inconsistent state.")
-		}
-
-		_ = os.RemoveAll(bpf.MapPath(backupMapName))
-		return wg, nil
 	}
 	return nil, nil
 }
