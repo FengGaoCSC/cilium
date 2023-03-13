@@ -1377,9 +1377,6 @@ func initEnv() {
 		if !option.Config.EnableIPv6 {
 			log.Fatalf("SRv6 requires IPv6.")
 		}
-		if probes.HaveMapType(ebpf.LRUHash) != nil {
-			log.Fatalf("SRv6 requires support for BPF LRU maps (Linux 4.10 or later).")
-		}
 	}
 
 	if option.Config.EnableHostFirewall {
@@ -1433,11 +1430,6 @@ func initEnv() {
 	if option.Config.EnableIPv4FragmentsTracking {
 		if !option.Config.EnableIPv4 {
 			option.Config.EnableIPv4FragmentsTracking = false
-		} else {
-			if probes.HaveMapType(ebpf.LRUHash) != nil {
-				option.Config.EnableIPv4FragmentsTracking = false
-				log.Info("Disabled support for IPv4 fragments due to missing kernel support for BPF LRU maps")
-			}
 		}
 	}
 
