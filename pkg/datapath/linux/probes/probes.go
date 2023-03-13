@@ -482,7 +482,6 @@ func ExecuteHeaderProbes() *FeatureProbes {
 
 	maps := []ebpf.MapType{
 		ebpf.LRUHash,
-		ebpf.LPMTrie,
 	}
 	for _, m := range maps {
 		probes.Maps[m] = (HaveMapType(m) == nil)

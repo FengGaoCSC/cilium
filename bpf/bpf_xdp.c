@@ -42,7 +42,6 @@
 #include "lib/nodeport.h"
 
 #ifdef ENABLE_PREFILTER
-#ifdef CIDR4_FILTER
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, struct lpm_v4_key);
@@ -52,7 +51,6 @@ struct {
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 } CIDR4_HMAP_NAME __section_maps_btf;
 
-#ifdef CIDR4_LPM_PREFILTER
 struct {
 	__uint(type, BPF_MAP_TYPE_LPM_TRIE);
 	__type(key, struct lpm_v4_key);
@@ -62,10 +60,6 @@ struct {
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 } CIDR4_LMAP_NAME __section_maps_btf;
 
-#endif /* CIDR4_LPM_PREFILTER */
-#endif /* CIDR4_FILTER */
-
-#ifdef CIDR6_FILTER
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, struct lpm_v6_key);
@@ -75,7 +69,6 @@ struct {
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 } CIDR6_HMAP_NAME __section_maps_btf;
 
-#ifdef CIDR6_LPM_PREFILTER
 struct {
 	__uint(type, BPF_MAP_TYPE_LPM_TRIE);
 	__type(key, struct lpm_v6_key);
@@ -84,8 +77,6 @@ struct {
 	__uint(max_entries, CIDR4_LMAP_ELEMS);
 	__uint(map_flags, BPF_F_NO_PREALLOC);
 } CIDR6_LMAP_NAME __section_maps_btf;
-#endif /* CIDR6_LPM_PREFILTER */
-#endif /* CIDR6_FILTER */
 #endif /* ENABLE_PREFILTER */
 
 static __always_inline __maybe_unused int
@@ -144,19 +135,14 @@ static __always_inline int check_v4(struct __ctx_buff *ctx)
 	if (ctx_no_room(ipv4_hdr + 1, data_end))
 		return CTX_ACT_DROP;
 
-#ifdef CIDR4_FILTER
 	memcpy(pfx.lpm.data, &ipv4_hdr->saddr, sizeof(pfx.addr));
 	pfx.lpm.prefixlen = 32;
 
-#ifdef CIDR4_LPM_PREFILTER
 	if (map_lookup_elem(&CIDR4_LMAP_NAME, &pfx))
 		return CTX_ACT_DROP;
-#endif /* CIDR4_LPM_PREFILTER */
+
 	return map_lookup_elem(&CIDR4_HMAP_NAME, &pfx) ?
 		CTX_ACT_DROP : check_v4_lb(ctx);
-#else
-	return check_v4_lb(ctx);
-#endif /* CIDR4_FILTER */
 }
 #else
 static __always_inline int check_v4(struct __ctx_buff *ctx)
@@ -207,19 +193,14 @@ static __always_inline int check_v6(struct __ctx_buff *ctx)
 	if (ctx_no_room(ipv6_hdr + 1, data_end))
 		return CTX_ACT_DROP;
 
-#ifdef CIDR6_FILTER
 	__bpf_memcpy_builtin(pfx.lpm.data, &ipv6_hdr->saddr, sizeof(pfx.addr));
 	pfx.lpm.prefixlen = 128;
 
-#ifdef CIDR6_LPM_PREFILTER
 	if (map_lookup_elem(&CIDR6_LMAP_NAME, &pfx))
 		return CTX_ACT_DROP;
-#endif /* CIDR6_LPM_PREFILTER */
+
 	return map_lookup_elem(&CIDR6_HMAP_NAME, &pfx) ?
 		CTX_ACT_DROP : check_v6_lb(ctx);
-#else
-	return check_v6_lb(ctx);
-#endif /* CIDR6_FILTER */
 }
 #else
 static __always_inline int check_v6(struct __ctx_buff *ctx)

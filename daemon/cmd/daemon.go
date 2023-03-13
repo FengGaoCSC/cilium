@@ -83,7 +83,6 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	policyAPI "github.com/cilium/cilium/pkg/policy/api"
-	"github.com/cilium/cilium/pkg/probe"
 	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/recorder"
@@ -1046,10 +1045,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup,
 		if !option.Config.EnableIPv4 {
 			log.WithError(err).Errorf("BPF ip-masq-agent requires IPv4 support (--%s=\"true\")", option.EnableIPv4Name)
 			return nil, nil, fmt.Errorf("BPF ip-masq-agent requires IPv4 support (--%s=\"true\")", option.EnableIPv4Name)
-		}
-		if !probe.HaveFullLPM() {
-			log.WithError(err).Error("BPF ip-masq-agent needs kernel 4.16 or newer")
-			return nil, nil, fmt.Errorf("BPF ip-masq-agent needs kernel 4.16 or newer")
 		}
 	}
 	if option.Config.EnableHostFirewall && len(option.Config.GetDevices()) == 0 {
