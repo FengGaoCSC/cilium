@@ -11,13 +11,65 @@
 package k8s
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 )
+
+func TestPhantomServiceMutator(t *testing.T) {
+	tests := []struct {
+		name     string
+		svc      slim_corev1.Service
+		expected Service
+	}{
+		{
+			name: "Phantom service",
+			svc: slim_corev1.Service{
+				ObjectMeta: slim_metav1.ObjectMeta{
+					Annotations: map[string]string{"service.isovalent.com/phantom": "true"},
+				},
+				Spec: slim_corev1.ServiceSpec{
+					ClusterIP: "127.0.0.1",
+					Type:      slim_corev1.ServiceTypeLoadBalancer,
+				},
+				Status: slim_corev1.ServiceStatus{
+					LoadBalancer: slim_corev1.LoadBalancerStatus{
+						Ingress: []slim_corev1.LoadBalancerIngress{
+							{IP: "192.168.0.1"},
+							{IP: "192.168.0.3"},
+						},
+					},
+				},
+			},
+			expected: Service{
+				Shared:      true,
+				FrontendIPs: []net.IP{net.ParseIP("192.168.0.1"), net.ParseIP("192.168.0.3")},
+			},
+		},
+		{
+			name: "Non-phantom service",
+			svc: slim_corev1.Service{
+				ObjectMeta: slim_metav1.ObjectMeta{
+					Annotations: map[string]string{"service.isovalent.com/phantom": "false"},
+				},
+			},
+			expected: Service{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var input Service
+			PhantomServiceMutator(&tt.svc, &input)
+			require.Equal(t, tt.expected, input)
+		})
+	}
+}
 
 func TestGetAnnotationPhantom(t *testing.T) {
 	tests := []struct {
