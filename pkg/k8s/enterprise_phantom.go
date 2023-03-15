@@ -16,6 +16,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/annotation"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
+	"github.com/cilium/cilium/pkg/service/store"
 )
 
 const (
@@ -62,4 +63,8 @@ func getAnnotationPhantom(svc *slim_corev1.Service) bool {
 	}
 
 	return false
+}
+
+func isPhantomService(s *store.ClusterService) bool {
+	return !s.IncludeExternal && s.Shared
 }

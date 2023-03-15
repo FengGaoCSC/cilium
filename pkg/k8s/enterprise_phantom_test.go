@@ -17,8 +17,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	fakeDatapath "github.com/cilium/cilium/pkg/datapath/fake"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
+	"github.com/cilium/cilium/pkg/loadbalancer"
+	"github.com/cilium/cilium/pkg/lock"
+	"github.com/cilium/cilium/pkg/service/store"
 )
 
 func TestPhantomServiceMutator(t *testing.T) {
@@ -69,6 +73,213 @@ func TestPhantomServiceMutator(t *testing.T) {
 			require.Equal(t, tt.expected, input)
 		})
 	}
+}
+
+func TestPhantomServiceUpdate(t *testing.T) {
+	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()))
+
+	svc := store.ClusterService{
+		Cluster:   "other",
+		Namespace: "bar",
+		Name:      "foo",
+		Frontends: map[string]store.PortConfiguration{
+			"1.1.1.1": {},
+		},
+		Backends: map[string]store.PortConfiguration{
+			"3.3.3.3": map[string]*loadbalancer.L4Addr{
+				"port": {Protocol: loadbalancer.TCP, Port: 80},
+			},
+		},
+	}
+
+	swg := lock.NewStoppableWaitGroup()
+	id := ServiceID{Cluster: svc.Cluster, Name: svc.Name, Namespace: svc.Namespace}
+
+	// The service is not marked as phantom, hence it should not be present in the cache.
+	svc.IncludeExternal, svc.Shared = true, true
+	require.False(t, isPhantomService(&svc), "The service should not be phantom")
+	svcCache.MergeExternalServiceUpdate(&svc, swg)
+	require.NotContains(t, svcCache.sc.services, id, "The service should not have been added to the cache")
+
+	// The service is now marked as phantom, hence it should be present in the cache.
+	svc.IncludeExternal, svc.Shared = false, true
+	require.True(t, isPhantomService(&svc), "The service should be phantom")
+	svcCache.MergeExternalServiceUpdate(&svc, swg)
+	require.Contains(t, svcCache.sc.services, id, "The service should have been added to the cache")
+
+	// The update event should be triggered.
+	event := <-svcCache.sc.Events
+	require.Equal(t, UpdateService, event.Action, "Received incorrect service event")
+	require.Equal(t, id, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 1, "Received incorrect service event")
+
+	// The service is again marked as non-phantom, hence it should be removed.
+	svc.IncludeExternal, svc.Shared = true, true
+	require.False(t, isPhantomService(&svc), "The service should not be phantom")
+	svcCache.MergeExternalServiceUpdate(&svc, swg)
+	require.NotContains(t, svcCache.sc.services, id, "The service should have been removed from the cache")
+
+	// The deletion event should be triggered.
+	event = <-svcCache.sc.Events
+	require.Equal(t, DeleteService, event.Action, "Received incorrect service event")
+	require.Equal(t, id, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 0, "Received incorrect service event")
+}
+
+func TestPhantomServiceDelete(t *testing.T) {
+	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()))
+
+	svc := store.ClusterService{
+		Cluster:   "other",
+		Namespace: "bar",
+		Name:      "foo",
+		Frontends: map[string]store.PortConfiguration{
+			"1.1.1.1": {},
+		},
+		Backends: map[string]store.PortConfiguration{
+			"3.3.3.3": map[string]*loadbalancer.L4Addr{
+				"port": {Protocol: loadbalancer.TCP, Port: 80},
+			},
+		},
+	}
+
+	swg := lock.NewStoppableWaitGroup()
+	id := ServiceID{Cluster: svc.Cluster, Name: svc.Name, Namespace: svc.Namespace}
+
+	// The service is now marked as phantom, hence it should be present in the cache.
+	svc.IncludeExternal, svc.Shared = false, true
+	require.True(t, isPhantomService(&svc), "The service should be phantom")
+	svcCache.MergeExternalServiceUpdate(&svc, swg)
+	require.Contains(t, svcCache.sc.services, id, "The service should have been added to the cache")
+
+	// The update event should be triggered.
+	event := <-svcCache.sc.Events
+	require.Equal(t, UpdateService, event.Action, "Received incorrect service event")
+	require.Equal(t, id, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 1, "Received incorrect service event")
+
+	// The service is deleted, hence it should be removed.
+	svcCache.MergeExternalServiceDelete(&svc, swg)
+	require.NotContains(t, svcCache.sc.services, id, "The service should have been removed from the cache")
+
+	// The deletion event should be triggered.
+	event = <-svcCache.sc.Events
+	require.Equal(t, DeleteService, event.Action, "Received incorrect service event")
+	require.Equal(t, id, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 0, "Received incorrect service event")
+}
+
+func TestGlobalToPhantomToGlobalService(t *testing.T) {
+	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()))
+
+	k8sSvc := slim_corev1.Service{
+		ObjectMeta: slim_metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "bar",
+			Annotations: map[string]string{
+				"service.cilium.io/global": "true",
+			},
+		},
+		Spec: slim_corev1.ServiceSpec{
+			ClusterIP: "127.0.0.1",
+			Type:      slim_corev1.ServiceTypeClusterIP,
+			Ports: []slim_corev1.ServicePort{
+				{
+					Name:     "foo",
+					Protocol: slim_corev1.ProtocolTCP,
+					Port:     80,
+				},
+			},
+		},
+	}
+
+	svc := store.ClusterService{
+		Cluster:   "other",
+		Namespace: "bar",
+		Name:      "foo",
+		Frontends: map[string]store.PortConfiguration{
+			"1.1.1.1": {},
+		},
+		Backends: map[string]store.PortConfiguration{
+			"3.3.3.3": map[string]*loadbalancer.L4Addr{
+				"port": {Protocol: loadbalancer.TCP, Port: 80},
+			},
+		},
+	}
+
+	swg := lock.NewStoppableWaitGroup()
+	globalID := ServiceID{Cluster: svc.Cluster, Name: svc.Name, Namespace: svc.Namespace}
+
+	localID := svcCache.sc.UpdateService(&k8sSvc, swg)
+	svcCache.sc.UpdateEndpoints(&Endpoints{
+		ObjectMeta: slim_metav1.ObjectMeta{
+			Namespace: localID.Namespace,
+			Name:      localID.Name,
+		},
+		EndpointSliceID: EndpointSliceID{
+			ServiceID: localID,
+		},
+	}, swg)
+
+	// Consume the event generated by UpdateEndpoints.
+	<-svcCache.sc.Events
+
+	// The service is not marked as phantom, hence it should not be present
+	// when indexed by cluster name.
+	svc.IncludeExternal, svc.Shared = true, true
+	require.False(t, isPhantomService(&svc), "The service should not be phantom")
+	svcCache.MergeExternalServiceUpdate(&svc, swg)
+	require.Contains(t, svcCache.sc.services, localID, "The service should be in cache (by local ID)")
+	require.NotContains(t, svcCache.sc.services, globalID, "The service should not be in cache (by global ID)")
+
+	// The update event for the local service should be triggered, to include
+	// the remote endpoints.
+	event := <-svcCache.sc.Events
+	require.Equal(t, UpdateService, event.Action, "Received incorrect service event")
+	require.Equal(t, localID, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 1, "Received incorrect service event")
+
+	// The service is now marked as phantom, hence it should be present when
+	// indexed by cluster name.
+	svc.IncludeExternal, svc.Shared = false, true
+	require.True(t, isPhantomService(&svc), "The service should be phantom")
+	svcCache.MergeExternalServiceUpdate(&svc, swg)
+	require.Contains(t, svcCache.sc.services, localID, "The service should be in cache (by local ID)")
+	require.Contains(t, svcCache.sc.services, globalID, "The service should be in cache (by global ID)")
+
+	// The update event for the local service should be triggered, to remove
+	// the remote endpoints.
+	event = <-svcCache.sc.Events
+	require.Equal(t, UpdateService, event.Action, "Received incorrect service event")
+	require.Equal(t, localID, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 0, "Received incorrect service event")
+
+	// The update event for the phantom service should be triggered.
+	event = <-svcCache.sc.Events
+	require.Equal(t, UpdateService, event.Action, "Received incorrect service event")
+	require.Equal(t, globalID, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 1, "Received incorrect service event")
+
+	// The service is not marked as phantom again, hence it should not be present
+	// when indexed by cluster name.
+	svc.IncludeExternal, svc.Shared = true, true
+	require.False(t, isPhantomService(&svc), "The service should not be phantom")
+	svcCache.MergeExternalServiceUpdate(&svc, swg)
+	require.Contains(t, svcCache.sc.services, localID, "The service should be in cache (by local ID)")
+	require.NotContains(t, svcCache.sc.services, globalID, "The service should not be in cache (by global ID)")
+
+	// The delete event for the phantom service should be triggered.
+	event = <-svcCache.sc.Events
+	require.Equal(t, DeleteService, event.Action, "Received incorrect service event")
+	require.Equal(t, globalID, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 0, "Received incorrect service event")
+
+	// The update event for the local service should be triggered, to include
+	// the remote endpoints.
+	event = <-svcCache.sc.Events
+	require.Equal(t, UpdateService, event.Action, "Received incorrect service event")
+	require.Equal(t, localID, event.ID, "Received incorrect service event")
+	require.Len(t, event.Endpoints.Backends, 1, "Received incorrect service event")
 }
 
 func TestGetAnnotationPhantom(t *testing.T) {

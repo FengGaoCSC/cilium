@@ -8,29 +8,16 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package cmd
+package clustermesh
 
-import (
-	"github.com/cilium/cilium/pkg/hive/cell"
+import "github.com/cilium/cilium/pkg/k8s"
 
-	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
-)
-
-var (
-	EnterpriseAgent = cell.Module(
-		"enterprise-agent",
-		"Cilium Agent Enterprise",
-
-		Agent,
-
-		// enterprise-only cells here
-		EnterpriseControlPlane,
-	)
-
-	EnterpriseControlPlane = cell.Module(
-		"enterprise-controlplane",
-		"Control Plane Enterprise",
-
-		cecm.Cell,
-	)
-)
+// InjectCEServiceMerger allows to override the default ServiceMerger injected
+// through hive, to support additional enterprise features in addition to global
+// services (e.g., phantom services). This method is intended to be executed
+// through an Invoke function before starting the clustermesh subsystem.
+func InjectCEServiceMerger(cm *ClusterMesh, sc *k8s.ServiceCache) {
+	if cm != nil {
+		cm.conf.ServiceMerger = k8s.NewCEServiceMerger(sc)
+	}
+}

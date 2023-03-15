@@ -8,29 +8,17 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package cmd
+package clustermesh
 
 import (
+	"github.com/cilium/cilium/pkg/clustermesh"
 	"github.com/cilium/cilium/pkg/hive/cell"
-
-	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
 )
 
-var (
-	EnterpriseAgent = cell.Module(
-		"enterprise-agent",
-		"Cilium Agent Enterprise",
+var Cell = cell.Module(
+	"enterprise-clustermesh",
+	"ClusterMesh is the Isovalent Enterprise for Cilium multicluster implementation",
 
-		Agent,
-
-		// enterprise-only cells here
-		EnterpriseControlPlane,
-	)
-
-	EnterpriseControlPlane = cell.Module(
-		"enterprise-controlplane",
-		"Control Plane Enterprise",
-
-		cecm.Cell,
-	)
+	// Override the OSS ServiceMerger, to introduce the support for enterprise features.
+	cell.Invoke(clustermesh.InjectCEServiceMerger),
 )
