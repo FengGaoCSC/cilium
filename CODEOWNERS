@@ -207,5 +207,6 @@
 # The following filepaths should be sorted so that more specific paths occur
 # after the less specific paths, otherwise the ownership for the specific paths
 # is not properly picked up in Github.
-* @isovalent/test1
-/enterprise @isovalent/test2
+* @isovalent/core-structure
+/enterprise @isovalent/isovalent
+*/**ee* @isovalent/isovalent
