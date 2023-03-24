@@ -209,4 +209,4 @@
 # is not properly picked up in Github.
 * @isovalent/core-structure
 /enterprise @isovalent/isovalent
-*/**ee* @isovalent/isovalent
+*/**enterprise* @isovalent/isovalent
