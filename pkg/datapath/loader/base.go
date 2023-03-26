@@ -61,6 +61,8 @@ const (
 	initArgEndpointRoutes
 	initArgProxyRule
 	initTCFilterPriority
+	initDefaultRTProto
+	initLocalRulePriority
 	initArgMax
 )
 
@@ -149,6 +151,7 @@ func addENIRules(sysSettings []sysctl.Setting, nodeAddressing datapath.NodeAddre
 		Mark:     linux_defaults.MarkMultinodeNodeport,
 		Mask:     linux_defaults.MaskMultinodeNodeport,
 		Table:    route.MainTable,
+		Protocol: linux_defaults.RTProto,
 	}); err != nil {
 		return nil, fmt.Errorf("unable to install ip rule for ENI multi-node NodePort: %w", err)
 	}
@@ -403,6 +406,8 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 	}
 
 	args[initTCFilterPriority] = strconv.Itoa(int(option.Config.TCFilterPriority))
+	args[initDefaultRTProto] = strconv.Itoa(linux_defaults.RTProto)
+	args[initLocalRulePriority] = strconv.Itoa(linux_defaults.RulePriorityLocalLookup)
 
 	// "Legacy" datapath inizialization with the init.sh script
 	// TODO(mrostecki): Rewrite the whole init.sh in Go, step by step.
