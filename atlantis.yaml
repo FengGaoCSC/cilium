@@ -2,17 +2,17 @@
 scheme: v1alpha4
 lib:
   package: github.com/isovalent/atlantis
-  version: cdbaa2e138d83e11b2cd63b90a1d068cb9713470
-plugins: []
+  version: eb42730e0818a254b3d493d686bf2c1dfbdc3648
+plugins:
   #- package: github.com/isovalent/fqdn-proxy/plugin
   #  version: v1.13.0
   #  edit:
   #    cilium: .FQDNProxy
-  #- package: github.com/isovalent/hubble-flow-aggregation
-  #  version: v1.1.1
-  #  agent: .New
-  #  edit:
-  #    proto: proto.AddAggregation
+  - package: github.com/isovalent/hubble-flow-aggregation
+    version: b2962eb0f1ccc940b51ce327866d1b8392b3cbf0
+    agent: .New
+    edit:
+      proto: proto.AddAggregation
   #- package: github.com/isovalent/hubble-flow-policy-metadata
   #  version: v1.0.2
   #  agent: .New
