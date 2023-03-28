@@ -13,11 +13,11 @@ plugins:
     agent: .New
     edit:
       proto: proto.AddAggregation
-  #- package: github.com/isovalent/hubble-flow-policy-metadata
-  #  version: v1.0.2
-  #  agent: .New
-  #  edit:
-  #    proto: proto.AddPolicyFields
+  - package: github.com/isovalent/hubble-flow-policy-metadata
+    version: 6c5b6724987f74687ce653f41bb7df71f3eb845c
+    agent: .New
+    edit:
+      proto: proto.AddPolicyFields
   #- package: github.com/isovalent/hubble-flow-export
   #  version: v1.7.1
   #  agent: .New
