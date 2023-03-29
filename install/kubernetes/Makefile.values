@@ -5,9 +5,9 @@ DIGESTS_PATH:=Makefile.digests
 include $(DIGESTS_PATH)
 export USE_DIGESTS ?= $(shell if grep -q '""' $(DIGESTS_PATH); then echo "false"; else echo "true"; fi)
 export RELEASE_REGISTRY ?= quay.io
-export RELEASE_ORG ?= cilium
+export RELEASE_ORG ?= isovalent
 export CI_REGISTRY ?= quay.io
-export CI_ORG ?= cilium
+export CI_ORG ?= isovalent-dev
 
 ifeq ($(RELEASE),yes)
     export PULL_POLICY:=IfNotPresent

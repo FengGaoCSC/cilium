@@ -113,7 +113,7 @@ rollOutCiliumPods: false
 # -- Agent container image.
 image:
   override: ~
-  repository: "quay.io/cilium/cilium-ci"
+  repository: "quay.io/isovalent-dev/cilium-ci"
   tag: "latest"
   pullPolicy: "Always"
   # cilium-digest
@@ -1026,7 +1026,7 @@ hubble:
     # -- Hubble-relay container image.
     image:
       override: ~
-      repository: "quay.io/cilium/hubble-relay-ci"
+      repository: "quay.io/isovalent-dev/hubble-relay-ci"
       tag: "latest"
        # hubble-relay-digest
       digest: ""
@@ -1915,7 +1915,7 @@ operator:
   # -- cilium-operator image.
   image:
     override: ~
-    repository: "quay.io/cilium/operator"
+    repository: "quay.io/isovalent-dev/operator"
     tag: "latest"
     # operator-generic-digest
     genericDigest: ""
@@ -2196,7 +2196,7 @@ preflight:
   # -- Cilium pre-flight image.
   image:
     override: ~
-    repository: "quay.io/cilium/cilium-ci"
+    repository: "quay.io/isovalent-dev/cilium-ci"
     tag: "latest"
     # cilium-digest
     digest: ""
@@ -2346,7 +2346,7 @@ clustermesh:
     # -- Clustermesh API server image.
     image:
       override: ~
-      repository: "quay.io/cilium/clustermesh-apiserver-ci"
+      repository: "quay.io/isovalent-dev/clustermesh-apiserver-ci"
       tag: "latest"
       # clustermesh-apiserver-digest
       digest: ""
