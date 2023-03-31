@@ -571,9 +571,9 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 			k.tlsSecretInit(k.clientset.Slim(), option.Config.EnvoySecretNamespaces, swgSecret)
 		// Custom resource definitions
 		case k8sAPIGroupCiliumNetworkPolicyV2:
-			k.ciliumNetworkPoliciesInit(k.clientset)
+			k.ciliumNetworkPoliciesInit(ctx, k.clientset)
 		case k8sAPIGroupCiliumClusterwideNetworkPolicyV2:
-			k.ciliumClusterwideNetworkPoliciesInit(k.clientset)
+			k.ciliumClusterwideNetworkPoliciesInit(ctx, k.clientset)
 		case k8sAPIGroupCiliumEndpointV2:
 			k.initCiliumEndpointOrSlices(k.clientset, asyncControllers)
 		case k8sAPIGroupCiliumEndpointSliceV2Alpha1:
