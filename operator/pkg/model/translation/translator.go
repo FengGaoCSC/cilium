@@ -153,18 +153,29 @@ func (i *defaultTranslator) getRouteConfiguration(m *model.Model) []ciliumv2.XDS
 	}
 
 	var res []ciliumv2.XDSResource
-	for port, hostNames := range portHostName {
+
+	for _, port := range []string{insecureHost, secureHost} {
+		hostNames, exists := portHostName[port]
+		if !exists {
+			continue
+		}
 		var virtualhosts []*envoy_config_route_v3.VirtualHost
 
+		redirectedHost := map[string]struct{}{}
 		// Add HTTPs redirect virtual host for secure host
 		if port == insecureHost && i.enforceHTTPs {
 			for _, h := range unique(portHostName[secureHost]) {
 				vhs, _ := NewVirtualHostWithDefaults([]string{h}, true, i.hostNameSuffixMatch, hostNameRoutes[h])
 				virtualhosts = append(virtualhosts, vhs)
+				redirectedHost[h] = struct{}{}
 			}
 		}
-
 		for _, h := range unique(hostNames) {
+			if port == insecureHost {
+				if _, ok := redirectedHost[h]; ok {
+					continue
+				}
+			}
 			routes, exists := hostNameRoutes[h]
 			if !exists {
 				continue

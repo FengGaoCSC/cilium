@@ -55,63 +55,6 @@ TEST_LDFLAGS=-ldflags "-X github.com/cilium/cilium/pkg/kvstore.consulDummyAddres
 
 TEST_UNITTEST_LDFLAGS=-ldflags "-X github.com/cilium/cilium/pkg/datapath.DatapathSHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
-define generate_k8s_api
-	cd "./vendor/k8s.io/code-generator" && \
-	GO111MODULE=off bash ./generate-groups.sh $(1) \
-	    $(2) \
-	    $(3) \
-	    $(4) \
-	    --go-header-file "$(PWD)/hack/custom-boilerplate.go.txt"
-endef
-
-define generate_deepequal
-	go run github.com/cilium/deepequal-gen \
-	--input-dirs $(1) \
-	-O zz_generated.deepequal \
-	--go-header-file "$(PWD)/hack/custom-boilerplate.go.txt"
-endef
-
-define generate_k8s_api_all
-	$(call generate_k8s_api,all,github.com/cilium/cilium/pkg/k8s/client,$(1),$(2))
-	$(call generate_deepequal,"$(call join-with-comma,$(foreach pkg,$(2),$(1)/$(subst ",,$(subst :,/,$(pkg)))))")
-endef
-
-define generate_k8s_api_deepcopy_deepequal
-	$(call generate_k8s_api,deepcopy,github.com/cilium/cilium/pkg/k8s/client,$(1),$(2))
-	@# Explanation for the 'subst' below:
-	@#   $(subst ",,$(subst :,/,$(pkg))) - replace all ':' with '/' and replace
-	@#    all '"' with '' from $pkg
-	@#   $(foreach pkg,$(2),$(1)/$(subst ",,$(subst :,/,$(pkg)))) - for each
-	@#    "$pkg", with the characters replaced, create a new string with the
-	@#    prefix $(1)
-	@#   Finally replace all spaces with commas from the generated strings.
-	$(call generate_deepequal,"$(call join-with-comma,$(foreach pkg,$(2),$(1)/$(subst ",,$(subst :,/,$(pkg)))))")
-endef
-
-define generate_k8s_api_deepcopy_deepequal_client
-	$(call generate_k8s_api,deepcopy$(comma)client,github.com/cilium/cilium/pkg/k8s/slim/k8s/$(1),$(2),$(3))
-	$(call generate_deepequal,"$(call join-with-comma,$(foreach pkg,$(3),$(2)/$(subst ",,$(subst :,/,$(pkg)))))")
-endef
-
-define generate_k8s_protobuf
-	go install k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo
-	go install golang.org/x/tools/cmd/goimports
-
-	go run k8s.io/code-generator/cmd/go-to-protobuf \
-		--apimachinery-packages='-k8s.io/apimachinery/pkg/util/intstr,$\
-                                -k8s.io/apimachinery/pkg/api/resource,$\
-                                -k8s.io/apimachinery/pkg/runtime/schema,$\
-                                -k8s.io/apimachinery/pkg/runtime,$\
-                                -k8s.io/apimachinery/pkg/apis/meta/v1,$\
-                                -k8s.io/apimachinery/pkg/apis/meta/v1beta1'\
-		--drop-embedded-fields="github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1.TypeMeta" \
-		--proto-import="$(PWD)" \
-		--proto-import="$(PWD)/vendor" \
-		--proto-import="$(PWD)/tools/protobuf" \
-		--packages=$(1) \
-		--go-header-file "$(PWD)/hack/custom-boilerplate.go.txt"
-endef
-
 build: check-sources $(SUBDIRS) ## Builds all the components for Cilium by executing make in the respective sub directories.
 
 build-container: check-sources ## Builds components required for cilium-agent container.
@@ -245,24 +188,34 @@ GIT_VERSION: force
 
 ##@ API targets
 CRD_OPTIONS ?= "crd:crdVersions=v1"
+CRD_PATHS := "$(PWD)/pkg/k8s/apis/cilium.io/v2;\
+              $(PWD)/pkg/k8s/apis/cilium.io/v2alpha1;"
+CRDS_CILIUM_PATHS := $(PWD)/pkg/k8s/apis/cilium.io/client/crds/v2\
+                     $(PWD)/pkg/k8s/apis/cilium.io/client/crds/v2alpha1
+CRDS_CILIUM_V2 := ciliumnetworkpolicies \
+                  ciliumclusterwidenetworkpolicies \
+                  ciliumendpoints \
+                  ciliumidentities \
+                  ciliumnodes \
+                  ciliumexternalworkloads \
+                  ciliumlocalredirectpolicies \
+                  ciliumegressgatewaypolicies \
+                  ciliumenvoyconfigs \
+                  ciliumclusterwideenvoyconfigs
+CRDS_CILIUM_V2ALPHA1 := ciliumendpointslices \
+                        ciliumbgppeeringpolicies \
+                        ciliumloadbalancerippools \
+                        ciliumnodeconfigs
 manifests: ## Generate K8s manifests e.g. CRD, RBAC etc.
 	$(eval TMPDIR := $(shell mktemp -d))
-	$(QUIET)$(GO) run sigs.k8s.io/controller-tools/cmd/controller-gen $(CRD_OPTIONS) paths="$(PWD)/pkg/k8s/apis/cilium.io/v2;$(PWD)/pkg/k8s/apis/cilium.io/v2alpha1" output:crd:artifacts:config="$(TMPDIR)"
+	$(QUIET)$(GO) run sigs.k8s.io/controller-tools/cmd/controller-gen $(CRD_OPTIONS) paths=$(CRD_PATHS) output:crd:artifacts:config="$(TMPDIR)"
 	$(QUIET)$(GO) run ./tools/crdcheck "$(TMPDIR)"
-	mv ${TMPDIR}/cilium.io_ciliumnetworkpolicies.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/ciliumnetworkpolicies.yaml
-	mv ${TMPDIR}/cilium.io_ciliumclusterwidenetworkpolicies.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwidenetworkpolicies.yaml
-	mv ${TMPDIR}/cilium.io_ciliumendpoints.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/ciliumendpoints.yaml
-	mv ${TMPDIR}/cilium.io_ciliumidentities.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/ciliumidentities.yaml
-	mv ${TMPDIR}/cilium.io_ciliumnodes.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/ciliumnodes.yaml
-	mv ${TMPDIR}/cilium.io_ciliumexternalworkloads.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/ciliumexternalworkloads.yaml
-	mv ${TMPDIR}/cilium.io_ciliumlocalredirectpolicies.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/ciliumlocalredirectpolicies.yaml
-	mv ${TMPDIR}/cilium.io_ciliumegressgatewaypolicies.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/ciliumegressgatewaypolicies.yaml
-	mv ${TMPDIR}/cilium.io_ciliumendpointslices.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2alpha1/ciliumendpointslices.yaml
-	mv ${TMPDIR}/cilium.io_ciliumclusterwideenvoyconfigs.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/ciliumclusterwideenvoyconfigs.yaml
-	mv ${TMPDIR}/cilium.io_ciliumenvoyconfigs.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/ciliumenvoyconfigs.yaml
-	mv ${TMPDIR}/cilium.io_ciliumbgppeeringpolicies.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2alpha1/ciliumbgppeeringpolicies.yaml
-	mv ${TMPDIR}/cilium.io_ciliumloadbalancerippools.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2alpha1/ciliumloadbalancerippools.yaml
-	mv ${TMPDIR}/cilium.io_ciliumnodeconfigs.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2alpha1/ciliumnodeconfigs.yaml
+
+	# Clean up old CRD state and start with a blank state.
+	for path in $(CRDS_CILIUM_PATHS); do rm -rf $${path} && mkdir $${path}; done
+
+	for file in $(CRDS_CILIUM_V2); do mv ${TMPDIR}/cilium.io_$${file}.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/$${file}.yaml; done
+	for file in $(CRDS_CILIUM_V2ALPHA1); do mv ${TMPDIR}/cilium.io_$${file}.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2alpha1/$${file}.yaml; done
 	rm -rf $(TMPDIR)
 
 generate-api: api/v1/openapi.yaml ## Generate cilium-agent client, model and server code from openapi spec.
@@ -317,72 +270,83 @@ generate-operator-api: api/v1/operator/openapi.yaml ## Generate cilium-operator 
 generate-hubble-api: api/v1/flow/flow.proto api/v1/peer/peer.proto api/v1/observer/observer.proto api/v1/relay/relay.proto ## Generate hubble proto Go sources.
 	$(QUIET) $(MAKE) $(SUBMAKEOPTS) -C api/v1
 
+define generate_k8s_api
+	$(QUIET) cd "./vendor/k8s.io/code-generator" && \
+	bash ./generate-groups.sh $(1) \
+	    $(2) \
+	    $(3) \
+	    $(4) \
+	    --go-header-file "$(PWD)/hack/custom-boilerplate.go.txt" \
+	    --output-base $(5)
+endef
+
+define generate_deepequal
+	$(GO) run github.com/cilium/deepequal-gen \
+	--input-dirs $(subst $(space),$(comma),$(1)) \
+	--go-header-file "$(PWD)/hack/custom-boilerplate.go.txt" \
+	--output-file-base zz_generated.deepequal \
+	--output-base $(2)
+endef
+
+define generate_deepcopy
+	$(GO) run k8s.io/code-generator/cmd/deepcopy-gen \
+	--input-dirs $(subst $(space),$(comma),$(1)) \
+	--go-header-file "$(PWD)/hack/custom-boilerplate.go.txt" \
+	--output-file-base zz_generated.deepcopy \
+	--output-base $(2)
+endef
+
+define generate_k8s_protobuf
+	$(GO) install k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo && \
+	$(GO) install golang.org/x/tools/cmd/goimports && \
+	$(GO) run k8s.io/code-generator/cmd/go-to-protobuf \
+		--apimachinery-packages='-k8s.io/apimachinery/pkg/util/intstr,$\
+                                -k8s.io/apimachinery/pkg/api/resource,$\
+                                -k8s.io/apimachinery/pkg/runtime/schema,$\
+                                -k8s.io/apimachinery/pkg/runtime,$\
+                                -k8s.io/apimachinery/pkg/apis/meta/v1,$\
+                                -k8s.io/apimachinery/pkg/apis/meta/v1beta1'\
+		--drop-embedded-fields="github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1.TypeMeta" \
+		--proto-import="$(PWD)" \
+		--proto-import="$(PWD)/vendor" \
+		--proto-import="$(PWD)/tools/protobuf" \
+		--packages=$(subst $(newline),$(comma),$(1)) \
+		--go-header-file "$(PWD)/hack/custom-boilerplate.go.txt" \
+		--output-base=$(2)
+endef
+
+define K8S_PROTO_PACKAGES
+github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1
+github.com/cilium/cilium/pkg/k8s/slim/k8s/api/discovery/v1
+github.com/cilium/cilium/pkg/k8s/slim/k8s/api/discovery/v1beta1
+github.com/cilium/cilium/pkg/k8s/slim/k8s/api/networking/v1
+github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/apiextensions/v1
+github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1
+github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1beta1
+github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/util/intstr
+endef
+
+GEN_CRD_GROUPS := "cilium.io:v2\
+                   cilium.io:v2alpha1"
 generate-k8s-api: ## Generate Cilium k8s API client, deepcopy and deepequal Go sources.
 	$(ASSERT_CILIUM_MODULE)
 
-	$(call generate_k8s_protobuf,$\
-	github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1$(comma)$\
-	github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1$(comma)$\
-	github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1beta1$(comma)$\
-	github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/util/intstr$(comma)$\
-	github.com/cilium/cilium/pkg/k8s/slim/k8s/api/discovery/v1$(comma)$\
-	github.com/cilium/cilium/pkg/k8s/slim/k8s/api/discovery/v1beta1$(comma)$\
-	github.com/cilium/cilium/pkg/k8s/slim/k8s/api/networking/v1$(comma)$\
-	github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/apiextensions/v1)
-	$(call generate_k8s_api_deepcopy_deepequal_client,client,github.com/cilium/cilium/pkg/k8s/slim/k8s/api,"$\
-	discovery:v1beta1\
-	discovery:v1\
-	networking:v1\
-	core:v1")
-	$(call generate_k8s_api_deepcopy_deepequal_client,apiextensions-client,github.com/cilium/cilium/pkg/k8s/slim/k8s/apis,"$\
-	apiextensions:v1")
-	$(call generate_k8s_api_deepcopy_deepequal,github.com/cilium/cilium/pkg/k8s/slim/k8s/apis,"$\
-	util:intstr\
-	meta:v1\
-	meta:v1beta1")
-	$(call generate_k8s_api_deepcopy_deepequal,github.com/cilium/cilium/pkg/k8s/slim/k8s,"$\
-	apis:labels")
-	$(call generate_k8s_api_deepcopy_deepequal,github.com/cilium/cilium/pkg,"$\
-	aws:types\
-	azure:types\
-	ipam:types\
-	alibabacloud:types\
-	k8s:types\
-	k8s:utils\
-	maps:auth\
-	maps:ctmap\
-	maps:encrypt\
-	maps:eppolicymap\
-	maps:eventsmap\
-	maps:fragmap\
-	maps:ipcache\
-	maps:ipmasq\
-	maps:lbmap\
-	maps:lxcmap\
-	maps:metricsmap\
-	maps:nat\
-	maps:neighborsmap\
-	maps:policymap\
-	maps:signalmap\
-	maps:sockmap\
-	maps:srv6map\
-	maps:tunnel\
-	maps:vtep\
-	node:types\
-	policy:api\
-	service:store")
-	$(call generate_k8s_api_deepcopy_deepequal,github.com/cilium/cilium/pkg/policy,"api:kafka")
-	$(call generate_k8s_api_all,github.com/cilium/cilium/pkg/k8s/apis,"cilium.io:v2 cilium.io:v2alpha1")
-	$(call generate_k8s_api_deepcopy_deepequal,github.com/cilium/cilium/pkg/aws,"eni:types")
-	$(call generate_k8s_api_deepcopy_deepequal,github.com/cilium/cilium/pkg/alibabacloud,"eni:types")
-	$(call generate_k8s_api_deepcopy_deepequal,github.com/cilium/cilium/api,"v1:models")
-	$(call generate_k8s_api_deepcopy_deepequal,github.com/cilium/cilium,"$\
-	pkg:bpf\
-	pkg:k8s\
-	pkg:labels\
-	pkg:loadbalancer\
-	pkg:tuple\
-	pkg:recorder")
+	$(eval TMPDIR := $(shell mktemp -d))
+
+	$(QUIET) $(call generate_k8s_protobuf,${K8S_PROTO_PACKAGES},"$(TMPDIR)")
+
+	$(eval DEEPEQUAL_PACKAGES := $(shell grep "\+deepequal-gen" -l -r --include \*.go --exclude-dir 'vendor' . | xargs dirname {} | sort | uniq | grep -x -v '.' | sed 's|\.\/|github.com/cilium/cilium\/|g'))
+	$(QUIET) $(call generate_deepequal,${DEEPEQUAL_PACKAGES},"$(TMPDIR)")
+
+	$(eval DEEPCOPY_PACKAGES := $(shell grep "\+k8s:deepcopy-gen" -l -r --include \*.go --exclude-dir 'vendor' . | xargs dirname {} | sort | uniq | grep -x -v '.' | sed 's|\.\/|github.com/cilium/cilium\/|g'))
+	$(QUIET) $(call generate_deepcopy,${DEEPCOPY_PACKAGES},"$(TMPDIR)")
+
+	$(QUIET) $(call generate_k8s_api,client,github.com/cilium/cilium/pkg/k8s/slim/k8s/client,github.com/cilium/cilium/pkg/k8s/slim/k8s/api,"discovery:v1beta1 discovery:v1 networking:v1 core:v1","$(TMPDIR)")
+	$(QUIET) $(call generate_k8s_api,client,github.com/cilium/cilium/pkg/k8s/slim/k8s/apiextensions-client,github.com/cilium/cilium/pkg/k8s/slim/k8s/apis,"apiextensions:v1","$(TMPDIR)")
+	$(QUIET) $(call generate_k8s_api,client$(comma)lister$(comma)informer,github.com/cilium/cilium/pkg/k8s/client,github.com/cilium/cilium/pkg/k8s/apis,$(GEN_CRD_GROUPS),"$(TMPDIR)")
+
+	$(QUIET) cp -r "$(TMPDIR)/github.com/cilium/cilium/." ./
+	$(QUIET) rm -rf "$(TMPDIR)"
 
 check-k8s-clusterrole: ## Ensures there is no diff between preflight's clusterrole and runtime's clusterrole.
 	./contrib/scripts/check-preflight-clusterrole.sh
