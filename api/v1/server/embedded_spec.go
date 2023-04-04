@@ -3087,6 +3087,10 @@ func init() {
           "description": "\n\n+k8s:deepcopy-gen=true",
           "type": "object",
           "properties": {
+            "bpfSocketLBHostnsOnly": {
+              "description": "flag bpf-lb-sock-hostns-only",
+              "type": "boolean"
+            },
             "externalIPs": {
               "description": "\n\n+k8s:deepcopy-gen=true",
               "type": "object",
@@ -4080,6 +4084,10 @@ func init() {
           "description": "Optional service configuration flags",
           "type": "object",
           "properties": {
+            "cluster": {
+              "description": "Service cluster",
+              "type": "string"
+            },
             "extTrafficPolicy": {
               "description": "Service external traffic policy",
               "type": "string",
@@ -4403,6 +4411,10 @@ func init() {
           "items": {
             "$ref": "#/definitions/WireguardInterface"
           }
+        },
+        "node-encryption": {
+          "description": "Node Encryption status",
+          "type": "string"
         }
       }
     }
@@ -7936,6 +7948,10 @@ func init() {
           "description": "\n\n+k8s:deepcopy-gen=true",
           "type": "object",
           "properties": {
+            "bpfSocketLBHostnsOnly": {
+              "description": "flag bpf-lb-sock-hostns-only",
+              "type": "boolean"
+            },
             "externalIPs": {
               "description": "\n\n+k8s:deepcopy-gen=true",
               "type": "object",
@@ -8112,6 +8128,10 @@ func init() {
       "description": "\n\n+k8s:deepcopy-gen=true",
       "type": "object",
       "properties": {
+        "bpfSocketLBHostnsOnly": {
+          "description": "flag bpf-lb-sock-hostns-only",
+          "type": "boolean"
+        },
         "externalIPs": {
           "description": "\n\n+k8s:deepcopy-gen=true",
           "type": "object",
@@ -9275,6 +9295,10 @@ func init() {
           "description": "Optional service configuration flags",
           "type": "object",
           "properties": {
+            "cluster": {
+              "description": "Service cluster",
+              "type": "string"
+            },
             "extTrafficPolicy": {
               "description": "Service external traffic policy",
               "type": "string",
@@ -9353,6 +9377,10 @@ func init() {
       "description": "Optional service configuration flags",
       "type": "object",
       "properties": {
+        "cluster": {
+          "description": "Service cluster",
+          "type": "string"
+        },
         "extTrafficPolicy": {
           "description": "Service external traffic policy",
           "type": "string",
@@ -9662,6 +9690,10 @@ func init() {
           "items": {
             "$ref": "#/definitions/WireguardInterface"
           }
+        },
+        "node-encryption": {
+          "description": "Node Encryption status",
+          "type": "string"
         }
       }
     }

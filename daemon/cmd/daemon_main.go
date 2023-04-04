@@ -184,10 +184,6 @@ func initializeFlags() {
 	flags.String(option.CGroupRoot, "", "Path to Cgroup2 filesystem")
 	option.BindEnv(Vp, option.CGroupRoot)
 
-	flags.Bool(option.SockopsEnableName, defaults.SockopsEnable, "Enable sockops when kernel supported")
-	option.BindEnv(Vp, option.SockopsEnableName)
-	flags.MarkDeprecated(option.SockopsEnableName, "This option will be removed in v1.14")
-
 	flags.Int(option.ClusterIDName, 0, "Unique identifier of the cluster")
 	option.BindEnv(Vp, option.ClusterIDName)
 
@@ -568,7 +564,7 @@ func initializeFlags() {
 	flags.String(option.LoadBalancerAlg, option.NodePortAlgRandom, "BPF load balancing algorithm (\"random\", \"maglev\")")
 	option.BindEnv(Vp, option.LoadBalancerAlg)
 
-	flags.String(option.LoadBalancerDSRDispatch, option.DSRDispatchOption, "BPF load balancing DSR dispatch method (\"opt\", \"ipip\")")
+	flags.String(option.LoadBalancerDSRDispatch, option.DSRDispatchOption, "BPF load balancing DSR dispatch method (\"opt\", \"ipip\", \"geneve\")")
 	option.BindEnv(Vp, option.LoadBalancerDSRDispatch)
 
 	flags.String(option.LoadBalancerDSRL4Xlate, option.DSRL4XlateFrontend, "BPF load balancing DSR L4 DNAT method for IPIP (\"frontend\", \"backend\")")
@@ -1368,7 +1364,6 @@ func initEnv() {
 	}
 
 	initClockSourceOption()
-	initSockmapOption()
 
 	if option.Config.EnableSRv6 {
 		if !option.Config.EnableIPv6 {
@@ -2010,19 +2005,6 @@ func (d *Daemon) instantiateAPI() *restapi.CiliumAPIAPI {
 	restAPI.DaemonGetNodeIdsHandler = NewGetNodeIDsHandler(d.datapath.Node())
 
 	return restAPI
-}
-
-func initSockmapOption() {
-	if !option.Config.SockopsEnable {
-		return
-	}
-	if probes.HaveMapType(ebpf.SockHash) == nil &&
-		probes.HaveProgramType(ebpf.SockOps) == nil &&
-		probes.HaveProgramType(ebpf.SkMsg) == nil {
-		return
-	}
-	log.Warn("BPF Sock ops not supported by kernel. Disabling '--sockops-enable' feature.")
-	option.Config.SockopsEnable = false
 }
 
 func initClockSourceOption() {

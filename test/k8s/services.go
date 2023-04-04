@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -538,6 +539,24 @@ Secondary Interface %s :: IPv4: (%s, %s), IPv6: (%s, %s)`,
 			testNodePortExternal(kubectl, ni, false, true, true)
 		})
 
+		It("Tests with XDP, direct routing, DSR with Geneve and Maglev", func() {
+			DeployCiliumOptionsAndDNS(kubectl, ciliumFilename, map[string]string{
+				"loadBalancer.acceleration": "testing-only",
+				"loadBalancer.mode":         "dsr",
+				"loadBalancer.algorithm":    "maglev",
+				"maglev.tableSize":          "251",
+				"tunnel":                    "disabled",
+				"autoDirectNodeRoutes":      "true",
+				"loadBalancer.dsrDispatch":  "geneve",
+				"devices":                   fmt.Sprintf(`'{%s}'`, ni.PrivateIface),
+				// Support for host firewall + Maglev is currently broken,
+				// see #14047 for details.
+				"hostFirewall.enabled": "false",
+			})
+			// DSR with Geneve doesn't work in conjunction with XDP and IPv6 currently
+			testNodePortExternalIPv4Only(kubectl, ni, false, true, true)
+		})
+
 		It("Tests with TC, direct routing and Hybrid", func() {
 			DeployCiliumOptionsAndDNS(kubectl, ciliumFilename, map[string]string{
 				"loadBalancer.acceleration": "disabled",
@@ -545,6 +564,33 @@ Secondary Interface %s :: IPv4: (%s, %s), IPv6: (%s, %s)`,
 				"loadBalancer.algorithm":    "random",
 				"tunnel":                    "disabled",
 				"autoDirectNodeRoutes":      "true",
+				"devices":                   fmt.Sprintf(`'{}'`), // Revert back to auto-detection after XDP.
+			})
+			testNodePortExternal(kubectl, ni, false, true, false)
+		})
+
+		It("Tests with TC, direct routing and dsr with geneve", func() {
+			DeployCiliumOptionsAndDNS(kubectl, ciliumFilename, map[string]string{
+				"loadBalancer.acceleration": "disabled",
+				"loadBalancer.mode":         "dsr",
+				"loadBalancer.algorithm":    "maglev",
+				"maglev.tableSize":          "251",
+				"tunnel":                    "disabled",
+				"autoDirectNodeRoutes":      "true",
+				"loadBalancer.dsrDispatch":  "geneve",
+				"devices":                   fmt.Sprintf(`'{}'`), // Revert back to auto-detection after XDP.
+			})
+			testNodePortExternal(kubectl, ni, false, true, false)
+		})
+
+		It("Tests with TC, geneve tunnel and dsr", func() {
+			DeployCiliumOptionsAndDNS(kubectl, ciliumFilename, map[string]string{
+				"loadBalancer.acceleration": "disabled",
+				"loadBalancer.mode":         "dsr",
+				"loadBalancer.algorithm":    "maglev",
+				"maglev.tableSize":          "251",
+				"tunnel":                    "geneve",
+				"loadBalancer.dsrDispatch":  "geneve",
 				"devices":                   fmt.Sprintf(`'{}'`), // Revert back to auto-detection after XDP.
 			})
 			testNodePortExternal(kubectl, ni, false, true, false)
@@ -572,8 +618,16 @@ Secondary Interface %s :: IPv4: (%s, %s), IPv6: (%s, %s)`,
 					"hostFirewall.enabled": "true",
 				})
 
-				ccnpHostPolicy = helpers.ManifestGet(kubectl.BasePath(), "ccnp-host-policy-nodeport-tests.yaml")
-				_, err := kubectl.CiliumClusterwidePolicyAction(ccnpHostPolicy,
+				originalCCNPHostPolicy := helpers.ManifestGet(kubectl.BasePath(), "ccnp-host-policy-nodeport-tests.yaml")
+				res := kubectl.ExecMiddle("mktemp")
+				res.ExpectSuccess()
+				ccnpHostPolicy := strings.Trim(res.Stdout(), "\n")
+				nodeIP, err := kubectl.GetNodeIPByLabel(kubectl.GetFirstNodeWithoutCiliumLabel(), false)
+				Expect(err).Should(BeNil())
+				kubectl.ExecMiddle(fmt.Sprintf("sed 's/NODE_WITHOUT_CILIUM_IP/%s/' %s > %s",
+					nodeIP, originalCCNPHostPolicy, ccnpHostPolicy)).ExpectSuccess()
+
+				_, err = kubectl.CiliumClusterwidePolicyAction(ccnpHostPolicy,
 					helpers.KubectlApply, helpers.HelperTimeout)
 				Expect(err).Should(BeNil(),
 					"Policy %s cannot be applied", ccnpHostPolicy)

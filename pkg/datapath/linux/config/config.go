@@ -35,7 +35,6 @@ import (
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 	"github.com/cilium/cilium/pkg/maps/egressmap"
 	"github.com/cilium/cilium/pkg/maps/encrypt"
-	"github.com/cilium/cilium/pkg/maps/eppolicymap"
 	"github.com/cilium/cilium/pkg/maps/eventsmap"
 	"github.com/cilium/cilium/pkg/maps/fragmap"
 	ipcachemap "github.com/cilium/cilium/pkg/maps/ipcache"
@@ -49,7 +48,6 @@ import (
 	"github.com/cilium/cilium/pkg/maps/policymap"
 	"github.com/cilium/cilium/pkg/maps/recorder"
 	"github.com/cilium/cilium/pkg/maps/signalmap"
-	"github.com/cilium/cilium/pkg/maps/sockmap"
 	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/maps/tunnel"
 	"github.com/cilium/cilium/pkg/maps/vtep"
@@ -169,7 +167,6 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	cDefinesMap["SRV6_SID_MAP_SIZE"] = fmt.Sprintf("%d", srv6map.MaxSIDEntries)
 	cDefinesMap["SRV6_STATE_MAP_SIZE"] = fmt.Sprintf("%d", srv6map.MaxStateEntries)
 	cDefinesMap["POLICY_PROG_MAP_SIZE"] = fmt.Sprintf("%d", policymap.PolicyCallMaxEntries)
-	cDefinesMap["SOCKOPS_MAP_SIZE"] = fmt.Sprintf("%d", sockmap.MaxEntries)
 	cDefinesMap["ENCRYPT_MAP"] = encrypt.MapName
 	cDefinesMap["CT_CONNECTION_LIFETIME_TCP"] = fmt.Sprintf("%d", int64(option.Config.CTMapEntriesTimeoutTCP.Seconds()))
 	cDefinesMap["CT_CONNECTION_LIFETIME_NONTCP"] = fmt.Sprintf("%d", int64(option.Config.CTMapEntriesTimeoutAny.Seconds()))
@@ -199,7 +196,6 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	if option.Config.EnableEnvoyConfig {
 		cDefinesMap["POLICY_EGRESSCALL_MAP"] = policymap.PolicyEgressCallMapName
 	}
-	cDefinesMap["EP_POLICY_MAP"] = eppolicymap.MapName
 	cDefinesMap["LB6_REVERSE_NAT_MAP"] = "cilium_lb6_reverse_nat"
 	cDefinesMap["LB6_SERVICES_MAP_V2"] = "cilium_lb6_services_v2"
 	cDefinesMap["LB6_BACKEND_MAP"] = "cilium_lb6_backends_v3"
@@ -362,6 +358,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 			dsrEncapInv = iota
 			dsrEncapNone
 			dsrEncapIPIP
+			dsrEncapGeneve
 		)
 		const (
 			dsrL4XlateInv = iota
@@ -369,6 +366,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 			dsrL4XlateBackend
 		)
 		cDefinesMap["DSR_ENCAP_IPIP"] = fmt.Sprintf("%d", dsrEncapIPIP)
+		cDefinesMap["DSR_ENCAP_GENEVE"] = fmt.Sprintf("%d", dsrEncapGeneve)
 		cDefinesMap["DSR_ENCAP_NONE"] = fmt.Sprintf("%d", dsrEncapNone)
 		cDefinesMap["DSR_XLATE_FRONTEND"] = fmt.Sprintf("%d", dsrL4XlateFrontend)
 		cDefinesMap["DSR_XLATE_BACKEND"] = fmt.Sprintf("%d", dsrL4XlateBackend)
@@ -385,6 +383,8 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 				cDefinesMap["DSR_ENCAP_MODE"] = fmt.Sprintf("%d", dsrEncapNone)
 			} else if option.Config.LoadBalancerDSRDispatch == option.DSRDispatchIPIP {
 				cDefinesMap["DSR_ENCAP_MODE"] = fmt.Sprintf("%d", dsrEncapIPIP)
+			} else if option.Config.LoadBalancerDSRDispatch == option.DSRDispatchGeneve {
+				cDefinesMap["DSR_ENCAP_MODE"] = fmt.Sprintf("%d", dsrEncapGeneve)
 			}
 			if option.Config.LoadBalancerDSRDispatch == option.DSRDispatchIPIP {
 				if option.Config.LoadBalancerDSRL4Xlate == option.DSRL4XlateFrontend {

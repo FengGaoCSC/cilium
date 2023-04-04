@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/yaml"
 
+	k8sconst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
 	k8sconstv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	k8sconstv2alpha1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -80,7 +81,7 @@ var (
 	// log is the k8s package logger object.
 	log = logging.DefaultLogger.WithField(logfields.LogSubsys, subsysK8s)
 
-	comparableCRDSchemaVersion = versioncheck.MustVersion(k8sconstv2.CustomResourceDefinitionSchemaVersion)
+	comparableCRDSchemaVersion = versioncheck.MustVersion(k8sconst.CustomResourceDefinitionSchemaVersion)
 )
 
 type crdCreationFn func(clientset apiextensionsclient.Interface) error
@@ -283,11 +284,11 @@ func constructV1CRD(
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
-				k8sconstv2.CustomResourceDefinitionSchemaVersionKey: k8sconstv2.CustomResourceDefinitionSchemaVersion,
+				k8sconst.CustomResourceDefinitionSchemaVersionKey: k8sconst.CustomResourceDefinitionSchemaVersion,
 			},
 		},
 		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-			Group: k8sconstv2.CustomResourceDefinitionGroup,
+			Group: k8sconst.CustomResourceDefinitionGroup,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
 				Kind:       template.Spec.Names.Kind,
 				Plural:     template.Spec.Names.Plural,
@@ -305,7 +306,7 @@ func needsUpdateV1(clusterCRD *apiextensionsv1.CustomResourceDefinition) bool {
 		// no validation detected
 		return true
 	}
-	v, ok := clusterCRD.Labels[k8sconstv2.CustomResourceDefinitionSchemaVersionKey]
+	v, ok := clusterCRD.Labels[k8sconst.CustomResourceDefinitionSchemaVersionKey]
 	if !ok {
 		// no schema version detected
 		return true

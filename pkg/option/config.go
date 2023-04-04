@@ -652,9 +652,6 @@ const (
 	// of MaxControllerInterval.
 	MaxCtrlIntervalName = "max-controller-interval"
 
-	// SockopsEnableName is the name of the option to enable sockops
-	SockopsEnableName = "sockops-enable"
-
 	// K8sNamespaceName is the name of the K8sNamespace option
 	K8sNamespaceName = "k8s-namespace"
 
@@ -1239,6 +1236,9 @@ const (
 	// DSR dispatch mode to encapsulate to IPIP
 	DSRDispatchIPIP = "ipip"
 
+	// DSR dispatch mode to encapsulate to Geneve
+	DSRDispatchGeneve = "geneve"
+
 	// DSR L4 translation to frontend port
 	DSRL4XlateFrontend = "frontend"
 
@@ -1553,9 +1553,6 @@ type DaemonConfig struct {
 	// EnvoyLogPath specifies where to store the Envoy proxy logs when Envoy
 	// runs in the same container as Cilium.
 	EnvoyLogPath string
-
-	// EnableSockOps specifies whether to enable sockops (socket lookup).
-	SockopsEnable bool
 
 	ProcFs string
 
@@ -2486,6 +2483,10 @@ func (c *DaemonConfig) TunnelDevice() string {
 // TunnelExists returns true if some traffic may go through a tunnel, including
 // if the primary mode is native routing. For example, in the egress gateway,
 // we may send such traffic to a gateway node via a tunnel.
+// In conjunction with the DSR Geneve and the direct routing, traffic from
+// intermediate nodes to backend pods go through a tunnel, but the datapath logic
+// takes care of the MTU overhead. So no need to take it into account here.
+// See encap_geneve_dsr_opt[4,6] in nodeport.h
 func (c *DaemonConfig) TunnelExists() bool {
 	return c.TunnelingEnabled() || c.EnableIPv4EgressGateway
 }
@@ -3013,7 +3014,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.SidecarIstioProxyImage = vp.GetString(SidecarIstioProxyImage)
 	c.UseSingleClusterRoute = vp.GetBool(SingleClusterRouteName)
 	c.SocketPath = vp.GetString(SocketPath)
-	c.SockopsEnable = vp.GetBool(SockopsEnableName)
 	c.TracePayloadlen = vp.GetInt(TracePayloadlen)
 	c.Version = vp.GetString(Version)
 	c.WriteCNIConfigurationWhenReady = vp.GetString(WriteCNIConfigurationWhenReady)
@@ -3078,8 +3078,14 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	if c.TunnelPort == 0 {
 		switch c.Tunnel {
 		case TunnelDisabled:
-			// tunnel might still be used by eg. EgressGW
-			c.TunnelPort = defaults.TunnelPortVXLAN
+			// tunnel might still be used by eg. DSR with Geneve dispatch or EgressGW
+			if (c.EnableNodePort || c.KubeProxyReplacement == KubeProxyReplacementStrict) &&
+				c.NodePortMode == NodePortModeDSR &&
+				c.LoadBalancerDSRDispatch == DSRDispatchGeneve {
+				c.TunnelPort = defaults.TunnelPortGeneve
+			} else {
+				c.TunnelPort = defaults.TunnelPortVXLAN
+			}
 		case TunnelVXLAN:
 			c.TunnelPort = defaults.TunnelPortVXLAN
 		case TunnelGeneve:
