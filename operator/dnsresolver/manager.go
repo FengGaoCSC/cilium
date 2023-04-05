@@ -10,18 +10,31 @@ import (
 	"time"
 
 	"github.com/cilium/workerpool"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 
 	"github.com/cilium/cilium/operator/dnsclient"
-	"github.com/cilium/cilium/operator/metrics"
+	operatormetrics "github.com/cilium/cilium/operator/metrics"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	cilium_client_v2alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/k8s/watchers/resources"
+	"github.com/cilium/cilium/pkg/metrics"
 )
+
+type mgrMetrics struct {
+	// enabled enables metrics reporting from the dnsresolver cell
+	enabled bool
+
+	// fqdnResolvers is the number of background FQDN resolvers started by the DNS resolver manager.
+	fqdnResolvers prometheus.Gauge
+
+	// fqdnGroupReconcilers is the number of IsovalentFDQNGroup reconcilers started by the DNS resolver manager.
+	fqdnGroupReconcilers prometheus.Gauge
+}
 
 // manager is responsible for handling IsovalentFQDNGroup events. It will spin
 // up resolvers and reconcilers to handle each instance of an
@@ -51,7 +64,7 @@ type manager struct {
 
 	wp *workerpool.WorkerPool
 
-	enableMetrics bool
+	metrics mgrMetrics
 }
 
 func newManager(params resolverManagerParams) *manager {
@@ -60,20 +73,21 @@ func newManager(params resolverManagerParams) *manager {
 	}
 
 	mgr := &manager{
-		logger:        params.Logger,
-		shutdowner:    params.Shutdowner,
-		clientset:     params.Clientset.CiliumV2alpha1().CiliumCIDRGroups(),
-		fqdnGroup:     params.FQDNGroupResource,
-		ctrMgr:        controller.NewManager(),
-		dnsClient:     params.DNSClient,
-		minInterval:   params.Cfg.FQDNGroupMinQueryInterval,
-		resolvers:     make(map[string]*resolver),
-		reconcilers:   make(map[string]*reconciler),
-		cache:         make(status),
-		store:         newStore(),
-		wp:            workerpool.New(1),
-		enableMetrics: params.EnableMetrics,
+		logger:      params.Logger,
+		shutdowner:  params.Shutdowner,
+		clientset:   params.Clientset.CiliumV2alpha1().CiliumCIDRGroups(),
+		fqdnGroup:   params.FQDNGroupResource,
+		ctrMgr:      controller.NewManager(),
+		dnsClient:   params.DNSClient,
+		minInterval: params.Cfg.FQDNGroupMinQueryInterval,
+		resolvers:   make(map[string]*resolver),
+		reconcilers: make(map[string]*reconciler),
+		cache:       make(status),
+		store:       newStore(),
+		wp:          workerpool.New(1),
 	}
+	mgr.metrics.enabled = params.EnableMetrics
+
 	params.LC.Append(mgr)
 
 	return mgr
@@ -81,6 +95,8 @@ func newManager(params resolverManagerParams) *manager {
 
 func (mgr *manager) Start(hive.HookContext) error {
 	mgr.logger.Info("Starting DNS resolvers manager")
+
+	mgr.registerMetrics()
 
 	return mgr.wp.Submit("dns-resolvers-manager", mgr.run)
 }
@@ -93,6 +109,27 @@ func (mgr *manager) Stop(hive.HookContext) error {
 	}
 
 	return nil
+}
+
+func (mgr *manager) registerMetrics() {
+	if !mgr.metrics.enabled {
+		mgr.metrics.fqdnResolvers = metrics.NoOpGauge
+		mgr.metrics.fqdnGroupReconcilers = metrics.NoOpGauge
+		return
+	}
+
+	mgr.metrics.fqdnResolvers = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: operatormetrics.Namespace,
+		Name:      "fqdn_resolvers_total",
+		Help:      "Number of background FQDN resolvers started by the Operator",
+	})
+	mgr.metrics.fqdnGroupReconcilers = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: operatormetrics.Namespace,
+		Name:      "fqdngroup_reconcilers_total",
+		Help:      "Number of IsovalentFQDNGroup reconcilers started by the Operator",
+	})
+	operatormetrics.Registry.MustRegister(mgr.metrics.fqdnResolvers)
+	operatormetrics.Registry.MustRegister(mgr.metrics.fqdnGroupReconcilers)
 }
 
 func (mgr *manager) run(ctx context.Context) error {
@@ -134,16 +171,17 @@ func (mgr *manager) onUpdate(ctx context.Context, obj *v1alpha1.IsovalentFQDNGro
 
 	// wrap the function calls into a naked func() to capture variables in the closure
 	defer func() {
-		if !mgr.enableMetrics {
+		if !mgr.metrics.enabled {
 			return
 		}
 
-		metrics.KubernetesEventProcessed.WithLabelValues(
+		operatormetrics.KubernetesEventProcessed.WithLabelValues(
 			MetricIFG,
 			action,
 			result(err),
 		).Inc()
 		ifgEventReceived(action, err == nil)
+		mgr.metrics.fqdnGroupReconcilers.Set(float64(len(mgr.reconcilers)))
 	}()
 
 	fqdnGroup := obj.Name
@@ -197,16 +235,17 @@ func (mgr *manager) onDelete(ctx context.Context, obj *v1alpha1.IsovalentFQDNGro
 
 	// wrap the function calls into a naked func() to capture variables in the closure
 	defer func() {
-		if !mgr.enableMetrics {
+		if !mgr.metrics.enabled {
 			return
 		}
 
-		metrics.KubernetesEventProcessed.WithLabelValues(
+		operatormetrics.KubernetesEventProcessed.WithLabelValues(
 			MetricIFG,
 			resources.MetricDelete,
 			result(err),
 		).Inc()
 		ifgEventReceived(resources.MetricDelete, err == nil)
+		mgr.metrics.fqdnGroupReconcilers.Set(float64(len(mgr.reconcilers)))
 	}()
 
 	fqdnGroup := obj.Name
@@ -247,6 +286,8 @@ func toStrings(objFQDNs []v1alpha1.FQDN) []string {
 }
 
 func (mgr *manager) syncResolvers(fqdnGroup string, fqdns []string) error {
+	defer func() { mgr.metrics.fqdnResolvers.Set(float64(len(mgr.resolvers))) }()
+
 	newStatus := mgr.cache.deepCopy()
 	newStatus[fqdnGroup] = fqdns
 
@@ -289,12 +330,12 @@ func (mgr *manager) syncResolvers(fqdnGroup string, fqdns []string) error {
 }
 
 func ifgEventReceived(action string, valid bool) {
-	metrics.EventTS.WithLabelValues(
-		metrics.LabelEventSourceK8s,
+	operatormetrics.EventTS.WithLabelValues(
+		operatormetrics.LabelEventSourceK8s,
 		MetricIFG,
 		action,
 	).SetToCurrentTime()
-	metrics.KubernetesEventReceived.WithLabelValues(
+	operatormetrics.KubernetesEventReceived.WithLabelValues(
 		MetricIFG,
 		action,
 		strconv.FormatBool(valid),
