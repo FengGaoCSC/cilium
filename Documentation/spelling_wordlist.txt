@@ -959,6 +959,10 @@ sourceContext
 spiffe
 spiffeTrustDomain
 spireAdminSocketPath
+spireAgentSocketPath
+spireServerAddress
+spireServerConnectionTimeout
+spireServerSocketPath
 src
 srv
 ssl
@@ -1066,6 +1070,7 @@ updateStrategy
 uplink
 uprobes
 upstreamed
+uptime
 uretprobes
 url
 useAPIServer

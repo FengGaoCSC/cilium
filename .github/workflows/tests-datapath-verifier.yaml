@@ -168,8 +168,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: add '4.19-main' once verifier issues are resolved on that version.
         include:
+          - kernel: '4.19-main'
+            ci-kernel: '419'
           - kernel: '5.4-main'
             ci-kernel: '54'
           - kernel: '5.10-main'
@@ -210,6 +211,7 @@ jobs:
             docker run -t --privileged \
               -v /sys/fs/bpf:/sys/fs/bpf \
               -v "\$PWD:/cilium" \
+              -w "/cilium/test/verifier" \
               quay.io/cilium/test-verifier:2ecf56b4ea57576e9d92d34407898e5d14e80aa3@sha256:62396cedb4f15477f0084d7dfc92de55ac9ab8531021b7ac5f56220c35f2cb64 \
               /cilium/verifier.test -test.v -test.parallel=1 -cilium-base-path /cilium -ci-kernel-version ${{ matrix.ci-kernel }}
 
@@ -222,6 +224,7 @@ jobs:
             cd /host
             mkdir datapath-verifier
             cp bpf/*.o datapath-verifier
+            find test/verifier -name "*.log" -exec cp {} datapath-verifier/ \;
 
       - name: Upload artifacts
         if: ${{ !success() }}
