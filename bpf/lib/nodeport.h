@@ -761,8 +761,7 @@ int tail_nodeport_nat_egress_ipv6(struct __ctx_buff *ctx)
 					  info->sec_label,
 					  NOT_VTEP_DST,
 					  (enum trace_reason)CT_NEW,
-					  TRACE_PAYLOAD_LEN,
-					  (int *)&fib_params.l.ifindex);
+					  TRACE_PAYLOAD_LEN, &oif);
 		if (IS_ERR(ret))
 			goto drop_err;
 
@@ -780,7 +779,7 @@ int tail_nodeport_nat_egress_ipv6(struct __ctx_buff *ctx)
 	if (use_tunnel) {
 		cilium_capture_out(ctx);
 		if (verdict == CTX_ACT_REDIRECT)
-			return ctx_redirect(ctx, fib_params.l.ifindex, 0);
+			return ctx_redirect(ctx, oif, 0);
 		ctx_move_xfer(ctx);
 		return verdict;
 	}
@@ -1940,9 +1939,7 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 
 	info = ipcache_lookup4(&IPCACHE_MAP, ip4->daddr, V4_CACHE_KEY_LEN, 0);
 	if (info && info->tunnel_endpoint != 0) {
-		/* The dir == NAT_DIR_EGRESS branch is executed for
-		 * N/S LB requests which needs to be fwd-ed to a remote
-		 * node. As the request came from outside, we need to
+		/* The request came from outside, so we need to
 		 * set the security id in the tunnel header to WORLD_ID.
 		 * Otherwise, the remote node will assume, that the
 		 * request originated from a cluster node which will

@@ -544,34 +544,6 @@ ct_recreate6:
 	if (!revalidate_data(ctx, &data, &data_end, &ip6))
 		return DROP_INVALID;
 
-	/* See handle_ipv4_from_lxc() re hairpin_flow */
-	if (is_defined(ENABLE_ROUTING) || hairpin_flow) {
-		struct endpoint_info *ep;
-
-		/* Lookup IPv6 address, this will return a match if:
-		 *  - The destination IP address belongs to a local endpoint managed by
-		 *    cilium
-		 *  - The destination IP address is an IP address associated with the
-		 *    host itself.
-		 */
-		ep = lookup_ip6_endpoint(ip6);
-		if (ep) {
-#ifdef ENABLE_ROUTING
-			if (ep->flags & ENDPOINT_F_HOST) {
-#ifdef HOST_IFINDEX
-				goto to_host;
-#else
-				return DROP_HOST_UNREACHABLE;
-#endif
-			}
-#endif /* ENABLE_ROUTING */
-			policy_clear_mark(ctx);
-			/* If the packet is from L7 LB it is coming from the host */
-			return ipv6_local_delivery(ctx, ETH_HLEN, SECLABEL, ep,
-						   METRIC_EGRESS, from_l7lb, hairpin_flow);
-		}
-	}
-
 #if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_ROUTING)
 	/* If the destination is the local host and per-endpoint routes are
 	 * enabled, jump to the bpf_host program to enforce ingress host policies.
@@ -582,6 +554,37 @@ ct_recreate6:
 		return DROP_MISSED_TAIL_CALL;
 	}
 #endif /* ENABLE_HOST_FIREWALL && !ENABLE_ROUTING */
+
+	/* See handle_ipv4_from_lxc() re hairpin_flow */
+	if (is_defined(ENABLE_ROUTING) || hairpin_flow ||
+	    is_defined(ENABLE_HOST_ROUTING)) {
+		struct endpoint_info *ep;
+
+		/* Lookup IPv6 address, this will return a match if:
+		 *  - The destination IP address belongs to a local endpoint managed by
+		 *    cilium
+		 *  - The destination IP address is an IP address associated with the
+		 *    host itself.
+		 */
+		ep = lookup_ip6_endpoint(ip6);
+		if (ep) {
+#if defined(ENABLE_HOST_ROUTING) || defined(ENABLE_ROUTING)
+			if (ep->flags & ENDPOINT_F_HOST) {
+				if (is_defined(ENABLE_ROUTING)) {
+# ifdef HOST_IFINDEX
+					goto to_host;
+# endif
+					return DROP_HOST_UNREACHABLE;
+				}
+				goto pass_to_stack;
+			}
+#endif /* ENABLE_HOST_ROUTING || ENABLE_ROUTING */
+			policy_clear_mark(ctx);
+			/* If the packet is from L7 LB it is coming from the host */
+			return ipv6_local_delivery(ctx, ETH_HLEN, SECLABEL, ep,
+						   METRIC_EGRESS, from_l7lb, hairpin_flow);
+		}
+	}
 
 	/* The packet goes to a peer not managed by this agent instance */
 #ifdef TUNNEL_MODE
@@ -629,8 +632,10 @@ ct_recreate6:
 
 	goto pass_to_stack;
 
-#ifdef ENABLE_ROUTING
+#if defined(ENABLE_HOST_ROUTING) || defined(ENABLE_ROUTING)
 to_host:
+#endif
+#ifdef ENABLE_ROUTING
 	if (is_defined(ENABLE_HOST_FIREWALL) && *dst_id == HOST_ID) {
 		send_trace_notify(ctx, TRACE_TO_HOST, SECLABEL, HOST_ID, 0,
 				  HOST_IFINDEX, trace.reason, trace.monitor);
@@ -1003,12 +1008,31 @@ ct_recreate4:
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
 
-	/* Allow a hairpin packet to be redirected even if ENABLE_ROUTING is
-	 * disabled. Otherwise, the packet will be dropped by the kernel if
-	 * it is going to be routed via an interface it came from after it has
-	 * been passed to the stack.
+#if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_ROUTING)
+	/* If the destination is the local host and per-endpoint routes are
+	 * enabled, jump to the bpf_host program to enforce ingress host policies.
 	 */
-	if (is_defined(ENABLE_ROUTING) || hairpin_flow) {
+	if (*dst_id == HOST_ID) {
+		ctx_store_meta(ctx, CB_FROM_HOST, 0);
+		tail_call_static(ctx, &POLICY_CALL_MAP, HOST_EP_ID);
+		return DROP_MISSED_TAIL_CALL;
+	}
+#endif /* ENABLE_HOST_FIREWALL && !ENABLE_ROUTING */
+
+	/* Allow a hairpin packet to be redirected even if ENABLE_ROUTING is
+	 * disabled (for example, with per-endpoint routes). Otherwise, the
+	 * packet will be dropped by the kernel if the packet will be routed to
+	 * the interface it came from after the packet has been passed to the
+	 * stack.
+	 *
+	 * If ENABLE_ROUTING is disabled, but the fast redirect is enabled, we
+	 * do lookup the local endpoint here to check whether we must pass the
+	 * packet up the stack for the host itself. We also want to run through
+	 * the ipv4_local_delivery() function to enforce ingress policies for
+	 * that endpoint.
+	 */
+	if (is_defined(ENABLE_ROUTING) || hairpin_flow ||
+	    is_defined(ENABLE_HOST_ROUTING)) {
 		struct endpoint_info *ep;
 
 		/* Lookup IPv4 address, this will return a match if:
@@ -1020,15 +1044,17 @@ ct_recreate4:
 		 */
 		ep = lookup_ip4_endpoint(ip4);
 		if (ep) {
-#ifdef ENABLE_ROUTING
+#if defined(ENABLE_HOST_ROUTING) || defined(ENABLE_ROUTING)
 			if (ep->flags & ENDPOINT_F_HOST) {
-#ifdef HOST_IFINDEX
-				goto to_host;
-#else
-				return DROP_HOST_UNREACHABLE;
-#endif
+				if (is_defined(ENABLE_ROUTING)) {
+# ifdef HOST_IFINDEX
+					goto to_host;
+# endif
+					return DROP_HOST_UNREACHABLE;
+				}
+				goto pass_to_stack;
 			}
-#endif /* ENABLE_ROUTING */
+#endif /* ENABLE_HOST_ROUTING || ENABLE_ROUTING */
 			policy_clear_mark(ctx);
 			/* If the packet is from L7 LB it is coming from the host */
 			return ipv4_local_delivery(ctx, ETH_HLEN, SECLABEL, ip4,
@@ -1036,17 +1062,6 @@ ct_recreate4:
 						   false, 0);
 		}
 	}
-
-#if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_ROUTING)
-	/* If the destination is the local host and per-endpoint routes are
-	 * enabled, jump to the bpf_host program to enforce ingress host policies.
-	 */
-	if (*dst_id == HOST_ID) {
-		ctx_store_meta(ctx, CB_FROM_HOST, 0);
-		tail_call_static(ctx, &POLICY_CALL_MAP, HOST_EP_ID);
-		return DROP_MISSED_TAIL_CALL;
-	}
-#endif /* ENABLE_HOST_FIREWALL && !ENABLE_ROUTING */
 
 #ifdef ENABLE_EGRESS_GATEWAY
 	{
@@ -1167,8 +1182,10 @@ skip_vtep:
 
 	goto pass_to_stack;
 
-#ifdef ENABLE_ROUTING
+#if defined(ENABLE_HOST_ROUTING) || defined(ENABLE_ROUTING)
 to_host:
+#endif
+#ifdef ENABLE_ROUTING
 	if (is_defined(ENABLE_HOST_FIREWALL) && *dst_id == HOST_ID) {
 		send_trace_notify(ctx, TRACE_TO_HOST, SECLABEL, HOST_ID, 0,
 				  HOST_IFINDEX, trace.reason, trace.monitor);
