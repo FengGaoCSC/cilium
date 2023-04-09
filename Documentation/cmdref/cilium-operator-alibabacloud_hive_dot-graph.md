@@ -17,9 +17,11 @@ cilium-operator-alibabacloud hive dot-graph [flags]
 ### Options inherited from parent commands
 
 ```
+      --dns-server-addresses strings                         A list of DNS server addresses to be used by the operator DNS client for resolution of FQDNs in IsovalentFQDNGroup CRDs. Each address should be in the form "<ip>:<port>". When resolving an FQDN, the operator will try to query the first server. If it fails, it will try the next one and so on, following the order specified by the user.
       --enable-cilium-operator-server-access strings         List of cilium operator APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-k8s                                           Enable the k8s clientset (default true)
       --enable-k8s-api-discovery                             Enable discovery of Kubernetes API groups and resources with the discovery API
+      --fqdn-group-min-query-interval duration               Minimum interval between two consecutive queries when resolving a FQDN belonging to an IsovalentFQDNGroup (default 1m0s)
       --gops-port uint16                                     Port for gops server to listen on (default 9891)
       --identity-gc-interval duration                        GC interval for security identities (default 15m0s)
       --identity-gc-rate-interval duration                   Interval used for rate limiting the GC of security identities (default 1m0s)

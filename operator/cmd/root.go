@@ -26,6 +26,8 @@ import (
 	operatorApi "github.com/cilium/cilium/api/v1/operator/server"
 	"github.com/cilium/cilium/operator/api"
 	"github.com/cilium/cilium/operator/auth"
+	"github.com/cilium/cilium/operator/dnsclient"
+	"github.com/cilium/cilium/operator/dnsresolver"
 	"github.com/cilium/cilium/operator/identitygc"
 	operatorK8s "github.com/cilium/cilium/operator/k8s"
 	operatorMetrics "github.com/cilium/cilium/operator/metrics"
@@ -128,6 +130,10 @@ var (
 
 			lbipam.Cell,
 			auth.Cell,
+
+			dnsclient.Cell,
+			dnsresolver.Cell,
+
 			legacyCell,
 
 			// When running in kvstore mode, the start hook of the identity GC

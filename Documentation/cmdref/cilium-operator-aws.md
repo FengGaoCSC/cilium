@@ -37,6 +37,7 @@ cilium-operator-aws [flags]
       --config string                                        Configuration file (default "$HOME/ciliumd.yaml")
       --config-dir string                                    Configuration directory that contains a file for each option
   -D, --debug                                                Enable debugging mode
+      --dns-server-addresses strings                         A list of DNS server addresses to be used by the operator DNS client for resolution of FQDNs in IsovalentFQDNGroup CRDs. Each address should be in the form "<ip>:<port>". When resolving an FQDN, the operator will try to query the first server. If it fails, it will try the next one and so on, following the order specified by the user.
       --ec2-api-endpoint string                              AWS API endpoint for the EC2 service
       --enable-cilium-endpoint-slice                         If set to true, the CiliumEndpointSlice feature is enabled. If any CiliumEndpoints resources are created, updated, or deleted in the cluster, all those changes are broadcast as CiliumEndpointSlice updates to all of the Cilium agents.
       --enable-cilium-operator-server-access strings         List of cilium operator APIs which are administratively enabled. Supports '*'. (default [*])
@@ -50,6 +51,7 @@ cilium-operator-aws [flags]
       --eni-gc-tags map                                      Additional tags attached to ENIs created by Cilium. Dangling ENIs with this tag will be garbage collected
       --eni-tags map                                         ENI tags in the form of k1=v1 (multiple k/v pairs can be passed by repeating the CLI flag)
       --excess-ip-release-delay int                          Number of seconds operator would wait before it releases an IP previously marked as excess (default 180)
+      --fqdn-group-min-query-interval duration               Minimum interval between two consecutive queries when resolving a FQDN belonging to an IsovalentFQDNGroup (default 1m0s)
       --gops-port uint16                                     Port for gops server to listen on (default 9891)
   -h, --help                                                 help for cilium-operator-aws
       --identity-allocation-mode string                      Method to use for identity allocation (default "kvstore")
