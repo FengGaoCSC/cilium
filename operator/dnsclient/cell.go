@@ -6,6 +6,7 @@ package dnsclient
 import (
 	"github.com/spf13/pflag"
 
+	"github.com/cilium/cilium/operator/option"
 	"github.com/cilium/cilium/pkg/hive/cell"
 )
 
@@ -22,6 +23,9 @@ var Cell = cell.Module(
 
 	cell.Config(Config{}),
 	cell.Provide(newClient),
+	cell.ProvidePrivate(func(cfg *option.OperatorConfig) bool {
+		return cfg.EnableMetrics
+	}),
 )
 
 type Config struct {

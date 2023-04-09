@@ -15,9 +15,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 
+	operatormetrics "github.com/cilium/cilium/operator/metrics"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/ip"
+	"github.com/cilium/cilium/pkg/metrics"
+	"github.com/cilium/cilium/pkg/metrics/metric"
 )
 
 // ErrNonExistentDomain is the error returned in case of a NXDOMAIN response
@@ -37,12 +40,25 @@ type Resolver interface {
 const (
 	// hostConfigPath is the path of the host resolver configuration file
 	hostConfigPath = "/etc/resolv.conf"
+
+	// labelFQDN is the label for fqdns queried by the operator DNS client
+	labelFQDN = "fqdn"
 )
+
+type clientMetrics struct {
+	// enabled enables metrics reporting from the dnsclient cell
+	enabled bool
+
+	// rttStats is the RTT for dns queries from the dns client.
+	rttStats metric.Vec[metric.Observer]
+}
 
 type params struct {
 	cell.In
 
 	Cfg Config
+
+	EnableMetrics bool
 
 	Logger    logrus.FieldLogger
 	Lifecycle hive.Lifecycle
@@ -53,6 +69,8 @@ type client struct {
 
 	client *dns.Client
 	addrs  []string
+
+	metrics clientMetrics
 }
 
 func newClient(p params) (Resolver, error) {
@@ -75,6 +93,7 @@ func newClient(p params) (Resolver, error) {
 		client.addrs = addrs
 	}
 
+	client.metrics.enabled = p.EnableMetrics
 	p.Lifecycle.Append(client)
 
 	return client, nil
@@ -82,6 +101,8 @@ func newClient(p params) (Resolver, error) {
 
 func (c *client) Start(_ hive.HookContext) error {
 	c.logger.Info("Starting DNS client")
+
+	c.registerMetrics()
 
 	c.client = &dns.Client{}
 
@@ -113,6 +134,21 @@ func hostResolvConf() ([]string, error) {
 	return addresses, nil
 }
 
+func (c *client) registerMetrics() {
+	if !c.metrics.enabled {
+		c.metrics.rttStats = metrics.NoOpObserverVec
+		return
+	}
+
+	c.metrics.rttStats = metric.NewHistogramVec(metric.HistogramOpts{
+		ConfigName: operatormetrics.Namespace + "_dns_client_rtt_stats_seconds",
+		Namespace:  operatormetrics.Namespace,
+		Name:       "dns_client_rtt_stats_seconds",
+		Help:       "Operator DNS client queries RTT stats",
+	}, []string{labelFQDN})
+	operatormetrics.Registry.MustRegister(c.metrics.rttStats)
+}
+
 func (c *client) query(ctx context.Context, fqdn string, ipv6 bool) ([]netip.Addr, []time.Duration, error) {
 	msg := &dns.Msg{}
 	if ipv6 {
@@ -127,6 +163,9 @@ func (c *client) query(ctx context.Context, fqdn string, ipv6 bool) ([]netip.Add
 	if err != nil {
 		return nil, nil, fmt.Errorf("dns query failed: %w", err)
 	}
+
+	c.metrics.rttStats.WithLabelValues(fqdn).Observe(rtt.Seconds())
+
 	if response.Rcode == dns.RcodeNameError {
 		return nil, nil, ErrNonExistentDomain
 	}

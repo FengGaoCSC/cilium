@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/goleak"
 
+	operatorMetrics "github.com/cilium/cilium/operator/metrics"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 )
@@ -85,6 +87,11 @@ func TestClient(t *testing.T) {
 				DNSServerAddresses: []string{conn.LocalAddr().String()},
 			}
 		}),
+		cell.Provide(func() bool {
+			// enable dnsclient metrics
+			return true
+		}),
+
 		cell.Provide(newClient),
 
 		cell.Invoke(func(lc hive.Lifecycle) error {
@@ -98,6 +105,9 @@ func TestClient(t *testing.T) {
 				},
 			})
 			return nil
+		}),
+		cell.Invoke(func() {
+			operatorMetrics.Registry = prometheus.NewPedanticRegistry()
 		}),
 		cell.Invoke(func(r Resolver) {
 			client = r
