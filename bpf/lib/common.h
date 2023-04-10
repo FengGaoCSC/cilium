@@ -350,8 +350,16 @@ struct auth_key {
 	__u8        pad;
 };
 
+/* expiration is Unix epoch time in unit nanosecond/2^9 (ns/512). */
 struct auth_info {
 	__u64       expiration;
+};
+
+/*
+ * Runtime configuration items for the datapath.
+ */
+enum {
+	RUNTIME_CONFIG_UTIME_OFFSET = 0, /* Index to Unix time offset in 512 ns units */
 };
 
 struct metrics_key {
@@ -883,7 +891,7 @@ struct ct_entry {
 	      proxy_redirect:1, /* Connection is redirected to a proxy */
 	      dsr:1,
 	      from_l7lb:1, /* Connection is originated from an L7 LB proxy */
-	      auth_required:1,
+	      reserved1:1, /* Was auth_required, not used in production anywhere */
 	      from_tunnel:1, /* Connection is over tunnel */
 	      reserved:5;
 	__u16 rev_nat_index;
@@ -1072,7 +1080,7 @@ struct ct_state {
 	      syn:1,
 	      proxy_redirect:1,	/* Connection is redirected to a proxy */
 	      from_l7lb:1,	/* Connection is originated from an L7 LB proxy */
-	      auth_required:1,
+	      reserved1:1,	/* Was auth_required, not used in production anywhere */
 	      from_tunnel:1,	/* Connection is from tunnel */
 	      reserved:8;
 	__be32 addr;

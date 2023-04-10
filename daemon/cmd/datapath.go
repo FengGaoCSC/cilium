@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
+	"github.com/cilium/cilium/pkg/datapath/linux/utime"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpointmanager"
@@ -28,7 +29,8 @@ import (
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	"github.com/cilium/cilium/pkg/maps/auth"
+	"github.com/cilium/cilium/pkg/maps/authmap"
+	"github.com/cilium/cilium/pkg/maps/configmap"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 	"github.com/cilium/cilium/pkg/maps/egressmap"
 	"github.com/cilium/cilium/pkg/maps/eventsmap"
@@ -332,6 +334,12 @@ func (d *Daemon) initMaps() error {
 		return nil
 	}
 
+	if err := configmap.InitMap(); err != nil {
+		return err
+	}
+	// start configmap users after configmap.InitMap() above
+	utime.InitUTime(d.ctx, d.controllers, time.Minute)
+
 	if _, err := lxcmap.LXCMap().OpenOrCreate(); err != nil {
 		return err
 	}
@@ -354,7 +362,7 @@ func (d *Daemon) initMaps() error {
 		return err
 	}
 
-	if err := auth.InitAuthMap(option.Config.AuthMapEntries); err != nil {
+	if err := authmap.InitAuthMap(option.Config.AuthMapEntries); err != nil {
 		return err
 	}
 
