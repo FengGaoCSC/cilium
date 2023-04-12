@@ -429,8 +429,7 @@ kind-clustermesh: ## Create two kind clusters for clustermesh development.
 
 .PHONY: kind-clustermesh-down
 kind-clustermesh-down: ## Destroy kind clusters for clustermesh development.
-	kind delete clusters clustermesh1
-	kind delete clusters clustermesh2
+	$(QUIET)./contrib/scripts/kind-down.sh clustermesh1 clustermesh2
 
 .PHONY: kind-clustermesh-ready
 kind-clustermesh-ready: ## Check if both kind clustermesh clusters exist
@@ -459,7 +458,7 @@ kind-clustermesh-images: kind-clustermesh-ready kind-build-clustermesh-apiserver
 	$(QUIET)kind load docker-image $(LOCAL_OPERATOR_IMAGE) --name clustermesh1
 	$(QUIET)kind load docker-image $(LOCAL_OPERATOR_IMAGE) --name clustermesh2
 
-.PHONY: kind-install-cilium-clustermesh
+$(eval $(call KIND_ENV,kind-install-cilium-clustermesh))
 kind-install-cilium-clustermesh: kind-clustermesh-ready ## Install a local Cilium version into the clustermesh clusters and enable clustermesh.
 	@echo "  INSTALL cilium on clustermesh1 cluster"
 	kubectl config use kind-clustermesh1
