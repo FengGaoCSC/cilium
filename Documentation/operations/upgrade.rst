@@ -328,13 +328,15 @@ Annotations:
 Removed Options
 ~~~~~~~~~~~~~~~
 
-The ``sockops-enable`` option is removed
+* The ``sockops-enable`` and ``force-local-policy-eval-at-source`` options deprecated in version
+  1.13 are removed.
 
 Added Metrics
 ~~~~~~~~~~~~~
 
 * ``cilium_operator_ces_sync_total``
 * ``cilium_policy_change_total``
+* ``go_sched_latencies_seconds``
 
 Deprecated Metrics
 ~~~~~~~~~~~~~~~~~~

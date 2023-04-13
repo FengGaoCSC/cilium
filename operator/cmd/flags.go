@@ -243,9 +243,6 @@ func init() {
 	flags.String(operatorOption.OperatorPrometheusServeAddr, operatorOption.PrometheusServeAddr, "Address to serve Prometheus metrics")
 	option.BindEnv(Vp, operatorOption.OperatorPrometheusServeAddr)
 
-	flags.String(operatorOption.OperatorAPIServeAddr, "localhost:9234", "Address to serve API requests")
-	option.BindEnv(Vp, operatorOption.OperatorAPIServeAddr)
-
 	flags.Bool(operatorOption.SyncK8sServices, true, "Synchronize Kubernetes services to kvstore")
 	option.BindEnv(Vp, operatorOption.SyncK8sServices)
 
@@ -311,9 +308,6 @@ func init() {
 
 	flags.StringSlice(operatorOption.IngressLBAnnotationPrefixes, operatorOption.IngressLBAnnotationsDefault, "Annotation prefixes for propagating from Ingress to the Load Balancer service")
 	option.BindEnv(Vp, operatorOption.IngressLBAnnotationPrefixes)
-
-	flags.Bool(operatorOption.EnableK8s, true, `Enable operation of Kubernetes-related services/controllers when using Cilium with Kubernetes`)
-	option.BindEnv(Vp, operatorOption.EnableK8s)
 
 	flags.String(operatorOption.PodRestartSelector, "k8s-app=kube-dns", "cilium-operator will delete/restart any pods with these labels if the pod is not managed by Cilium. If this option is empty, then all pods may be restarted")
 	option.BindEnv(Vp, operatorOption.PodRestartSelector)
