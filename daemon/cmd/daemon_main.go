@@ -731,6 +731,14 @@ func initializeFlags() {
 
 	flags.StringP(option.TunnelName, "t", "", fmt.Sprintf("Tunnel mode {%s} (default \"vxlan\" for the \"veth\" datapath mode)", option.GetTunnelModes()))
 	option.BindEnv(Vp, option.TunnelName)
+	flags.MarkDeprecated(option.TunnelName,
+		fmt.Sprintf("This option will be removed in v1.15. Please use --%s and --%s instead.", option.RoutingMode, option.TunnelProtocol))
+
+	flags.String(option.RoutingMode, defaults.RoutingMode, fmt.Sprintf("Routing mode (%q or %q)", option.RoutingModeNative, option.RoutingModeTunnel))
+	option.BindEnv(Vp, option.RoutingMode)
+
+	flags.String(option.TunnelProtocol, defaults.TunnelProtocol, "Encapsulation protocol to use for the overlay (\"vxlan\" or \"geneve\")")
+	option.BindEnv(Vp, option.TunnelProtocol)
 
 	flags.Int(option.TunnelPortName, 0, fmt.Sprintf("Tunnel port (default %d for \"vxlan\" and %d for \"geneve\")", defaults.TunnelPortVXLAN, defaults.TunnelPortGeneve))
 	option.BindEnv(Vp, option.TunnelPortName)
@@ -1295,9 +1303,6 @@ func initEnv() {
 
 	switch option.Config.DatapathMode {
 	case datapathOption.DatapathModeVeth:
-		if option.Config.Tunnel == "" {
-			option.Config.Tunnel = option.TunnelVXLAN
-		}
 	case datapathOption.DatapathModeLBOnly:
 		log.Info("Running in LB-only mode")
 		if option.Config.NodePortAcceleration != option.NodePortAccelerationDisabled {
@@ -1310,7 +1315,7 @@ func initEnv() {
 		option.Config.EnableHostPort = false
 		option.Config.EnableNodePort = true
 		option.Config.EnableExternalIPs = true
-		option.Config.Tunnel = option.TunnelDisabled
+		option.Config.RoutingMode = option.RoutingModeNative
 		option.Config.EnableHealthChecking = false
 		option.Config.EnableIPv4Masquerade = false
 		option.Config.EnableIPv6Masquerade = false
