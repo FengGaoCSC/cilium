@@ -9,7 +9,7 @@ on:
       - reopened
   push:
     branches:
-      - master-ce-experiment
+      - main-ce
       - ft/main-ce/**
 
   # If the cache was cleaned we should re-build the cache with the latest commit
@@ -17,7 +17,7 @@ on:
     workflows:
      - "Image CI Cache Cleaner"
     branches:
-     - master-ce-experiment
+     - main-ce
      - ft/main-ce/**
     types:
      - completed
