@@ -36,6 +36,9 @@ var Cell = cell.Module(
 		// to handle per-cluster maps creation and removal.
 		newClusterIDManager,
 		func(mgr ClusterIDsManager) clustermesh.ClusterIDsManager { return mgr },
+
+		// Inject the extra datapath configs required for overlapping PodCIDR support.
+		datapathNodeHeaderConfigProvider,
 	),
 
 	cell.Invoke(
