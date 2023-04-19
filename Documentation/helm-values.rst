@@ -633,7 +633,7 @@
      - bool
      - ``false``
    * - encryption.interface
-     - Deprecated in favor of encryption.ipsec.interface. The interface to use for encrypted traffic. This option is only effective when encryption.type is set to ipsec.
+     - Deprecated in favor of encryption.ipsec.interface. To be removed in 1.15. The interface to use for encrypted traffic. This option is only effective when encryption.type is set to ipsec.
      - string
      - ``""``
    * - encryption.ipsec.interface
@@ -653,11 +653,11 @@
      - string
      - ``""``
    * - encryption.keyFile
-     - Deprecated in favor of encryption.ipsec.keyFile. Name of the key file inside the Kubernetes secret configured via secretName. This option is only effective when encryption.type is set to ipsec.
+     - Deprecated in favor of encryption.ipsec.keyFile. To be removed in 1.15. Name of the key file inside the Kubernetes secret configured via secretName. This option is only effective when encryption.type is set to ipsec.
      - string
      - ``"keys"``
    * - encryption.mountPath
-     - Deprecated in favor of encryption.ipsec.mountPath. Path to mount the secret inside the Cilium pod. This option is only effective when encryption.type is set to ipsec.
+     - Deprecated in favor of encryption.ipsec.mountPath. To be removed in 1.15. Path to mount the secret inside the Cilium pod. This option is only effective when encryption.type is set to ipsec.
      - string
      - ``"/etc/ipsec"``
    * - encryption.nodeEncryption
@@ -665,7 +665,7 @@
      - bool
      - ``false``
    * - encryption.secretName
-     - Deprecated in favor of encryption.ipsec.secretName. Name of the Kubernetes secret containing the encryption keys. This option is only effective when encryption.type is set to ipsec.
+     - Deprecated in favor of encryption.ipsec.secretName. To be removed in 1.15. Name of the Kubernetes secret containing the encryption keys. This option is only effective when encryption.type is set to ipsec.
      - string
      - ``"cilium-ipsec-keys"``
    * - encryption.type
@@ -968,10 +968,6 @@
      - The cluster domain to use to query the Hubble Peer service. It should be the local cluster.
      - string
      - ``"cluster.local"``
-   * - hubble.peerService.enabled
-     - Enable a K8s Service for the Peer service, so that it can be accessed by a non-local client. This configuration option is deprecated, the peer service will be non-optional starting Cilium v1.14.
-     - bool
-     - ``true``
    * - hubble.peerService.targetPort
      - Target Port for the Peer service, must match the hubble.listenAddress' port.
      - int
@@ -1175,7 +1171,7 @@
    * - hubble.tls
      - TLS configuration for Hubble
      - object
-     - ``{"auto":{"certManagerIssuerRef":{},"certValidityDuration":1095,"enabled":true,"method":"helm","schedule":"0 0 1 */4 *"},"ca":{"cert":"","key":""},"enabled":true,"server":{"cert":"","extraDnsNames":[],"extraIpAddresses":[],"key":""}}``
+     - ``{"auto":{"certManagerIssuerRef":{},"certValidityDuration":1095,"enabled":true,"method":"helm","schedule":"0 0 1 */4 *"},"enabled":true,"server":{"cert":"","extraDnsNames":[],"extraIpAddresses":[],"key":""}}``
    * - hubble.tls.auto
      - Configure automatic TLS certificates generation.
      - object
@@ -1200,18 +1196,6 @@
      - Schedule for certificates regeneration (regardless of their expiration date). Only used if method is "cronJob". If nil, then no recurring job will be created. Instead, only the one-shot job is deployed to generate the certificates at installation time.  Defaults to midnight of the first day of every fourth month. For syntax, see https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/#schedule-syntax
      - string
      - ``"0 0 1 */4 *"``
-   * - hubble.tls.ca
-     - Deprecated in favor of tls.ca. To be removed in 1.13. base64 encoded PEM values for the Hubble CA certificate and private key.
-     - object
-     - ``{"cert":"","key":""}``
-   * - hubble.tls.ca.cert
-     - Deprecated in favor of tls.ca.cert. To be removed in 1.13.
-     - string
-     - ``""``
-   * - hubble.tls.ca.key
-     - Deprecated in favor of tls.ca.key. To be removed in 1.13. The CA private key (optional). If it is provided, then it will be used by hubble.tls.auto.method=cronJob to generate all other certificates. Otherwise, a ephemeral CA is generated if hubble.tls.auto.enabled=true.
-     - string
-     - ``""``
    * - hubble.tls.enabled
      - Enable mutual TLS for listenAddress. Setting this value to false is highly discouraged as the Hubble API provides access to potentially sensitive network flow metadata and is exposed on the host network.
      - bool
@@ -1335,11 +1319,7 @@
    * - hubble.ui.securityContext
      - Security context to be added to Hubble UI pods
      - object
-     - ``{"enabled":true,"fsGroup":1001,"runAsGroup":1001,"runAsUser":1001}``
-   * - hubble.ui.securityContext.enabled
-     - Deprecated in favor of hubble.ui.securityContext. Whether to set the security context on the Hubble UI pods.
-     - bool
-     - ``true``
+     - ``{"fsGroup":1001,"runAsGroup":1001,"runAsUser":1001}``
    * - hubble.ui.service
      - hubble-ui service configuration.
      - object
@@ -1488,26 +1468,18 @@
      - IPv4 CIDR mask size to delegate to individual nodes for IPAM.
      - int
      - ``24``
-   * - ipam.operator.clusterPoolIPv4PodCIDR
-     - Deprecated in favor of ipam.operator.clusterPoolIPv4PodCIDRList. IPv4 CIDR range to delegate to individual nodes for IPAM.
-     - string
-     - ``"10.0.0.0/8"``
    * - ipam.operator.clusterPoolIPv4PodCIDRList
      - IPv4 CIDR list range to delegate to individual nodes for IPAM.
      - list
-     - ``[]``
+     - ``["10.0.0.0/8"]``
    * - ipam.operator.clusterPoolIPv6MaskSize
      - IPv6 CIDR mask size to delegate to individual nodes for IPAM.
      - int
      - ``120``
-   * - ipam.operator.clusterPoolIPv6PodCIDR
-     - Deprecated in favor of ipam.operator.clusterPoolIPv6PodCIDRList. IPv6 CIDR range to delegate to individual nodes for IPAM.
-     - string
-     - ``"fd00::/104"``
    * - ipam.operator.clusterPoolIPv6PodCIDRList
      - IPv6 CIDR list range to delegate to individual nodes for IPAM.
      - list
-     - ``[]``
+     - ``["fd00::/104"]``
    * - ipam.operator.externalAPILimitBurstSize
      - The maximum burst size when rate limiting access to external APIs. Also known as the token bucket capacity.
      - string

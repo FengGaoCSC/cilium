@@ -717,22 +717,22 @@ encryption:
     # -- Enables the fallback to the user-space implementation.
     userspaceFallback: false
 
-  # -- Deprecated in favor of encryption.ipsec.keyFile.
+  # -- Deprecated in favor of encryption.ipsec.keyFile. To be removed in 1.15.
   # Name of the key file inside the Kubernetes secret configured via secretName.
   # This option is only effective when encryption.type is set to ipsec.
   keyFile: keys
 
-  # -- Deprecated in favor of encryption.ipsec.mountPath.
+  # -- Deprecated in favor of encryption.ipsec.mountPath. To be removed in 1.15.
   # Path to mount the secret inside the Cilium pod.
   # This option is only effective when encryption.type is set to ipsec.
   mountPath: /etc/ipsec
 
-  # -- Deprecated in favor of encryption.ipsec.secretName.
+  # -- Deprecated in favor of encryption.ipsec.secretName. To be removed in 1.15.
   # Name of the Kubernetes secret containing the encryption keys.
   # This option is only effective when encryption.type is set to ipsec.
   secretName: cilium-ipsec-keys
 
-  # -- Deprecated in favor of encryption.ipsec.interface.
+  # -- Deprecated in favor of encryption.ipsec.interface. To be removed in 1.15.
   # The interface to use for encrypted traffic.
   # This option is only effective when encryption.type is set to ipsec.
   interface: ""
@@ -943,10 +943,6 @@ hubble:
   skipUnknownCGroupIDs: ~
 
   peerService:
-    # -- Enable a K8s Service for the Peer service, so that it can be accessed
-    # by a non-local client. This configuration option is deprecated, the peer
-    # service will be non-optional starting Cilium v1.14.
-    enabled: true
     # -- Service Port for the Peer service.
     # If not set, it is dynamically assigned to port 443 if TLS is enabled and to
     # port 80 if not.
@@ -997,16 +993,6 @@ hubble:
       # -- certmanager issuer used when hubble.tls.auto.method=certmanager.
       certManagerIssuerRef: {}
 
-    # -- Deprecated in favor of tls.ca. To be removed in 1.13.
-    # base64 encoded PEM values for the Hubble CA certificate and private key.
-    ca:
-      # -- Deprecated in favor of tls.ca.cert. To be removed in 1.13.
-      cert: ""
-      # -- Deprecated in favor of tls.ca.key. To be removed in 1.13.
-      # The CA private key (optional). If it is provided, then it will be
-      # used by hubble.tls.auto.method=cronJob to generate all other certificates.
-      # Otherwise, a ephemeral CA is generated if hubble.tls.auto.enabled=true.
-      key: ""
     # -- base64 encoded PEM values for the Hubble server certificate and private key
     server:
       cert: ""
@@ -1355,9 +1341,6 @@ hubble:
 
     # -- Security context to be added to Hubble UI pods
     securityContext:
-      # -- Deprecated in favor of hubble.ui.securityContext.
-      # Whether to set the security context on the Hubble UI pods.
-      enabled: true
       runAsUser: 1001
       runAsGroup: 1001
       fsGroup: 1001
@@ -1412,18 +1395,12 @@ ipam:
   # -- Maximum rate at which the CiliumNode custom resource is updated.
   ciliumNodeUpdateRate: "15s"
   operator:
-    # -- Deprecated in favor of ipam.operator.clusterPoolIPv4PodCIDRList.
-    # IPv4 CIDR range to delegate to individual nodes for IPAM.
-    clusterPoolIPv4PodCIDR: "10.0.0.0/8"
     # -- IPv4 CIDR list range to delegate to individual nodes for IPAM.
-    clusterPoolIPv4PodCIDRList: []
+    clusterPoolIPv4PodCIDRList: ["10.0.0.0/8"]
     # -- IPv4 CIDR mask size to delegate to individual nodes for IPAM.
     clusterPoolIPv4MaskSize: 24
-    # -- Deprecated in favor of ipam.operator.clusterPoolIPv6PodCIDRList.
-    # IPv6 CIDR range to delegate to individual nodes for IPAM.
-    clusterPoolIPv6PodCIDR: "fd00::/104"
-     # -- IPv6 CIDR list range to delegate to individual nodes for IPAM.
-    clusterPoolIPv6PodCIDRList: []
+    # -- IPv6 CIDR list range to delegate to individual nodes for IPAM.
+    clusterPoolIPv6PodCIDRList: ["fd00::/104"]
     # -- IPv6 CIDR mask size to delegate to individual nodes for IPAM.
     clusterPoolIPv6MaskSize: 120
     # -- The maximum burst size when rate limiting access to external APIs.
