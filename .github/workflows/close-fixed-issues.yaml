@@ -1,0 +1,34 @@
+---
+# A reusable workflow designed to be called from the context of a specific
+# branch whenever a PR is merged. It closes the issues that are mentioned in the
+# PR description using the standard 'Fixes #xyz' syntax. Github does not close
+# issues for PRs against branches that are not the default, hence this workflow.
+name: Close fixed issues for PRs to enterprise branches
+on:
+  workflow_call:
+    inputs:
+      pr-number:
+        required: true
+        type: string
+        description: "The number of the PR which adresses the issues."
+      pr-body:
+        required: true
+        type: string
+        description: "The PR description containing the 'Fixes #xyz' line."
+
+jobs:
+  closer:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write  # Closing the issue
+    steps:
+      - name: Close issues mentioned by PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          PR_BODY: ${{ inputs.pr-body }}
+        run: |
+          echo $PR_BODY | grep -Eio "(fix|clos|resolv)(e|ed|es)?:? +(https://github.com/${GITHUB_REPOSITORY}/issues/|#)[0-9]+" | grep -Eo '[0-9]+' | while read -r issue; do
+            echo "Closing issue #${issue} as completed in #${PR_NUMBER}."
+            gh issue close ${issue} --repo "${GITHUB_REPOSITORY}" --reason "completed" --comment "Done in #${PR_NUMBER}"
+          done || true

@@ -5,5 +5,5 @@ runs:
   steps:
     - shell: bash
       run: |
-        echo "QUAY_ORGANIZATION=cilium" >> $GITHUB_ENV
-        echo "QUAY_ORGANIZATION_DEV=cilium" >> $GITHUB_ENV
+        echo "QUAY_ORGANIZATION=isovalent" >> $GITHUB_ENV
+        echo "QUAY_ORGANIZATION_DEV=isovalent-dev" >> $GITHUB_ENV

@@ -1,0 +1,18 @@
+name: helm-repo-dispatch
+on:
+  push:
+    branches:
+      - *-ce
+    tags:
+      - v*
+jobs:
+  helm-repo-dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch to https://github.com/isovalent/helm-repo
+        run: |
+          curl -u ${{ secrets.API_USER }}:${{ secrets.API_TOKEN }} \
+            -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/isovalent/helm-repo/dispatches \
+            -d '{"event_type":"isovalent-cilium-push"}'
