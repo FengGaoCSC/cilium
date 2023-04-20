@@ -2,25 +2,25 @@
 scheme: v1alpha4
 lib:
   package: github.com/isovalent/atlantis
-  version: eb42730e0818a254b3d493d686bf2c1dfbdc3648
-plugins:
+  version: d05b4c445fea35a96b50fe8fcc6d4b9009a0e546
+plugins: []
   #- package: github.com/isovalent/fqdn-proxy/plugin
   #  version: v1.13.0
   #  edit:
   #    cilium: .FQDNProxy
-  - package: github.com/isovalent/hubble-flow-aggregation
-    version: b2962eb0f1ccc940b51ce327866d1b8392b3cbf0
-    agent: .New
-    edit:
-      proto: proto.AddAggregation
-  - package: github.com/isovalent/hubble-flow-policy-metadata
-    version: 6c5b6724987f74687ce653f41bb7df71f3eb845c
-    agent: .New
-    edit:
-      proto: proto.AddPolicyFields
-  - package: github.com/isovalent/hubble-flow-export
-    version: 6308742a5a6aaa8cd7d35bd033d3e691653751c5
-    agent: .New
+  #- package: github.com/isovalent/hubble-flow-aggregation
+  #  version: b2962eb0f1ccc940b51ce327866d1b8392b3cbf0
+  #  agent: .New
+  #  edit:
+  #    proto: proto.AddAggregation
+  #- package: github.com/isovalent/hubble-flow-policy-metadata
+  #  version: 6c5b6724987f74687ce653f41bb7df71f3eb845c
+  #  agent: .New
+  #  edit:
+  #    proto: proto.AddPolicyFields
+  #- package: github.com/isovalent/hubble-flow-export
+  #  version: 6308742a5a6aaa8cd7d35bd033d3e691653751c5
+  #  agent: .New
 goModOptions:
   tidyOptions:
     - "-compat"
