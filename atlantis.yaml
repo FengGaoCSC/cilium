@@ -3,7 +3,7 @@ scheme: v1alpha4
 lib:
   package: github.com/isovalent/atlantis
   version: v1.0.0-alpha4.10
-plugins: []
+plugins:
   #- package: github.com/isovalent/fqdn-proxy/plugin
   #  version: v1.13.0
   #  edit:
@@ -13,14 +13,14 @@ plugins: []
   #  agent: .New
   #  edit:
   #    proto: proto.AddAggregation
-  #- package: github.com/isovalent/hubble-flow-policy-metadata
-  #  version: 6c5b6724987f74687ce653f41bb7df71f3eb845c
-  #  agent: .New
-  #  edit:
-  #    proto: proto.AddPolicyFields
-  #- package: github.com/isovalent/hubble-flow-export
-  #  version: 6308742a5a6aaa8cd7d35bd033d3e691653751c5
-  #  agent: .New
+  - package: github.com/isovalent/hubble-flow-policy-metadata
+    version: 88f74452beb0ea463c0172a680502a08d22929f1
+    agent: .New
+    edit:
+      proto: proto.AddPolicyFields
+  - package: github.com/isovalent/hubble-flow-export
+    version: 72777408c02669910dffd4c27623690e4b78c86f
+    agent: .New
 goModOptions:
   tidyOptions:
     - "-compat"
