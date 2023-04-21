@@ -2,7 +2,7 @@
 scheme: v1alpha4
 lib:
   package: github.com/isovalent/atlantis
-  version: d05b4c445fea35a96b50fe8fcc6d4b9009a0e546
+  version: v1.0.0-alpha4.10
 plugins: []
   #- package: github.com/isovalent/fqdn-proxy/plugin
   #  version: v1.13.0
