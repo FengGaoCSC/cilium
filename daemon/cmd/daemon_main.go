@@ -1037,7 +1037,7 @@ func initializeFlags() {
 	flags.MarkHidden(option.BypassIPAvailabilityUponRestore)
 	option.BindEnv(Vp, option.BypassIPAvailabilityUponRestore)
 
-	flags.Bool(option.EnableCiliumEndpointSlice, false, "If set to true, CiliumEndpointSlice feature is enabled and cilium agent watch for CiliumEndpointSlice instead of CiliumEndpoint to update the IPCache.")
+	flags.Bool(option.EnableCiliumEndpointSlice, false, "Enable the CiliumEndpointSlice watcher in place of the CiliumEndpoint watcher (beta)")
 	option.BindEnv(Vp, option.EnableCiliumEndpointSlice)
 
 	flags.Bool(option.EnableK8sTerminatingEndpoint, true, "Enable auto-detect of terminating endpoint condition")
@@ -1613,26 +1613,7 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 
 	params.Lifecycle.Append(hive.Hook{
 		OnStart: func(hive.HookContext) error {
-			d, restoredEndpoints, err := newDaemon(
-				daemonCtx, cleaner,
-				params.EndpointManager,
-				params.NodeManager,
-				params.Datapath,
-				params.WGAgent,
-				params.Clientset,
-				params.SharedResources,
-				params.CertManager,
-				params.SecretManager,
-				params.LocalNodeStore,
-				params.AuthManager,
-				params.CacheStatus,
-				params.IPCache,
-				params.IdentityAllocator,
-				params.Policy,
-				params.PolicyUpdater,
-				params.EgressGatewayManager,
-				params.CNIConfigManager,
-			)
+			d, restoredEndpoints, err := newDaemon(daemonCtx, cleaner, &params)
 			if err != nil {
 				return fmt.Errorf("daemon creation failed: %w", err)
 			}

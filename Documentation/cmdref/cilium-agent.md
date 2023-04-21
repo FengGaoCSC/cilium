@@ -91,7 +91,7 @@ cilium-agent [flags]
       --enable-bpf-clock-probe                                  Enable BPF clock source probing for more efficient tick retrieval
       --enable-bpf-masquerade                                   Masquerade packets from endpoints leaving the host with BPF instead of iptables
       --enable-bpf-tproxy                                       Enable BPF-based proxy redirection, if support available
-      --enable-cilium-endpoint-slice                            If set to true, CiliumEndpointSlice feature is enabled and cilium agent watch for CiliumEndpointSlice instead of CiliumEndpoint to update the IPCache.
+      --enable-cilium-endpoint-slice                            Enable the CiliumEndpointSlice watcher in place of the CiliumEndpoint watcher (beta)
       --enable-custom-calls                                     Enable tail call hooks for custom eBPF programs
       --enable-endpoint-health-checking                         Enable connectivity health checking between virtual endpoints (default true)
       --enable-endpoint-routes                                  Use per endpoint routes instead of routing via cilium_host
@@ -233,7 +233,7 @@ cilium-agent [flags]
       --log-system-load                                         Enable periodic logging of system load
       --mesh-auth-monitor-queue-size int                        Queue size for the auth monitor (default 1024)
       --mesh-auth-mtls-listener-port int                        Port on which the Cilium Agent will perfom mTLS handshakes between other Agents
-      --mesh-auth-spiffe-trust-domain string                    The trust domain for the SPIFFE identity. (default "spiffe.cilium.io")
+      --mesh-auth-spiffe-trust-domain string                    The trust domain for the SPIFFE identity. (default "spiffe.cilium")
       --mesh-auth-spire-admin-socket string                     The path for the SPIRE admin agent Unix socket.
       --metrics strings                                         Metrics that should be enabled or disabled from the default metric list. The list is expected to be separated by a space. (+metric_foo to enable metric_foo , -metric_bar to disable metric_bar)
       --monitor-aggregation string                              Level of monitor aggregation for traces from the datapath (default "None")

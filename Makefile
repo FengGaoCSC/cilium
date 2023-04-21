@@ -107,13 +107,12 @@ generate-cov: ## Generate HTML coverage report at coverage-all.html.
 	$(QUIET) rm coverage.out.tmp
 	@rmdir ./daemon/1 ./daemon/1_backup 2> /dev/null || true
 
-integration-tests: GO_TAGS_FLAGS+=integration_tests
-integration-tests: start-kvstores ## Runs all integration tests.
+integration-tests: start-kvstores ## Run Go tests including ones that are marked as integration tests.
 	$(QUIET) $(MAKE) $(SUBMAKEOPTS) -C test/bpf/
 ifeq ($(SKIP_VET),"false")
 	$(MAKE) govet
 endif
-	$(GO_TEST) $(TEST_UNITTEST_LDFLAGS) $(TESTPKGS) $(GOTEST_BASE) $(GOTEST_COVER_OPTS) | $(GOTEST_FORMATTER)
+	INTEGRATION_TESTS=true $(GO_TEST) $(TEST_UNITTEST_LDFLAGS) $(TESTPKGS) $(GOTEST_BASE) $(GOTEST_COVER_OPTS) | $(GOTEST_FORMATTER)
 	$(MAKE) generate-cov
 	$(MAKE) stop-kvstores
 
@@ -585,8 +584,8 @@ endif
 	$(QUIET) contrib/scripts/check-fmt.sh
 	@$(ECHO_CHECK) contrib/scripts/check-log-newlines.sh
 	$(QUIET) contrib/scripts/check-log-newlines.sh
-	@$(ECHO_CHECK) contrib/scripts/check-privileged-tests-tags.sh
-	$(QUIET) contrib/scripts/check-privileged-tests-tags.sh
+	@$(ECHO_CHECK) contrib/scripts/check-test-tags.sh
+	$(QUIET) contrib/scripts/check-test-tags.sh
 	@$(ECHO_CHECK) contrib/scripts/check-assert-deep-equals.sh
 	$(QUIET) contrib/scripts/check-assert-deep-equals.sh
 	@$(ECHO_CHECK) contrib/scripts/lock-check.sh
