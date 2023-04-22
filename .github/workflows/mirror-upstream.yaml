@@ -1,0 +1,36 @@
+name: mirror-upstream
+on:
+  # Allow to run manually via GitHub UI
+  workflow_dispatch: {}
+  # Additionally run once a day at midnight
+  schedule:
+    - cron:  '0 0 * * *'
+
+jobs:
+  mirror-cilium:
+    # This job mirrors github.com/cilium/cilium to github.com/isovalent/cilium
+    if: github.repository == 'isovalent/cilium'
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f
+        with:
+          # The default token does not have permissions to create and update
+          # workflows. We need that permission because some of the commits
+          # we will push want will end up creating or updating workflow files
+          # token required scopes: repo, workflow
+          token: ${{ secrets.API_TOKEN }}
+      - name: Update mirrored branches from upstream
+        env:
+          BRANCHES: "main v1.8 v1.9 v1.10 v1.11 v1.12 v1.13"
+          UPSTREAM: "https://github.com/cilium/cilium"
+        run: |
+          git remote add upstream "$UPSTREAM"
+          for branch in $BRANCHES; do
+            echo "Synching ${UPSTREAM}@${branch}..."
+
+            # fetches the branch and all tags from upstream cilium
+            git fetch --no-write-fetch-head --tags upstream "refs/heads/${branch}:refs/remotes/upstream/${branch}"
+
+            # push the given branch and all associated tags to origin remote (this repo)
+            git push --follow-tags origin "refs/remotes/upstream/${branch}:refs/heads/${branch}"
+          done
