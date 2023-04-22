@@ -2,9 +2,9 @@ name: helm-repo-dispatch
 on:
   push:
     branches:
-      - *-ce
+      - "*-ce"
     tags:
-      - v*
+      - "v*"
 jobs:
   helm-repo-dispatch:
     runs-on: ubuntu-latest
