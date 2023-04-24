@@ -577,20 +577,20 @@ Secondary Interface %s :: IPv4: (%s, %s), IPv6: (%s, %s)`,
 				"loadBalancer.dsrDispatch":  "geneve",
 				"devices":                   fmt.Sprintf(`'{}'`), // Revert back to auto-detection after XDP.
 			})
-			testNodePortExternal(kubectl, ni, false, true, false)
+			testNodePortExternal(kubectl, ni, false, true, true)
 		})
 
-		It("Tests with TC, geneve tunnel and dsr", func() {
+		It("Tests with TC, geneve tunnel, dsr and Maglev", func() {
 			DeployCiliumOptionsAndDNS(kubectl, ciliumFilename, map[string]string{
 				"loadBalancer.acceleration": "disabled",
 				"loadBalancer.mode":         "dsr",
 				"loadBalancer.algorithm":    "maglev",
 				"maglev.tableSize":          "251",
-				"routingMode":               "native",
+				"tunnelProtocol":            "geneve",
 				"loadBalancer.dsrDispatch":  "geneve",
 				"devices":                   fmt.Sprintf(`'{}'`), // Revert back to auto-detection after XDP.
 			})
-			testNodePortExternal(kubectl, ni, false, true, false)
+			testNodePortExternal(kubectl, ni, false, true, true)
 		})
 
 		// Run on net-next and 4.19 but not on old versions, because of
