@@ -1,0 +1,201 @@
+name: CTE CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      SHA:
+        description: "SHA to use for Cilium"
+        required: true
+
+env:
+  aws_delete_vpc_version: 0.1.0
+  cilium_cli_version: v0.12.3
+  name: ${{ github.run_id }}
+  USE_GKE_GCLOUD_AUTH_PLUGIN: True
+
+# to avoid Terraform jobs from different instances
+# of this workflow interfering each other
+concurrency: ${{ github.workflow }}
+
+jobs:
+  cte-ci:
+    name: CTE CI
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # we want all CTE CI runs to run independently
+      matrix:
+        include:
+          # AWS based CTEs triggered from this workflows are currently broken.
+          # See https://github.com/isovalent/cilium/actions/runs/3303413452
+          # - CTE: 'isovalent/cute-telenor'
+          #   provider: aws
+          #   region: eu-west-2
+          #   extra_args: ''
+          # - CTE: 'isovalent/cute-sky'
+          #   provider: aws
+          #   region: eu-west-2
+          #   extra_args: ''
+          - CTE: 'isovalent/terraform-gke-generic-cute'
+            ref: b8ddd20a1b0e6e5fd08d02adbc13de253f64e055
+            provider: gcp
+            region: europe-west6
+            zone: europe-west6-a
+            extra_args: 'kvstore_type=etcd'
+          - CTE: 'isovalent/terraform-gke-generic-cute'
+            ref: b8ddd20a1b0e6e5fd08d02adbc13de253f64e055
+            provider: gcp
+            region: europe-west6
+            zone: europe-west6-a
+            extra_args: 'kvstore_type=consul'
+    steps:
+      - name: 'Randomize unique job build id'
+        id: random_job_id
+        run: echo "id=$(date --utc +'%y%m%d-%H%M%S-%N')" >> $GITHUB_OUTPUT
+
+      - name: Checkout CTE repository
+        uses: actions/checkout@2541b1294d2704b0964813337f33b291d3f8596b
+        with:
+          repository: ${{ matrix.CTE }}
+          ref: ${{ matrix.ref }}
+          token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
+
+      # We configure Git SSH to use a private access token so that `terraform
+      # get` commands ran as part of `terraform init` are able to download
+      # terraform modules from private repositories
+      - name: Configure Git
+        run: |
+          git config --global url."https://oauth2:${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}@github.com".insteadOf ssh://git@github.com
+
+      - name: Install Cilium CLI
+        run: |
+          curl -sSL --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${{ env.cilium_cli_version }}/cilium-linux-amd64.tar.gz{,.sha256sum}
+          sha256sum --check cilium-linux-amd64.tar.gz.sha256sum
+          sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
+          rm cilium-linux-amd64.tar.gz{,.sha256sum}
+          cilium version
+
+      - name: Install aws-delete-vpc
+        if: matrix.provider == 'aws'
+        run: |
+          curl -H "Authorization: token ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}" -sSL --remote-name-all https://github.com/isovalent/aws-delete-vpc/releases/download/v${{ env.aws_delete_vpc_version }}/{aws-delete-vpc_${{ env.aws_delete_vpc_version }}_linux_amd64.tar.gz,checksums.txt}
+          sha256sum --check checksums.txt
+          sudo tar xzvfC aws-delete-vpc_${{ env.aws_delete_vpc_version }}_linux_amd64.tar.gz /usr/local/bin
+          rm aws-delete-vpc_${{ env.aws_delete_vpc_version }}_linux_amd64.tar.gz checksums.txt
+
+      - name: Set up AWS CLI credentials
+        if: matrix.provider == 'aws'
+        uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838
+        with:
+          aws-access-key-id: ${{ secrets.AWS_PR_SA_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_PR_SA_KEY }}
+          aws-region: ${{ matrix.region }}
+
+      - name: Set up gcloud credentials
+        if: matrix.provider == 'gcp'
+        id: 'auth'
+        uses: 'google-github-actions/auth@dac4e13deb3640f22e3ffe758fd3f95e6e89f712'
+        with:
+          credentials_json: '${{ secrets.GCP_PR_SA_KEY }}'
+
+      - name: Set up gcloud CLI
+        if: matrix.provider == 'gcp'
+        uses: google-github-actions/setup-gcloud@877d4953d2c70a0ba7ef3290ae968eb24af233bb
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Get gcloud user unique id
+        if: matrix.provider == 'gcp'
+        run: |
+          GCLOUD_USER_UNIQUE_ID=$(gcloud iam service-accounts describe isovalent-cilium-sa@cilium-pr.iam.gserviceaccount.com --project "${{ secrets.GCP_PROJECT_ID }}" | grep uniqueId | cut -d' ' -f2 | tr -d "'")
+          echo "GCLOUD_USER_UNIQUE_ID=$GCLOUD_USER_UNIQUE_ID" >> $GITHUB_ENV
+
+      - name: Install gke-gcloud-auth-plugin
+        if: matrix.provider == 'gcp'
+        run: |
+          gcloud components install gke-gcloud-auth-plugin
+
+      - name: Display gcloud CLI info
+        if: matrix.provider == 'gcp'
+        run: |
+          gcloud info
+
+      - name: Create an SSH key pair
+        if: matrix.provider == 'gcp'
+        run: |
+          ssh-keygen -t rsa -f ${HOME}/.ssh/google_compute_engine -C ${{ env.name }} -b 2048 -N "" -q
+
+      # Use TF_VAR_* env variables idiom to avoid Terraform warnings about undeclared vars.
+      # (see https://developer.hashicorp.com/terraform/language/values/variables#values-for-undeclared-variables)
+      - name: Set optional Terraform values as env variables
+        run: |
+          TF_VAR_project_id="${{ secrets.GCP_PROJECT_ID }}"
+          echo "TF_VAR_project_id=$TF_VAR_project_id" >> $GITHUB_ENV
+
+          TF_VAR_run_id="-${{ steps.random_job_id.outputs.id }}"
+          echo "TF_VAR_run_id=$TF_VAR_run_id" >> $GITHUB_ENV
+
+          TF_VAR_zone="${{ matrix.zone }}"
+          echo "TF_VAR_zone=$TF_VAR_zone" >> $GITHUB_ENV
+
+          TF_VAR_gcloud_user_unique_id="${{ env.GCLOUD_USER_UNIQUE_ID }}"
+          echo "TF_VAR_gcloud_user_unique_id=$TF_VAR_gcloud_user_unique_id" >> $GITHUB_ENV
+
+          TF_VAR_private_key_path="${HOME}/.ssh/google_compute_engine"
+          echo "TF_VAR_private_key_path=$TF_VAR_private_key_path" >> $GITHUB_ENV
+
+          TF_VAR_public_key_path="${HOME}/.ssh/google_compute_engine.pub"
+          echo "TF_VAR_public_key_path=$TF_VAR_public_key_path" >> $GITHUB_ENV
+
+          TF_VAR_cilium_helm_extra_args="-f helm-overrides.yaml"
+          echo "TF_VAR_cilium_helm_extra_args=$TF_VAR_cilium_helm_extra_args" >> $GITHUB_ENV
+
+          if [ -n "${{ matrix.extra_args }}" ];
+          then
+            while read -d, -r pair; do
+              IFS='=' read -r key val <<<"${pair}"
+              echo "TF_VAR_${key}"="${val}" >> $GITHUB_ENV
+            done <<<"${{ matrix.extra_args }},"
+          fi
+
+      - name: Create helm overrides yaml file
+        run: |
+          cat > helm-overrides.yaml << EOF
+          cilium:
+            image:
+              repository: "quay.io/isovalent/cilium"
+              tag: "${{ inputs.SHA }}"
+            operator:
+              image:
+                repository: "quay.io/isovalent/operator"
+                suffix: ""
+                tag: "${{ inputs.SHA }}"
+          EOF
+
+      - name: Create CTE resources
+        id: create
+        run: |
+          cat > terraform.tfvars << EOF
+          cluster_name = "gh-${{ env.name }}"
+          owner = "${{ env.name }}"
+          region = "${{ matrix.region }}"
+          cilium_helm_release_name = "cilium-enterprise"
+          cilium_helm_chart = "isovalent/cilium-enterprise"
+          cilium_helm_version = "1.12.3"
+          EOF
+          make apply AUTO_APPROVE=true
+
+      - name: Run CTE tests
+        run: |
+          make test
+
+      # If the create step was run, always run the clean up step, even if create
+      # or test steps failed
+      - name: Clean up CTE resources
+        if: always() && steps.create.outcome != 'skipped'
+        run: |
+          make destroy AUTO_APPROVE=true
+
+      - name: Clean up AWS-specific CTE resources
+        if: matrix.provider == 'aws' && always() && steps.create.outcome != 'skipped'
+        run: |
+          aws-delete-vpc -cluster-name=$(terraform output -raw cluster_name)
