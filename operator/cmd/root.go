@@ -148,9 +148,14 @@ func Execute() {
 }
 
 func registerOperatorHooks(lc hive.Lifecycle, llc *LeaderLifecycle, clientset k8sClient.Clientset, shutdowner hive.Shutdowner) {
+	var wg sync.WaitGroup
 	lc.Append(hive.Hook{
 		OnStart: func(hive.HookContext) error {
-			go runOperator(llc, clientset, shutdowner)
+			wg.Add(1)
+			go func() {
+				runOperator(llc, clientset, shutdowner)
+				wg.Done()
+			}()
 			return nil
 		},
 		OnStop: func(ctx hive.HookContext) error {
@@ -158,6 +163,7 @@ func registerOperatorHooks(lc hive.Lifecycle, llc *LeaderLifecycle, clientset k8
 				return err
 			}
 			doCleanup()
+			wg.Wait()
 			return nil
 		},
 	})
@@ -225,6 +231,7 @@ func initEnv() {
 	}
 
 	option.LogRegisteredOptions(vp, log)
+	log.Infof("Cilium Operator %s", version.Version)
 }
 
 func doCleanup() {
@@ -239,8 +246,6 @@ func doCleanup() {
 // built-in leader election capbility in kubernetes.
 // See: https://github.com/kubernetes/client-go/blob/master/examples/leader-election/main.go
 func runOperator(lc *LeaderLifecycle, clientset k8sClient.Clientset, shutdowner hive.Shutdowner) {
-	log.Infof("Cilium Operator %s", version.Version)
-
 	isLeader.Store(false)
 
 	leaderElectionCtx, leaderElectionCtxCancel = context.WithCancel(context.Background())

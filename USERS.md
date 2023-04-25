@@ -551,6 +551,12 @@ Users (Alphabetically)
       U: Networking, CNI
       L: https://segmentfault.com/a/1190000040298428/en
 
+    * N: teuto.net Netzdienste GmbH
+      D: teuto.net is using cilium for their managed k8s service, t8s
+      U: CNI, CiliumNetworkPolicy, Hubble, Encryption, ...
+      L: https://teuto.net/managed-kubernetes
+      Q: @cwrau
+
     * N: T-Systems International
       D: TSI uses Cilium for it's Open Sovereign Cloud product, including as a CNI for Gardener-based Kubernetes clusters and bare-metal infrastructure managed by OnMetal.
       U: CNI, overlay network, NetworkPolicies
@@ -560,6 +566,12 @@ Users (Alphabetically)
       D: uSwitch is using Cilium in AWS for all their production clusters (self hosted k8s)
       U: ClusterMesh, CNI-Chaining (with amazon-vpc-cni-k8s)
       Q: @jirving
+
+    * N: United Cloud
+      D: United Cloud is using Cilium for all non-production and production clusters (on-premises)
+      U: CNI, Hubble, CiliumNetworkPolicy, CiliumClusterwideNetworkPolicy, ClusterMesh, Encryption
+      L: https://united.cloud
+      Q: @boris
 
     * N: Utmost Software, Inc
       D: Utmost is using Cilium in all tiers of its Kubernetes ecosystem to implement zero trust

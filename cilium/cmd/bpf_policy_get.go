@@ -14,16 +14,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/pkg/bpf"
-	"github.com/cilium/cilium/pkg/byteorder"
 	"github.com/cilium/cilium/pkg/command"
 	"github.com/cilium/cilium/pkg/common"
 	"github.com/cilium/cilium/pkg/identity"
 	identitymodel "github.com/cilium/cilium/pkg/identity/model"
 	"github.com/cilium/cilium/pkg/maps/policymap"
 	"github.com/cilium/cilium/pkg/policy/trafficdirection"
-	"github.com/cilium/cilium/pkg/u8proto"
 )
 
 var (
@@ -124,6 +121,7 @@ func formatMap(w io.Writer, statsMap []policymap.PolicyEntryDump) {
 		proxyPortTitle        = "PROXY PORT"
 		bytesTitle            = "BYTES"
 		packetsTitle          = "PACKETS"
+		prefixTitle           = "PREFIX"
 	)
 
 	labelsID := map[identity.NumericIdentity]*identity.Identity{}
@@ -141,49 +139,46 @@ func formatMap(w io.Writer, statsMap []policymap.PolicyEntryDump) {
 	}
 
 	if printIDs {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
-			policyTitle, trafficDirectionTitle, labelsIDTitle, portTitle, proxyPortTitle, bytesTitle, packetsTitle)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
+			policyTitle, trafficDirectionTitle, labelsIDTitle, portTitle, proxyPortTitle, bytesTitle, packetsTitle, prefixTitle)
 	} else {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
-			policyTitle, trafficDirectionTitle, labelsDesTitle, portTitle, proxyPortTitle, bytesTitle, packetsTitle)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n",
+			policyTitle, trafficDirectionTitle, labelsDesTitle, portTitle, proxyPortTitle, bytesTitle, packetsTitle, prefixTitle)
 	}
 	for _, stat := range statsMap {
+		prefixLen := stat.Key.Prefixlen - policymap.StaticPrefixBits
 		id := identity.NumericIdentity(stat.Key.Identity)
 		trafficDirection := trafficdirection.TrafficDirection(stat.Key.TrafficDirection)
 		trafficDirectionString := trafficDirection.String()
-		port := models.PortProtocolANY
-		if stat.Key.DestPort != 0 || stat.Key.Nexthdr == uint8(u8proto.ICMP) || stat.Key.Nexthdr == uint8(u8proto.ICMPv6) {
-			dport := byteorder.NetworkToHost16(stat.Key.DestPort)
-			proto := u8proto.U8proto(stat.Key.Nexthdr)
-			port = fmt.Sprintf("%d/%s", dport, proto.String())
-		}
+		port := stat.Key.PortProtoString()
 		proxyPort := "NONE"
-		if stat.ProxyPort != 0 {
-			proxyPort = strconv.FormatUint(uint64(byteorder.NetworkToHost16(stat.ProxyPort)), 10)
+		pp := stat.GetProxyPort()
+		if pp != 0 {
+			proxyPort = strconv.FormatUint(uint64(pp), 10)
 		}
 		var policyStr string
-		if policymap.PolicyEntryFlags(stat.Flags).IsDeny() {
+		if stat.IsDeny() {
 			policyStr = "Deny"
 		} else {
 			policyStr = "Allow"
 		}
 		if printIDs {
-			fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%d\t%d\t\n",
-				policyStr, trafficDirectionString, id, port, proxyPort, stat.Bytes, stat.Packets)
+			fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%d\t%d\t%d\t\n",
+				policyStr, trafficDirectionString, id, port, proxyPort, stat.Bytes, stat.Packets, prefixLen)
 		} else if lbls := labelsID[id]; lbls != nil && len(lbls.Labels) > 0 {
 			first := true
 			for _, lbl := range lbls.Labels.GetPrintableModel() {
 				if first {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%d\t\n",
-						policyStr, trafficDirectionString, lbl, port, proxyPort, stat.Bytes, stat.Packets)
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t\n",
+						policyStr, trafficDirectionString, lbl, port, proxyPort, stat.Bytes, stat.Packets, prefixLen)
 					first = false
 				} else {
 					fmt.Fprintf(w, "\t\t%s\t\t\t\t\t\t\n", lbl)
 				}
 			}
 		} else {
-			fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%d\t%d\t\n",
-				policyStr, trafficDirectionString, id, port, proxyPort, stat.Bytes, stat.Packets)
+			fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%d\t%d\t%d\t\n",
+				policyStr, trafficDirectionString, id, port, proxyPort, stat.Bytes, stat.Packets, prefixLen)
 		}
 	}
 }
