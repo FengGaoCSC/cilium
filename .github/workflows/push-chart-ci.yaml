@@ -31,6 +31,12 @@ jobs:
       run: |
         if [ "${{ inputs.checkout_ref }}" != "" ]; then
           echo ref=${{ inputs.checkout_ref }} >> $GITHUB_OUTPUT
+        elif [ "${{ toJson(github.event.workflow_run.pull_requests) }}" != "[]" ]; then
+          # If the workflow run was from a pull request, github.event.workflow_run.head_sha
+          # is set to the commit SHA. The subsequent checkout will be in the detached HEAD
+          # state, and "git rev-parse --abbrev-ref HEAD" will just print "HEAD". Set the ref
+          # to pull request branch name instead so that we get the correct branch name.
+          echo ref=${{ github.event.workflow_run.pull_requests[0].base.ref }} >> $GITHUB_OUTPUT
         elif [ "${{ github.event.workflow_run.head_sha }}" != "" ]; then
           echo ref=${{ github.event.workflow_run.head_sha }} >> $GITHUB_OUTPUT
         else
