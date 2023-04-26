@@ -110,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-    - name: Checkout GitHub master
+    - name: Checkout default branch
       uses: actions/checkout@24cb9080177205b6e8c946b17badbe402adc938f # v3.4.0
       with:
         ref: ${{ github.event.repository.default_branch }}
@@ -188,12 +188,6 @@ jobs:
         state: pending
         target_url: ${{ env.check_url }}
 
-    - name: Checkout code
-      uses: actions/checkout@24cb9080177205b6e8c946b17badbe402adc938f # v3.4.0
-      with:
-        ref: ${{ steps.vars.outputs.sha }}
-        persist-credentials: false
-
     - name: Install Cilium CLI
       run: |
         curl -sSL --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${{ env.cilium_cli_version }}/cilium-linux-amd64.tar.gz{,.sha256sum}
@@ -241,6 +235,12 @@ jobs:
         for image in cilium-ci operator-generic-ci hubble-relay-ci clustermesh-apiserver-ci ; do
           until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.vars.outputs.sha }} &> /dev/null; do sleep 45s; done
         done
+
+    - name: Checkout code
+      uses: actions/checkout@24cb9080177205b6e8c946b17badbe402adc938f # v3.4.0
+      with:
+        ref: ${{ steps.vars.outputs.sha }}
+        persist-credentials: false
 
     - name: Install Cilium in cluster1
       run: |
