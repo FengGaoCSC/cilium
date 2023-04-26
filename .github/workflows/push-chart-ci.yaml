@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       checkout_ref:
-        description: 'Git ref to build'
+        description: 'Git ref to build. This needs to be a full commit SHA.'
         required: true
 
 permissions:
@@ -43,6 +43,17 @@ jobs:
           echo "Invalid event type"
           exit 1
         fi
+    - name: Get image tag
+      id: get-tag
+      run: |
+        if [ "${{ inputs.checkout_ref }}" != "" ]; then
+          echo tag=${{ inputs.checkout_ref }} >> $GITHUB_OUTPUT
+        elif [ "${{ github.event.workflow_run.head_sha }}" != "" ]; then
+          echo tag=${{ github.event.workflow_run.head_sha }} >> $GITHUB_OUTPUT
+        else
+          echo "Invalid event type"
+          exit 1
+        fi
     - name: Checkout Source Code
       uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
       with:
@@ -63,16 +74,16 @@ jobs:
           {
 
             "image.repository": "quay.io/isovalent-dev/cilium-ci",
-            "image.tag": "${{ steps.get-ref.outputs.ref }}",
+            "image.tag": "${{ steps.get-tag.outputs.tag }}",
             "preflight.image.repository": "quay.io/isovalent-dev/cilium-ci",
-            "preflight.image.tag": "${{ steps.get-ref.outputs.ref }}",
+            "preflight.image.tag": "${{ steps.get-tag.outputs.tag }}",
             "operator.image.repository": "quay.io/isovalent-dev/operator",
             "operator.image.suffix": "-ci",
-            "operator.image.tag": "${{ steps.get-ref.outputs.ref }}",
+            "operator.image.tag": "${{ steps.get-tag.outputs.tag }}",
             "hubble.relay.image.repository": "quay.io/isovalent-dev/hubble-relay-ci",
-            "hubble.relay.image.tag": "${{ steps.get-ref.outputs.ref }}",
+            "hubble.relay.image.tag": "${{ steps.get-tag.outputs.tag }}",
             "clustermesh.apiserver.image.repository": "quay.io/isovalent-dev/clustermesh-apiserver-ci",
-            "clustermesh.apiserver.image.tag": "${{ steps.get-ref.outputs.ref }}"
+            "clustermesh.apiserver.image.tag": "${{ steps.get-tag.outputs.tag }}"
           }
         registry: quay.io
         registry_namespace: isovalent-charts-dev
