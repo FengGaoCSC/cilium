@@ -31,8 +31,8 @@ jobs:
       run: |
         if [ "${{ inputs.checkout_ref }}" != "" ]; then
           echo ref=${{ inputs.checkout_ref }} >> $GITHUB_OUTPUT
-        elif [ "${{ github.event.workflow_run.head_branch }}" != "" ]; then
-          echo ref=${{ github.event.workflow_run.head_branch }} >> $GITHUB_OUTPUT
+        elif [ "${{ github.event.workflow_run.head_sha }}" != "" ]; then
+          echo ref=${{ github.event.workflow_run.head_sha }} >> $GITHUB_OUTPUT
         else
           echo "Invalid event type"
           exit 1
