@@ -40,14 +40,17 @@ jobs:
       run: |
         if [ "${{ inputs.checkout_ref }}" != "" ]; then
           echo ref=${{ inputs.checkout_ref }} >> $GITHUB_OUTPUT
+          echo sha=${{ inputs.checkout_ref }} >> $GITHUB_OUTPUT
         elif [ "${{ toJson(github.event.workflow_run.pull_requests) }}" != "[]" ]; then
           # If the workflow run was from a pull request, github.event.workflow_run.head_sha
           # is set to the commit SHA. The subsequent checkout will be in the detached HEAD
           # state, and "git rev-parse --abbrev-ref HEAD" will just print "HEAD". Set the ref
           # to pull request branch name instead so that we get the correct branch name.
           echo ref=${{ github.event.workflow_run.pull_requests[0].head.ref }} >> $GITHUB_OUTPUT
+          echo sha=${{ github.event.workflow_run.head_sha }} >> $GITHUB_OUTPUT
         elif [ "${{ github.event.workflow_run.head_sha }}" != "" ]; then
           echo ref=${{ github.event.workflow_run.head_sha }} >> $GITHUB_OUTPUT
+          echo sha=${{ github.event.workflow_run.head_sha }} >> $GITHUB_OUTPUT
         else
           echo "Invalid event type"
           exit 1
@@ -57,27 +60,17 @@ jobs:
       uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
       with:
         authToken: ${{ secrets.GITHUB_TOKEN }}
-        sha: ${{ steps.vars.outputs.sha }}
+        sha: ${{ steps.get-ref.outputs.sha }}
         context: ${{ github.workflow }}
         description: Helm push in progress
         state: pending
         target_url: ${{ env.check_url }}
 
-    - name: Get image tag
-      id: get-tag
-      run: |
-        if [ "${{ inputs.checkout_ref }}" != "" ]; then
-          echo tag=${{ inputs.checkout_ref }} >> $GITHUB_OUTPUT
-        elif [ "${{ github.event.workflow_run.head_sha }}" != "" ]; then
-          echo tag=${{ github.event.workflow_run.head_sha }} >> $GITHUB_OUTPUT
-        else
-          echo "Invalid event type"
-          exit 1
-        fi
     - name: Checkout Source Code
       uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
       with:
         persist-credentials: false
+        # checkout ref not SHA so we can get useful branch names (see previous comments)
         ref: ${{ steps.get-ref.outputs.ref }}
         # required for git describe
         fetch-depth: 0
@@ -94,16 +87,16 @@ jobs:
           {
 
             "image.repository": "quay.io/isovalent-dev/cilium-ci",
-            "image.tag": "${{ steps.get-tag.outputs.tag }}",
+            "image.tag": "${{ steps.get-ref.outputs.sha }}",
             "preflight.image.repository": "quay.io/isovalent-dev/cilium-ci",
-            "preflight.image.tag": "${{ steps.get-tag.outputs.tag }}",
+            "preflight.image.tag": "${{ steps.get-ref.outputs.sha }}",
             "operator.image.repository": "quay.io/isovalent-dev/operator",
             "operator.image.suffix": "-ci",
-            "operator.image.tag": "${{ steps.get-tag.outputs.tag }}",
+            "operator.image.tag": "${{ steps.get-ref.outputs.sha }}",
             "hubble.relay.image.repository": "quay.io/isovalent-dev/hubble-relay-ci",
-            "hubble.relay.image.tag": "${{ steps.get-tag.outputs.tag }}",
+            "hubble.relay.image.tag": "${{ steps.get-ref.outputs.sha }}",
             "clustermesh.apiserver.image.repository": "quay.io/isovalent-dev/clustermesh-apiserver-ci",
-            "clustermesh.apiserver.image.tag": "${{ steps.get-tag.outputs.tag }}"
+            "clustermesh.apiserver.image.tag": "${{ steps.get-ref.outputs.sha }}"
           }
         registry: quay.io
         registry_namespace: isovalent-charts-dev
@@ -115,7 +108,7 @@ jobs:
       uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
       with:
         authToken: ${{ secrets.GITHUB_TOKEN }}
-        sha: ${{ steps.vars.outputs.sha }}
+        sha: ${{ steps.get-ref.outputs.sha }}
         context: ${{ github.workflow }}
         description: Helm push successful
         state: success
@@ -126,7 +119,7 @@ jobs:
       uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
       with:
         authToken: ${{ secrets.GITHUB_TOKEN }}
-        sha: ${{ steps.vars.outputs.sha }}
+        sha: ${{ steps.get-ref.outputs.sha }}
         context: ${{ github.workflow }}
         description: Helm push failed
         state: failure
@@ -137,7 +130,7 @@ jobs:
       uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
       with:
         authToken: ${{ secrets.GITHUB_TOKEN }}
-        sha: ${{ steps.vars.outputs.sha }}
+        sha: ${{ steps.get-ref.outputs.sha }}
         context: ${{ github.workflow }}
         description: Helm push cancelled
         state: error
