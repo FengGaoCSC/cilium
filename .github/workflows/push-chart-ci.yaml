@@ -16,6 +16,8 @@ on:
 permissions:
   # To be able to access the repository with `actions/checkout`
   contents: read
+  # So that we can update github commit status
+  statuses: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.after }}
@@ -26,6 +28,9 @@ jobs:
     runs-on: ubuntu-20.04
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.head_branch != '' }}
     steps:
+    - name: Update commit status
+      uses: haya14busa/action-workflow_run-status@v1
+      if: ${{ github.event_name == 'workflow_run' }}
     - name: Get triggering event ref
       id: get-ref
       run: |
