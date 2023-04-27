@@ -13,13 +13,22 @@ on:
         description: 'Git ref to build. This needs to be a full commit SHA.'
         required: true
 
+# By specifying the access of one of the scopes, all of those that are not
+# specified are set to 'none'.
 permissions:
-  # To be able to access the repository with `actions/checkout`
+  # To be able to access the repository with actions/checkout
   contents: read
+  # To allow retrieving information from the PR API
+  pull-requests: read
+  # So that Sibz/github-status-action can write into the status API
+  statuses: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.after }}
   cancel-in-progress: true
+
+env:
+  check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   push-charts:
@@ -43,6 +52,17 @@ jobs:
           echo "Invalid event type"
           exit 1
         fi
+
+    - name: Set commit status to pending
+      uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
+      with:
+        authToken: ${{ secrets.GITHUB_TOKEN }}
+        sha: ${{ steps.vars.outputs.sha }}
+        context: ${{ github.workflow }}
+        description: Helm push in progress
+        state: pending
+        target_url: ${{ env.check_url }}
+
     - name: Get image tag
       id: get-tag
       run: |
@@ -89,3 +109,36 @@ jobs:
         registry_namespace: isovalent-charts-dev
         registry_username: ${{ secrets.QUAY_ISOVALENT_CHARTS_DEV_USERNAME }}
         registry_password: ${{ secrets.QUAY_ISOVALENT_CHARTS_DEV_PASSWORD }}
+
+    - name: Set commit status to success
+      if: ${{ success() }}
+      uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
+      with:
+        authToken: ${{ secrets.GITHUB_TOKEN }}
+        sha: ${{ steps.vars.outputs.sha }}
+        context: ${{ github.workflow }}
+        description: Helm push successful
+        state: success
+        target_url: ${{ env.check_url }}
+
+    - name: Set commit status to failure
+      if: ${{ failure() }}
+      uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
+      with:
+        authToken: ${{ secrets.GITHUB_TOKEN }}
+        sha: ${{ steps.vars.outputs.sha }}
+        context: ${{ github.workflow }}
+        description: Helm push failed
+        state: failure
+        target_url: ${{ env.check_url }}
+
+    - name: Set commit status to cancelled
+      if: ${{ cancelled() }}
+      uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
+      with:
+        authToken: ${{ secrets.GITHUB_TOKEN }}
+        sha: ${{ steps.vars.outputs.sha }}
+        context: ${{ github.workflow }}
+        description: Helm push cancelled
+        state: error
+        target_url: ${{ env.check_url }}
