@@ -13,6 +13,11 @@ on:
         description: 'Git ref to build. This needs to be a full commit SHA.'
         required: true
 
+  # To test: uncomment this and update it to your branch name and push to the branch.
+  # push:
+  #   branches:
+  #     - ft/main-ce/<your_branch>
+
 # By specifying the access of one of the scopes, all of those that are not
 # specified are set to 'none'.
 permissions:
@@ -33,24 +38,21 @@ env:
 jobs:
   push-charts:
     runs-on: ubuntu-20.04
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.head_branch != '' }}
+    # we also check for push events in case someone is testing the workflow by uncommenting the push trigger above.
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.head_branch != '' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     steps:
     - name: Get triggering event ref
       id: get-ref
       run: |
-        if [ "${{ inputs.checkout_ref }}" != "" ]; then
-          echo ref=${{ inputs.checkout_ref }} >> $GITHUB_OUTPUT
-          echo sha=${{ inputs.checkout_ref }} >> $GITHUB_OUTPUT
-        elif [ "${{ toJson(github.event.workflow_run.pull_requests) }}" != "[]" ]; then
-          # If the workflow run was from a pull request, github.event.workflow_run.head_sha
-          # is set to the commit SHA. The subsequent checkout will be in the detached HEAD
-          # state, and "git rev-parse --abbrev-ref HEAD" will just print "HEAD". Set the ref
-          # to pull request branch name instead so that we get the correct branch name.
-          echo ref=${{ github.event.workflow_run.pull_requests[0].head.ref }} >> $GITHUB_OUTPUT
-          echo sha=${{ github.event.workflow_run.head_sha }} >> $GITHUB_OUTPUT
-        elif [ "${{ github.event.workflow_run.head_sha }}" != "" ]; then
-          echo ref=${{ github.event.workflow_run.head_sha }} >> $GITHUB_OUTPUT
-          echo sha=${{ github.event.workflow_run.head_sha }} >> $GITHUB_OUTPUT
+        if [[ "${{ github.event_name }}" == "workflow_dispatch"  ]]; then
+          echo ref="${{ inputs.checkout_ref }}" >> $GITHUB_OUTPUT
+          echo sha="${{ inputs.checkout_ref }}" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+          echo ref="${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
+          echo sha="${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event_name }}" == "push" ]]; then
+          echo ref="${{ github.ref }}" >> $GITHUB_OUTPUT
+          echo sha="${{ github.sha }}" >> $GITHUB_OUTPUT
         else
           echo "Invalid event type"
           exit 1
