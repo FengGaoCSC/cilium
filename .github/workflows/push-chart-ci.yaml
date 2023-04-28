@@ -1,4 +1,4 @@
-name: Chart CI Build
+name: Chart CI Push
 
 on:
   # run after the image build completes
@@ -79,8 +79,10 @@ jobs:
     - id: get-version
       run: |
         echo "chart_version=$(./contrib/scripts/print-chart-version.sh)" | tee -a $GITHUB_OUTPUT
+    - name: Set Environment Variables
+      uses: ./.github/actions/set-env-variables
     - name: Push charts
-      uses: isovalent/reusable-workflows/.github/actions/push-helm-chart@v0.2.0
+      uses: cilium/reusable-workflows/.github/actions/push-helm-chart@v0.1.0
       with:
         name: cilium
         path: install/kubernetes/cilium
@@ -88,22 +90,28 @@ jobs:
         values_file_changes: |
           {
 
-            "image.repository": "quay.io/isovalent-dev/cilium-ci",
+            "image.repository": "quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci",
             "image.tag": "${{ steps.get-ref.outputs.sha }}",
-            "preflight.image.repository": "quay.io/isovalent-dev/cilium-ci",
+            "preflight.image.repository": "quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci",
             "preflight.image.tag": "${{ steps.get-ref.outputs.sha }}",
-            "operator.image.repository": "quay.io/isovalent-dev/operator",
+            "operator.image.repository": "quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/operator",
             "operator.image.suffix": "-ci",
             "operator.image.tag": "${{ steps.get-ref.outputs.sha }}",
-            "hubble.relay.image.repository": "quay.io/isovalent-dev/hubble-relay-ci",
+            "hubble.relay.image.repository": "quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/hubble-relay-ci",
             "hubble.relay.image.tag": "${{ steps.get-ref.outputs.sha }}",
-            "clustermesh.apiserver.image.repository": "quay.io/isovalent-dev/clustermesh-apiserver-ci",
+            "clustermesh.apiserver.image.repository": "quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/clustermesh-apiserver-ci",
             "clustermesh.apiserver.image.tag": "${{ steps.get-ref.outputs.sha }}"
           }
         registry: quay.io
-        registry_namespace: isovalent-charts-dev
-        registry_username: ${{ secrets.QUAY_ISOVALENT_CHARTS_DEV_USERNAME }}
-        registry_password: ${{ secrets.QUAY_ISOVALENT_CHARTS_DEV_PASSWORD }}
+        registry_namespace: ${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}
+        registry_username: ${{ secrets.QUAY_CHARTS_DEV_USERNAME }}
+        registry_password: ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }}
+
+    - name: Print helm command
+      run: |
+        echo "Example commands:"
+        echo helm template -n kube-system oci://quay.io/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium --version ${{ steps.get-version.outputs.chart_version }}
+        echo helm install cilium -n kube-system  oci://quay.io/${{ env.QUAY_CHARTS_ORGANIZATION_DEV }}/cilium --version ${{ steps.get-version.outputs.chart_version }}
 
     - name: Set commit status to success
       if: ${{ success() }}
