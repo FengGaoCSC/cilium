@@ -20,7 +20,7 @@ on:
   #   will disappear from the PR checks: please provide a direct link to the
   #   successful workflow run (can be found from Actions tab) in a comment.
   #
-  # pull_request: {}
+  pull_request: {}
   ###
 
 # By specifying the access of one of the scopes, all of those that are not
@@ -397,17 +397,13 @@ jobs:
           ref: ${{ needs.setup-report.outputs.sha }}
           persist-credentials: false
 
-      - name: Install cilium-cli
-        shell: bash
-        run: |
-          curl -sSL --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${{ env.cilium_cli_version }}/cilium-linux-amd64.tar.gz{,.sha256sum}
-          sha256sum --check cilium-linux-amd64.tar.gz.sha256sum
-          mkdir cilium-cli-tmp
-          tar xzvfC cilium-linux-amd64.tar.gz cilium-cli-tmp
-          mv ./cilium-cli-tmp/cilium cilium-cli
-          rm cilium-linux-amd64.tar.gz{,.sha256sum}
-          rmdir cilium-cli-tmp
-          ./cilium-cli version
+      - name: Install Cilium CLI
+        uses: cilium/cilium-cli@c57db9cd6c0301f5901d68d96db2dfa7f1b455f4
+        with:
+          release-version: ${{ env.CILIUM_CLI_RELEASE_VERSION }}
+          ci-version: ${{ env.CILIUM_CLI_CI_VERSION }}
+          binary-name: cilium-cli
+          binary-dir: ./
 
       - name: Provision LVH VMs
         uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3

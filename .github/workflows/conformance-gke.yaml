@@ -66,8 +66,6 @@ concurrency:
 env:
   clusterName: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ github.run_id }}
   zone: us-west2-a
-  # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.13.2
   check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
   k8s_version: 1.24
@@ -198,12 +196,10 @@ jobs:
           persist-credentials: false
 
       - name: Install Cilium CLI
-        run: |
-          curl -sSL --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${{ env.cilium_cli_version }}/cilium-linux-amd64.tar.gz{,.sha256sum}
-          sha256sum --check cilium-linux-amd64.tar.gz.sha256sum
-          sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
-          rm cilium-linux-amd64.tar.gz{,.sha256sum}
-          cilium version
+        uses: cilium/cilium-cli@c57db9cd6c0301f5901d68d96db2dfa7f1b455f4
+        with:
+          release-version: ${{ env.CILIUM_CLI_RELEASE_VERSION }}
+          ci-version: ${{ env.CILIUM_CLI_CI_VERSION }}
 
       - name: Set up gcloud credentials
         id: 'auth'
