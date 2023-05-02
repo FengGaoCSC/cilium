@@ -1,5 +1,13 @@
 name: Set environment variables
 description: Set environment variables
+inputs:
+  cilium-cli-release-vsn:
+    description:  "Cilium CLI released version"
+    # renovate: datasource=github-releases depName=cilium/cilium-cli
+    default: "v0.13.2"
+  cilium-cli-ci-vsn:
+    description:  "Cilium CLI CI version (unset 'cilium-cli-release-vsn' to make it used)"
+    default: ""
 runs:
   using: composite
   steps:
@@ -7,3 +15,5 @@ runs:
       run: |
         echo "QUAY_ORGANIZATION=cilium" >> $GITHUB_ENV
         echo "QUAY_ORGANIZATION_DEV=cilium" >> $GITHUB_ENV
+        echo "CILIUM_CLI_RELEASE_VERSION=${{ inputs.cilium-cli-release-vsn }}" >> $GITHUB_ENV
+        echo "CILIUM_CLI_CI_VERSION=${{ inputs.cilium-cli-ci-vsn }}" >> $GITHUB_ENV
