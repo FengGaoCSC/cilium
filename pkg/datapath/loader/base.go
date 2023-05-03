@@ -15,7 +15,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/command/exec"
 	"github.com/cilium/cilium/pkg/datapath/alignchecker"
 	"github.com/cilium/cilium/pkg/datapath/connector"
@@ -228,7 +227,6 @@ func (l *Loader) reinitializeOverlay(ctx context.Context, encapProto string) err
 		fmt.Sprintf("-DSECLABEL=%d", identity.ReservedIdentityWorld),
 		fmt.Sprintf("-DNODE_MAC={.addr=%s}", mac.CArrayString(link.Attrs().HardwareAddr)),
 		fmt.Sprintf("-DCALLS_MAP=cilium_calls_overlay_%d", identity.ReservedIdentityWorld),
-		"-DFROM_ENCAP_DEV=1",
 	}
 	if option.Config.EnableNodePort {
 		opts = append(opts, "-DDISABLE_LOOPBACK_LB")
@@ -443,7 +441,7 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 
 	prog := filepath.Join(option.Config.BpfDir, "init.sh")
 	cmd := exec.CommandContext(ctx, prog, args...)
-	cmd.Env = bpf.Environment()
+	cmd.Env = os.Environ()
 	if _, err := cmd.CombinedOutput(log, true); err != nil {
 		return err
 	}
