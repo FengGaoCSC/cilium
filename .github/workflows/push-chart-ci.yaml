@@ -44,7 +44,7 @@ jobs:
     - name: Get triggering event ref
       id: get-ref
       run: |
-        echo repository="${{ github.event.repository.organization }}/${{ github.event.repository.name }}" >> $GITHUB_OUTPUT
+        echo repository="${{ github.event.repository.full_name }}" >> $GITHUB_OUTPUT
         if [[ "${{ github.event_name }}" == "workflow_dispatch"  ]]; then
           echo ref="${{ inputs.checkout_ref }}" >> $GITHUB_OUTPUT
           echo sha="${{ inputs.checkout_ref }}" >> $GITHUB_OUTPUT
