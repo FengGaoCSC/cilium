@@ -545,6 +545,10 @@ const (
 	// CNIChainingMode configures which CNI plugin Cilium is chained with.
 	CNIChainingMode = "cni-chaining-mode"
 
+	// CNIChainingTarget is the name of a CNI network in to which we should
+	// insert our plugin configuration
+	CNIChainingTarget = "cni-chaining-target"
+
 	// AuthMapEntriesMin defines the minimum auth map limit.
 	AuthMapEntriesMin = 1 << 8
 
@@ -1511,10 +1515,6 @@ type DaemonConfig struct {
 	// SockRevNatEntries is the maximum number of sock rev nat mappings
 	// allowed in the BPF rev nat table
 	SockRevNatEntries int
-
-	// EgressGatewayPolicyMapEntries is the maximum number of entries
-	// allowed in the BPF egress gateway policy map.
-	EgressGatewayPolicyMapEntries int
 
 	// DisableCiliumEndpointCRD disables the use of CiliumEndpoint CRD
 	DisableCiliumEndpointCRD bool
@@ -3000,7 +3000,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnableBPFClockProbe = vp.GetBool(EnableBPFClockProbe)
 	c.EnableIPMasqAgent = vp.GetBool(EnableIPMasqAgent)
 	c.EnableIPv4EgressGateway = vp.GetBool(EnableIPv4EgressGateway)
-	c.EgressGatewayPolicyMapEntries = vp.GetInt(EgressGatewayPolicyMapEntriesName)
 	c.EnableEnvoyConfig = vp.GetBool(EnableEnvoyConfig)
 	c.EnableIngressController = vp.GetBool(EnableIngressController)
 	c.EnableGatewayAPI = vp.GetBool(EnableGatewayAPI)

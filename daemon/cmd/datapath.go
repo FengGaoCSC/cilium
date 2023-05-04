@@ -29,7 +29,6 @@ import (
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
-	"github.com/cilium/cilium/pkg/maps/egressmap"
 	"github.com/cilium/cilium/pkg/maps/eventsmap"
 	"github.com/cilium/cilium/pkg/maps/fragmap"
 	ipcachemap "github.com/cilium/cilium/pkg/maps/ipcache"
@@ -252,7 +251,6 @@ func (d *Daemon) syncHostIPs() error {
 	}
 
 	for _, ipIDPair := range specialIdentities {
-		hostKey := node.GetIPsecKeyIdentity()
 		isHost := ipIDPair.ID == identity.ReservedIdentityHost
 		if isHost {
 			added, err := lxcmap.SyncHostEntry(ipIDPair.IP)
@@ -272,7 +270,7 @@ func (d *Daemon) syncHostIPs() error {
 		// This upsert will fail with ErrOverwrite continuously as long as the
 		// EP / CN watcher have found an apiserver IP and upserted it into the
 		// ipcache. Until then, it is expected to succeed.
-		d.ipcache.Upsert(ipIDPair.PrefixString(), nil, hostKey, nil, ipcache.Identity{
+		d.ipcache.Upsert(ipIDPair.PrefixString(), nil, 0, nil, ipcache.Identity{
 			ID:     ipIDPair.ID,
 			Source: d.sourceByIP(ipIDPair.IP, source.Local),
 		})
@@ -359,12 +357,6 @@ func (d *Daemon) initMaps() error {
 
 	if option.Config.TunnelingEnabled() {
 		if _, err := tunnel.TunnelMap().OpenOrCreate(); err != nil {
-			return err
-		}
-	}
-
-	if option.Config.EnableIPv4EgressGateway {
-		if err := egressmap.InitEgressMaps(option.Config.EgressGatewayPolicyMapEntries); err != nil {
 			return err
 		}
 	}
