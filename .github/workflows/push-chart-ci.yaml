@@ -41,6 +41,9 @@ jobs:
     # we also check for push events in case someone is testing the workflow by uncommenting the push trigger above.
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     steps:
+    - name: Echo event
+      run: |
+        echo '${{ toJSON(github) }}'
     - name: Get triggering event ref
       id: get-ref
       run: |
