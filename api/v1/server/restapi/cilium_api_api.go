@@ -27,6 +27,7 @@ import (
 	"github.com/cilium/cilium/api/v1/server/restapi/endpoint"
 	"github.com/cilium/cilium/api/v1/server/restapi/ipam"
 	"github.com/cilium/cilium/api/v1/server/restapi/metrics"
+	"github.com/cilium/cilium/api/v1/server/restapi/network"
 	"github.com/cilium/cilium/api/v1/server/restapi/policy"
 	"github.com/cilium/cilium/api/v1/server/restapi/prefilter"
 	"github.com/cilium/cilium/api/v1/server/restapi/recorder"
@@ -152,6 +153,9 @@ func NewCiliumAPIAPI(spec *loads.Document) *CiliumAPIAPI {
 		}),
 		MetricsGetMetricsHandler: metrics.GetMetricsHandlerFunc(func(params metrics.GetMetricsParams) middleware.Responder {
 			return middleware.NotImplemented("operation metrics.GetMetrics has not yet been implemented")
+		}),
+		NetworkGetNetworkAttachmentHandler: network.GetNetworkAttachmentHandlerFunc(func(params network.GetNetworkAttachmentParams) middleware.Responder {
+			return middleware.NotImplemented("operation network.GetNetworkAttachment has not yet been implemented")
 		}),
 		DaemonGetNodeIdsHandler: daemon.GetNodeIdsHandlerFunc(func(params daemon.GetNodeIdsParams) middleware.Responder {
 			return middleware.NotImplemented("operation daemon.GetNodeIds has not yet been implemented")
@@ -319,6 +323,8 @@ type CiliumAPIAPI struct {
 	DaemonGetMapNameEventsHandler daemon.GetMapNameEventsHandler
 	// MetricsGetMetricsHandler sets the operation handler for the get metrics operation
 	MetricsGetMetricsHandler metrics.GetMetricsHandler
+	// NetworkGetNetworkAttachmentHandler sets the operation handler for the get network attachment operation
+	NetworkGetNetworkAttachmentHandler network.GetNetworkAttachmentHandler
 	// DaemonGetNodeIdsHandler sets the operation handler for the get node ids operation
 	DaemonGetNodeIdsHandler daemon.GetNodeIdsHandler
 	// PolicyGetPolicyHandler sets the operation handler for the get policy operation
@@ -536,6 +542,9 @@ func (o *CiliumAPIAPI) Validate() error {
 	}
 	if o.MetricsGetMetricsHandler == nil {
 		unregistered = append(unregistered, "metrics.GetMetricsHandler")
+	}
+	if o.NetworkGetNetworkAttachmentHandler == nil {
+		unregistered = append(unregistered, "network.GetNetworkAttachmentHandler")
 	}
 	if o.DaemonGetNodeIdsHandler == nil {
 		unregistered = append(unregistered, "daemon.GetNodeIdsHandler")
@@ -818,6 +827,10 @@ func (o *CiliumAPIAPI) initHandlerCache() {
 		o.handlers["GET"] = make(map[string]http.Handler)
 	}
 	o.handlers["GET"]["/metrics"] = metrics.NewGetMetrics(o.context, o.MetricsGetMetricsHandler)
+	if o.handlers["GET"] == nil {
+		o.handlers["GET"] = make(map[string]http.Handler)
+	}
+	o.handlers["GET"]["/network/attachment"] = network.NewGetNetworkAttachment(o.context, o.NetworkGetNetworkAttachmentHandler)
 	if o.handlers["GET"] == nil {
 		o.handlers["GET"] = make(map[string]http.Handler)
 	}
