@@ -773,14 +773,24 @@ int tail_nodeport_nat_ingress_ipv6(struct __ctx_buff *ctx)
 	/* ext_err is NULL because errors don't survive the tailcall anyway. */
 	ret = snat_v6_rev_nat(ctx, &target, NULL);
 	if (IS_ERR(ret)) {
-		/* In case of no mapping, recircle back to main path. SNAT is very
-		 * expensive in terms of instructions (since we don't have BPF to
-		 * BPF calls as we use tail calls) and complexity, hence this is
-		 * done inside a tail call here.
-		 */
-		ctx_skip_nodeport_set(ctx);
-		ep_tail_call(ctx, CILIUM_CALL_IPV6_FROM_NETDEV);
-		ret = DROP_MISSED_TAIL_CALL;
+		if (ret == NAT_PUNT_TO_STACK ||
+		    /* DROP_NAT_NO_MAPPING is unwanted behavior in a
+		     * rev-SNAT context. Let's continue to passing it
+		     * up to the host and revisiting this later if
+		     * needed.
+		     */
+		    ret == DROP_NAT_NO_MAPPING) {
+			/* In case of no mapping, recircle back to
+			 * main path. SNAT is very expensive in terms
+			 * of instructions and
+			 * complexity. Consequently, this is done
+			 * inside a tail call here (because we don't
+			 * have BPF to BPF calls).
+			 */
+			ctx_skip_nodeport_set(ctx);
+			ep_tail_call(ctx, CILIUM_CALL_IPV6_FROM_NETDEV);
+			ret = DROP_MISSED_TAIL_CALL;
+		}
 		goto drop_err;
 	}
 
@@ -1029,7 +1039,7 @@ redo:
 		case CT_REOPENED:
 		case CT_ESTABLISHED:
 			if (unlikely(ct_state.rev_nat_index !=
-				     svc->rev_nat_index))
+				     ct_state_new.rev_nat_index))
 				goto redo;
 			break;
 		default:
@@ -1977,14 +1987,24 @@ int tail_nodeport_nat_ingress_ipv4(struct __ctx_buff *ctx)
 	/* ext_err is NULL because errors don't survive the tailcall anyway. */
 	ret = snat_v4_rev_nat(ctx, &target, NULL);
 	if (IS_ERR(ret)) {
-		/* In case of no mapping, recircle back to main path. SNAT is very
-		 * expensive in terms of instructions (since we don't have BPF to
-		 * BPF calls as we use tail calls) and complexity, hence this is
-		 * done inside a tail call here.
-		 */
-		ctx_skip_nodeport_set(ctx);
-		ep_tail_call(ctx, CILIUM_CALL_IPV4_FROM_NETDEV);
-		ret = DROP_MISSED_TAIL_CALL;
+		if (ret == NAT_PUNT_TO_STACK ||
+		    /* DROP_NAT_NO_MAPPING is unwanted behavior in a
+		     * rev-SNAT context. Let's continue to passing it up
+		     * to the host and revisiting this later if
+		     * needed.
+		     */
+		    ret == DROP_NAT_NO_MAPPING) {
+			/* In case of no mapping, recircle back to
+			 * main path. SNAT is very expensive in terms
+			 * of instructions and
+			 * complexity. Consequently, this is done
+			 * inside a tail call here (because we don't
+			 * have BPF to BPF calls).
+			 */
+			ctx_skip_nodeport_set(ctx);
+			ep_tail_call(ctx, CILIUM_CALL_IPV4_FROM_NETDEV);
+			ret = DROP_MISSED_TAIL_CALL;
+		}
 		goto drop_err;
 	}
 
@@ -2281,7 +2301,7 @@ redo:
 			 * belongs to a flow which target a different svc.
 			 */
 			if (unlikely(ct_state.rev_nat_index !=
-				     svc->rev_nat_index))
+				     ct_state_new.rev_nat_index))
 				goto redo;
 			break;
 		default:

@@ -935,13 +935,14 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 			goto drop_no_service;
 		state->backend_id = backend_id;
 		ct_update_backend_id(map, tuple, state);
+		state->rev_nat_index = svc->rev_nat_index;
+		ct_update_rev_nat_index(map, tuple, state);
 	}
 update_state:
 	/* Restore flags so that SERVICE flag is only used in used when the
 	 * service lookup happens and future lookups use EGRESS or INGRESS.
 	 */
 	tuple->flags = flags;
-	state->rev_nat_index = svc->rev_nat_index;
 #ifdef ENABLE_SESSION_AFFINITY
 	if (lb6_svc_is_affinity(svc))
 		lb6_update_affinity_by_addr(svc, &client_id,
@@ -1619,6 +1620,8 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 			goto drop_no_service;
 		state->backend_id = backend_id;
 		ct_update_backend_id(map, tuple, state);
+		state->rev_nat_index = svc->rev_nat_index;
+		ct_update_rev_nat_index(map, tuple, state);
 	}
 update_state:
 #ifdef ENABLE_CLUSTER_AWARE_ADDRESSING
@@ -1629,7 +1632,6 @@ update_state:
 	 * service lookup happens and future lookups use EGRESS or INGRESS.
 	 */
 	tuple->flags = flags;
-	state->rev_nat_index = svc->rev_nat_index;
 	state->addr = backend->address;
 #ifdef ENABLE_SESSION_AFFINITY
 	if (lb4_svc_is_affinity(svc))
