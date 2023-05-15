@@ -26,6 +26,7 @@ cilium-agent hive [flags]
       --enable-k8s-api-discovery                                  Enable discovery of Kubernetes API groups and resources with the discovery API
       --enable-l2-pod-announcements                               Enable announcing Pod IPs with Gratuitous ARP
       --enable-monitor                                            Enable the monitor unix domain socket server (default true)
+      --enable-multi-network                                      Enable support for multiple pod networks
       --gops-port uint16                                          Port for gops server to listen on (default 9890)
   -h, --help                                                      help for hive
       --install-egress-gateway-routes                             Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface

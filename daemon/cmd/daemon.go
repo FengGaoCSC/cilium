@@ -24,6 +24,7 @@ import (
 	"github.com/cilium/cilium/api/v1/models"
 	health "github.com/cilium/cilium/cilium-health/launch"
 	"github.com/cilium/cilium/daemon/cmd/cni"
+	"github.com/cilium/cilium/enterprise/pkg/multinetwork"
 	"github.com/cilium/cilium/pkg/bandwidth"
 	"github.com/cilium/cilium/pkg/bgp/speaker"
 	bgpv1 "github.com/cilium/cilium/pkg/bgpv1/agent"
@@ -192,6 +193,8 @@ type Daemon struct {
 	cgroupManager *manager.CgroupManager
 
 	ipamMetadata *ipamMetadata.Manager
+
+	multiNetworkManager *multinetwork.Manager
 
 	apiLimiterSet *rate.APILimiterSet
 
@@ -539,6 +542,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		policyUpdater:        params.PolicyUpdater,
 		egressGatewayManager: params.EgressGatewayManager,
 		ipamMetadata:         params.IPAMMetadataManager,
+		multiNetworkManager:  params.MultiNetworkManager,
 		cniConfigManager:     params.CNIConfigManager,
 		clustermesh:          params.ClusterMesh,
 		monitorAgent:         params.MonitorAgent,

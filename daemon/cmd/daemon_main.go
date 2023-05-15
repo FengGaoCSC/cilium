@@ -26,6 +26,7 @@ import (
 	"github.com/cilium/cilium/api/v1/server/restapi"
 	"github.com/cilium/cilium/daemon/cmd/cni"
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
+	"github.com/cilium/cilium/enterprise/pkg/multinetwork"
 	"github.com/cilium/cilium/pkg/api"
 	"github.com/cilium/cilium/pkg/aws/eni"
 	bgpv1 "github.com/cilium/cilium/pkg/bgpv1/agent"
@@ -1602,6 +1603,7 @@ type daemonParams struct {
 	IPCache              *ipcache.IPCache
 	EgressGatewayManager *egressgateway.Manager
 	IPAMMetadataManager  *ipamMetadata.Manager
+	MultiNetworkManager  *multinetwork.Manager
 	CNIConfigManager     cni.CNIConfigManager
 	SwaggerSpec          *server.Spec
 	HealthAPISpec        *healthApi.Spec
@@ -1993,6 +1995,9 @@ func (d *Daemon) instantiateAPI(swaggerSpec *server.Spec) *restapi.CiliumAPIAPI 
 
 	// /statedb/dump
 	restAPI.StatedbGetStatedbDumpHandler = &getStateDBDump{d.db}
+
+	// /network/attachments
+	restAPI.NetworkGetNetworkAttachmentHandler = NewGetNetworkAttachmentHandler(d)
 
 	msg := "Required API option %s is disabled. This may prevent Cilium from operating correctly"
 	hint := "Consider enabling this API in " + server.AdminEnableFlag
