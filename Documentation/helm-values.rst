@@ -816,6 +816,146 @@
      - Update ENI Adapter limits from the EC2 API
      - bool
      - ``true``
+   * - envoy
+     - Configure Cilium Envoy options.
+     - object
+     - ``{"affinity":{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"k8s-app":"cilium-envoy"}},"topologyKey":"kubernetes.io/hostname"}]}},"connectTimeoutSeconds":2,"dnsPolicy":null,"enabled":false,"extraArgs":[],"extraContainers":[],"extraEnv":[],"extraHostPathMounts":[],"extraVolumeMounts":[],"extraVolumes":[],"healthPort":9878,"image":{"digest":"sha256:5d03695af25448768062fa42bffec7dbaa970f0d2b320d39e60b0a12f45027e8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.25.6-4350471813b173839df78f7a1ea5d77b5cdf714b","useDigest":true},"livenessProbe":{"failureThreshold":10,"periodSeconds":30},"log":{"format":"[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v","path":""},"maxConnectionDurationSeconds":0,"maxRequestsPerConnection":0,"nodeSelector":{"kubernetes.io/os":"linux"},"podAnnotations":{},"podLabels":{},"podSecurityContext":{},"priorityClassName":null,"prometheus":{"enabled":true,"port":"9964","serviceMonitor":{"annotations":{},"enabled":false,"interval":"10s","labels":{},"metricRelabelings":null,"relabelings":[{"replacement":"${1}","sourceLabels":["__meta_kubernetes_pod_node_name"],"targetLabel":"node"}]}},"readinessProbe":{"failureThreshold":3,"periodSeconds":30},"resources":{},"rollOutPods":false,"securityContext":{"capabilities":{"envoy":["NET_ADMIN","SYS_ADMIN"]},"privileged":false,"seLinuxOptions":{"level":"s0","type":"spc_t"}},"startupProbe":{"failureThreshold":105,"periodSeconds":2},"terminationGracePeriodSeconds":1,"tolerations":[{"operator":"Exists"}],"updateStrategy":{"rollingUpdate":{"maxUnavailable":2},"type":"RollingUpdate"}}``
+   * - envoy.affinity
+     - Affinity for cilium-envoy.
+     - object
+     - ``{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"k8s-app":"cilium-envoy"}},"topologyKey":"kubernetes.io/hostname"}]}}``
+   * - envoy.dnsPolicy
+     - DNS policy for Cilium envoy pods. Ref: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy
+     - string
+     - ``nil``
+   * - envoy.extraArgs
+     - Additional envoy container arguments.
+     - list
+     - ``[]``
+   * - envoy.extraContainers
+     - Additional containers added to the cilium Envoy DaemonSet.
+     - list
+     - ``[]``
+   * - envoy.extraEnv
+     - Additional envoy container environment variables.
+     - list
+     - ``[]``
+   * - envoy.extraHostPathMounts
+     - Additional envoy hostPath mounts.
+     - list
+     - ``[]``
+   * - envoy.extraVolumeMounts
+     - Additional envoy volumeMounts.
+     - list
+     - ``[]``
+   * - envoy.extraVolumes
+     - Additional envoy volumes.
+     - list
+     - ``[]``
+   * - envoy.healthPort
+     - TCP port for the health API.
+     - int
+     - ``9878``
+   * - envoy.image
+     - Envoy container image.
+     - object
+     - ``{"digest":"sha256:5d03695af25448768062fa42bffec7dbaa970f0d2b320d39e60b0a12f45027e8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.25.6-4350471813b173839df78f7a1ea5d77b5cdf714b","useDigest":true}``
+   * - envoy.livenessProbe.failureThreshold
+     - failure threshold of liveness probe
+     - int
+     - ``10``
+   * - envoy.livenessProbe.periodSeconds
+     - interval between checks of the liveness probe
+     - int
+     - ``30``
+   * - envoy.nodeSelector
+     - Node selector for cilium-envoy.
+     - object
+     - ``{"kubernetes.io/os":"linux"}``
+   * - envoy.podAnnotations
+     - Annotations to be added to envoy pods
+     - object
+     - ``{}``
+   * - envoy.podLabels
+     - Labels to be added to envoy pods
+     - object
+     - ``{}``
+   * - envoy.podSecurityContext
+     - Security Context for cilium-envoy pods.
+     - object
+     - ``{}``
+   * - envoy.priorityClassName
+     - The priority class to use for cilium-envoy.
+     - string
+     - ``nil``
+   * - envoy.prometheus.serviceMonitor.annotations
+     - Annotations to add to ServiceMonitor cilium-envoy
+     - object
+     - ``{}``
+   * - envoy.prometheus.serviceMonitor.enabled
+     - Enable service monitors. This requires the prometheus CRDs to be available (see https://github.com/prometheus-operator/prometheus-operator/blob/main/example/prometheus-operator-crd/monitoring.coreos.com_servicemonitors.yaml)
+     - bool
+     - ``false``
+   * - envoy.prometheus.serviceMonitor.interval
+     - Interval for scrape metrics.
+     - string
+     - ``"10s"``
+   * - envoy.prometheus.serviceMonitor.labels
+     - Labels to add to ServiceMonitor cilium-envoy
+     - object
+     - ``{}``
+   * - envoy.prometheus.serviceMonitor.metricRelabelings
+     - Metrics relabeling configs for the ServiceMonitor cilium-envoy
+     - string
+     - ``nil``
+   * - envoy.prometheus.serviceMonitor.relabelings
+     - Relabeling configs for the ServiceMonitor cilium-envoy
+     - list
+     - ``[{"replacement":"${1}","sourceLabels":["__meta_kubernetes_pod_node_name"],"targetLabel":"node"}]``
+   * - envoy.readinessProbe.failureThreshold
+     - failure threshold of readiness probe
+     - int
+     - ``3``
+   * - envoy.readinessProbe.periodSeconds
+     - interval between checks of the readiness probe
+     - int
+     - ``30``
+   * - envoy.resources
+     - Envoy resource limits & requests ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+     - object
+     - ``{}``
+   * - envoy.rollOutPods
+     - Roll out cilium envoy pods automatically when configmap is updated.
+     - bool
+     - ``false``
+   * - envoy.securityContext.capabilities.envoy
+     - Capabilities for the ``cilium-envoy`` container
+     - list
+     - ``["NET_ADMIN","SYS_ADMIN"]``
+   * - envoy.securityContext.privileged
+     - Run the pod with elevated privileges
+     - bool
+     - ``false``
+   * - envoy.securityContext.seLinuxOptions
+     - SELinux options for the ``cilium-envoy`` container
+     - object
+     - ``{"level":"s0","type":"spc_t"}``
+   * - envoy.startupProbe.failureThreshold
+     - failure threshold of startup probe. 105 x 2s translates to the old behaviour of the readiness probe (120s delay + 30 x 3s)
+     - int
+     - ``105``
+   * - envoy.startupProbe.periodSeconds
+     - interval between checks of the startup probe
+     - int
+     - ``2``
+   * - envoy.terminationGracePeriodSeconds
+     - Configure termination grace period for cilium-envoy DaemonSet.
+     - int
+     - ``1``
+   * - envoy.tolerations
+     - Node tolerations for envoy scheduling to nodes with taints ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+     - list
+     - ``[{"operator":"Exists"}]``
    * - etcd.clusterDomain
      - Cluster domain for cilium-etcd-operator.
      - string
@@ -976,6 +1116,14 @@
      - TCP port for the agent health API. This is not the port for cilium-health.
      - int
      - ``9879``
+   * - highScaleIPcache
+     - EnableHighScaleIPcache enables the special ipcache mode for high scale clusters. The ipcache content will be reduced to the strict minimum and traffic will be encapsulated to carry security identities.
+     - object
+     - ``{"enabled":false}``
+   * - highScaleIPcache.enabled
+     - Enable the high scale mode for the ipcache.
+     - bool
+     - ``false``
    * - hostFirewall
      - Configure the host firewall.
      - object
@@ -1568,6 +1716,10 @@
      - The maximum queries per second when rate limiting access to external APIs. Also known as the bucket refill rate, which is used to refill the bucket up to the burst size capacity.
      - string
      - ``4.0``
+   * - ipam.operator.multiPoolMap
+     - IP pools defined for the multi-pool IPAM mode.
+     - object
+     - ``{}``
    * - ipv4.enabled
      - Enable IPv4 support.
      - bool
@@ -2119,7 +2271,15 @@
    * - proxy
      - Configure Istio proxy options.
      - object
-     - ``{"prometheus":{"enabled":true,"port":"9964"},"sidecarImageRegex":"cilium/istio_proxy"}``
+     - ``{"prometheus":{"enabled":true,"port":null},"sidecarImageRegex":"cilium/istio_proxy"}``
+   * - proxy.prometheus.enabled
+     - Deprecated in favor of envoy.prometheus.enabled
+     - bool
+     - ``true``
+   * - proxy.prometheus.port
+     - Deprecated in favor of envoy.prometheus.port
+     - string
+     - ``nil``
    * - proxy.sidecarImageRegex
      - Regular expression matching compatible Istio sidecar istio-proxy container image names
      - string

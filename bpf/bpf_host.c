@@ -94,17 +94,12 @@ static __always_inline bool identity_from_ipcache_ok(void)
 
 #ifdef ENABLE_IPV6
 static __always_inline __u32
-resolve_srcid_ipv6(struct __ctx_buff *ctx, __u32 srcid_from_proxy,
-		   const bool from_host)
+resolve_srcid_ipv6(struct __ctx_buff *ctx, struct ipv6hdr *ip6,
+		   __u32 srcid_from_proxy, const bool from_host)
 {
 	__u32 src_id = WORLD_ID, srcid_from_ipcache = srcid_from_proxy;
 	struct remote_endpoint_info *info = NULL;
-	void *data, *data_end;
-	struct ipv6hdr *ip6;
 	union v6addr *src;
-
-	if (!revalidate_data_maybe_pull(ctx, &data, &data_end, &ip6, !from_host))
-		return DROP_INVALID;
 
 	/* Packets from the proxy will already have a real identity. */
 	if (identity_is_reserved(srcid_from_ipcache)) {
@@ -491,7 +486,7 @@ handle_to_netdev_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace, __s8 *ext
 
 	if ((ctx->mark & MARK_MAGIC_HOST_MASK) == MARK_MAGIC_HOST)
 		src_id = HOST_ID;
-	src_id = resolve_srcid_ipv6(ctx, src_id, true);
+	src_id = resolve_srcid_ipv6(ctx, ip6, src_id, true);
 
 	/* to-netdev is attached to the egress path of the native device. */
 	return ipv6_host_policy_egress(ctx, src_id, ip6, trace, ext_err);
@@ -501,21 +496,12 @@ handle_to_netdev_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace, __s8 *ext
 
 #ifdef ENABLE_IPV4
 static __always_inline __u32
-resolve_srcid_ipv4(struct __ctx_buff *ctx, __u32 srcid_from_proxy,
-		   __u32 *sec_identity, const bool from_host)
+resolve_srcid_ipv4(struct __ctx_buff *ctx, struct iphdr *ip4,
+		   __u32 srcid_from_proxy, __u32 *sec_identity,
+		   const bool from_host)
 {
 	__u32 src_id = WORLD_ID, srcid_from_ipcache = srcid_from_proxy;
 	struct remote_endpoint_info *info = NULL;
-	void *data, *data_end;
-	struct iphdr *ip4;
-
-	/* This is the first time revalidate_data() is going to be called in
-	 * the "to-netdev" path. Make sure that we don't legitimately drop
-	 * the packet if the skb arrived with the header not being not in the
-	 * linear data.
-	 */
-	if (!revalidate_data_maybe_pull(ctx, &data, &data_end, &ip4, !from_host))
-		return DROP_INVALID;
 
 	/* Packets from the proxy will already have a real identity. */
 	if (identity_is_reserved(srcid_from_ipcache)) {
@@ -916,10 +902,10 @@ handle_to_netdev_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace, __s8 *ext
 	if ((ctx->mark & MARK_MAGIC_HOST_MASK) == MARK_MAGIC_HOST)
 		src_id = HOST_ID;
 
-	src_id = resolve_srcid_ipv4(ctx, src_id, &ipcache_srcid, true);
-
-	if (!revalidate_data(ctx, &data, &data_end, &ip4))
+	if (!revalidate_data_pull(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
+
+	src_id = resolve_srcid_ipv4(ctx, ip4, src_id, &ipcache_srcid, true);
 
 	/* We need to pass the srcid from ipcache to host firewall. See
 	 * comment in ipv4_host_policy_egress() for details.
@@ -970,10 +956,8 @@ static __always_inline int do_netdev_encrypt_encap(struct __ctx_buff *ctx, __u32
 		break;
 # endif /* ENABLE_IPV4 */
 	}
-	if (!ep)
-		return send_drop_notify_error(ctx, src_id,
-					      DROP_NO_TUNNEL_ENDPOINT,
-					      CTX_ACT_DROP, METRIC_EGRESS);
+	if (!ep || !ep->tunnel_endpoint)
+		return DROP_NO_TUNNEL_ENDPOINT;
 
 	ctx->mark = 0;
 	bpf_clear_meta(ctx);
@@ -994,6 +978,9 @@ do_netdev(struct __ctx_buff *ctx, __u16 proto, const bool from_host)
 {
 	__u32 __maybe_unused identity = 0;
 	__u32 __maybe_unused ipcache_srcid = 0;
+	void __maybe_unused *data, *data_end;
+	struct ipv6hdr __maybe_unused *ip6;
+	struct iphdr __maybe_unused *ip4;
 	int ret;
 
 #if defined(ENABLE_L7_LB)
@@ -1005,7 +992,8 @@ do_netdev(struct __ctx_buff *ctx, __u16 proto, const bool from_host)
 
 			ctx->mark = 0;
 			tail_call_dynamic(ctx, &POLICY_EGRESSCALL_MAP, lxc_id);
-			return DROP_MISSED_TAIL_CALL;
+			return send_drop_notify_error(ctx, identity, DROP_MISSED_TAIL_CALL,
+						      CTX_ACT_DROP, METRIC_EGRESS);
 		}
 	}
 #endif
@@ -1028,7 +1016,11 @@ do_netdev(struct __ctx_buff *ctx, __u16 proto, const bool from_host)
 			send_trace_notify(ctx, TRACE_FROM_STACK, identity, 0, 0,
 					  ctx->ingress_ifindex, TRACE_REASON_ENCRYPTED,
 					  TRACE_PAYLOAD_LEN);
-			return do_netdev_encrypt(ctx, identity);
+			ret = do_netdev_encrypt(ctx, identity);
+			if (IS_ERR(ret))
+				return send_drop_notify_error(ctx, identity, ret,
+							      CTX_ACT_DROP, METRIC_EGRESS);
+			return ret;
 		}
 #endif
 
@@ -1051,7 +1043,11 @@ do_netdev(struct __ctx_buff *ctx, __u16 proto, const bool from_host)
 # endif
 #ifdef ENABLE_IPV6
 	case bpf_htons(ETH_P_IPV6):
-		identity = resolve_srcid_ipv6(ctx, identity, from_host);
+		if (!revalidate_data_pull(ctx, &data, &data_end, &ip6))
+			return send_drop_notify_error(ctx, identity, DROP_INVALID,
+						      CTX_ACT_DROP, METRIC_INGRESS);
+
+		identity = resolve_srcid_ipv6(ctx, ip6, identity, from_host);
 		ctx_store_meta(ctx, CB_SRC_LABEL, identity);
 		if (from_host)
 			ep_tail_call(ctx, CILIUM_CALL_IPV6_FROM_HOST);
@@ -1063,7 +1059,15 @@ do_netdev(struct __ctx_buff *ctx, __u16 proto, const bool from_host)
 #endif
 #ifdef ENABLE_IPV4
 	case bpf_htons(ETH_P_IP):
-		identity = resolve_srcid_ipv4(ctx, identity, &ipcache_srcid,
+		/* This is the first time revalidate_data() is going to be called.
+		 * Make sure that we don't legitimately drop the packet if the skb
+		 * arrived with the header not being not in the linear data.
+		 */
+		if (!revalidate_data_pull(ctx, &data, &data_end, &ip4))
+			return send_drop_notify_error(ctx, identity, DROP_INVALID,
+						      CTX_ACT_DROP, METRIC_INGRESS);
+
+		identity = resolve_srcid_ipv4(ctx, ip4, identity, &ipcache_srcid,
 					      from_host);
 		ctx_store_meta(ctx, CB_SRC_LABEL, identity);
 		if (from_host) {
@@ -1238,6 +1242,7 @@ int cil_from_netdev(struct __ctx_buff *ctx)
 	};
 #endif
 #endif
+	int ret;
 
 	/* Filter allowed vlan id's and pass them back to kernel.
 	 * We will see the packet again in from-netdev@eth0.vlanXXX.
@@ -1248,9 +1253,9 @@ int cil_from_netdev(struct __ctx_buff *ctx)
 		if (vlan_id) {
 			if (allow_vlan(ctx->ifindex, vlan_id))
 				return CTX_ACT_OK;
-			else
-				return send_drop_notify_error(ctx, 0, DROP_VLAN_FILTERED,
-							      CTX_ACT_DROP, METRIC_INGRESS);
+
+			ret = DROP_VLAN_FILTERED;
+			goto drop_err;
 		}
 	}
 
@@ -1275,7 +1280,7 @@ int cil_from_netdev(struct __ctx_buff *ctx)
 			if (port && addr) {
 				set_geneve_dsr_opt4(port, addr, &gopt);
 
-				return encap_and_redirect_with_nodeid_opt(ctx,
+				ret = encap_and_redirect_with_nodeid_opt(ctx,
 								  ctx_get_xfer(ctx,
 									       XFER_ENCAP_NODEID),
 								  ctx_get_xfer(ctx,
@@ -1287,18 +1292,29 @@ int cil_from_netdev(struct __ctx_buff *ctx)
 								  sizeof(gopt),
 								  false,
 								  &trace);
+				if (IS_ERR(ret))
+					goto drop_err;
+
+				return ret;
 			}
 		}
 #endif
-		return __encap_and_redirect_with_nodeid(ctx, ctx_get_xfer(ctx, XFER_ENCAP_NODEID),
-							ctx_get_xfer(ctx, XFER_ENCAP_SECLABEL),
-							ctx_get_xfer(ctx, XFER_ENCAP_DSTID),
-							NOT_VTEP_DST, &trace);
+		ret = __encap_and_redirect_with_nodeid(ctx, ctx_get_xfer(ctx, XFER_ENCAP_NODEID),
+						       ctx_get_xfer(ctx, XFER_ENCAP_SECLABEL),
+						       ctx_get_xfer(ctx, XFER_ENCAP_DSTID),
+						       NOT_VTEP_DST, &trace);
+		if (IS_ERR(ret))
+			goto drop_err;
+
+		return ret;
 	}
 #endif
 #endif
 
 	return handle_netdev(ctx, false);
+
+drop_err:
+	return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP, METRIC_INGRESS);
 }
 
 /*

@@ -64,8 +64,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.14.2
+  # renovate is disabled in this workflow until https://github.com/cilium/cilium-cli/issues/1627 is resolved.
+  # renovate_disabled: datasource=github-releases depName=cilium/cilium-cli
+  cilium_cli_version: v0.13.2
   cilium_cli_ci_version:
   check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
@@ -173,6 +174,7 @@ jobs:
       github.event_name == 'pull_request'
     strategy:
       fail-fast: false
+      max-parallel: 8
       matrix:
         include:
           # See https://github.com/cilium/cilium/issues/20606 for configuration table
@@ -181,22 +183,18 @@ jobs:
             kube-proxy: 'iptables'
             kpr: 'disabled'
             tunnel: 'vxlan'
-            encryption: 'ipsec'
-            ipv6: 'false' # until https://github.com/cilium/cilium/issues/23461 has been fixed
 
           - name: '2'
             kernel: '5.4-main'
             kube-proxy: 'iptables'
             kpr: 'disabled'
             tunnel: 'disabled'
-            encryption: 'ipsec'
 
           - name: '3'
             kernel: '5.10-main'
             kube-proxy: 'iptables'
             kpr: 'disabled'
             tunnel: 'disabled'
-            encryption: 'ipsec'
             endpoint-routes: 'true'
 
           - name: '4'
@@ -204,41 +202,101 @@ jobs:
             kube-proxy: 'iptables'
             kpr: 'strict'
             tunnel: 'vxlan'
-            encryption: 'disabled'
             lb-mode: 'snat'
             endpoint-routes: 'true'
+            egress-gateway: 'true'
 
           - name: '5'
             kernel: '5.15-main'
             kube-proxy: 'iptables'
             kpr: 'strict'
             tunnel: 'disabled'
-            encryption: 'disabled'
-            lb-mode: 'snat'
+            lb-mode: 'dsr'
             endpoint-routes: 'true'
+            egress-gateway: 'true'
+            host-fw: 'true'
 
           - name: '6'
             kernel: '6.0-main'
             kube-proxy: 'none'
             kpr: 'strict'
             tunnel: 'vxlan'
-            encryption: 'disabled'
             lb-mode: 'snat'
+            egress-gateway: 'true'
+            host-fw: 'true'
+            lb-acceleration: 'testing-only'
 
           - name: '7'
             kernel: 'bpf-next-main'
             kube-proxy: 'none'
             kpr: 'strict'
             tunnel: 'disabled'
-            encryption: 'disabled'
             lb-mode: 'snat'
+            egress-gateway: 'true'
+            lb-acceleration: 'testing-only'
 
           - name: '8'
             kernel: 'bpf-next-main'
             kube-proxy: 'iptables'
             kpr: 'disabled'
+            tunnel: 'geneve'
+            endpoint-routes: 'true'
+
+          - name: '9'
+            kernel: '4.19-main'
+            kube-proxy: 'iptables'
+            kpr: 'disabled'
             tunnel: 'vxlan'
             encryption: 'ipsec'
+            encryption-node: 'false'
+            ipv6: 'false' # https://github.com/cilium/cilium/issues/23461
+
+          - name: '10'
+            kernel: '5.4-main'
+            kube-proxy: 'iptables'
+            kpr: 'disabled'
+            tunnel: 'disabled'
+            encryption: 'ipsec'
+            encryption-node: 'false'
+
+          - name: '11'
+            kernel: '5.10-main'
+            kube-proxy: 'iptables'
+            kpr: 'disabled'
+            tunnel: 'disabled'
+            encryption: 'ipsec'
+            encryption-node: 'false'
+            endpoint-routes: 'true'
+
+          - name: '12'
+            kernel: '5.10-main'
+            kube-proxy: 'iptables'
+            kpr: 'strict'
+            tunnel: 'vxlan'
+            encryption: 'wireguard'
+            encryption-node: 'false'
+            lb-mode: 'snat'
+            endpoint-routes: 'true'
+            egress-gateway: 'true'
+
+          - name: '13'
+            kernel: '5.15-main'
+            kube-proxy: 'iptables'
+            kpr: 'strict'
+            tunnel: 'disabled'
+            encryption: 'wireguard'
+            encryption-node: 'false'
+            lb-mode: 'dsr'
+            endpoint-routes: 'true'
+            egress-gateway: 'true'
+
+          - name: '14'
+            kernel: 'bpf-next-main'
+            kube-proxy: 'iptables'
+            kpr: 'disabled'
+            tunnel: 'geneve'
+            encryption: 'ipsec'
+            encryption-node: 'false'
             endpoint-routes: 'true'
 
     timeout-minutes: 60
@@ -269,9 +327,8 @@ jobs:
             --rollback=false \
             --config monitor-aggregation=none \
             --nodes-without-cilium=kind-worker3 \
-            --helm-set-string=kubeProxyReplacement=${{ matrix.kpr }} \
-            --helm-set=bpf.masquerade=false"
-          TUNNEL="--helm-set-string=tunnel=vxlan"
+            --helm-set-string=kubeProxyReplacement=${{ matrix.kpr }}"
+          TUNNEL="--helm-set-string=tunnel=${{ matrix.tunnel }}"
           if [ "${{ matrix.tunnel }}" == "disabled" ]; then
             TUNNEL="--helm-set-string=tunnel=disabled --helm-set-string=autoDirectNodeRoutes=true --helm-set-string=ipv4NativeRoutingCIDR=10.244.0.0/16"
             TUNNEL="${TUNNEL} --helm-set-string=ipv6NativeRoutingCIDR=fd00:10:244::/56"
@@ -288,8 +345,40 @@ jobs:
           if [ "${{ matrix.ipv6 }}" != "false" ]; then
             IPV6="--helm-set=ipv6.enabled=true"
           fi
+          MASQ=""
+          if [ "${{ matrix.kpr }}" == "strict" ]; then
+            # BPF-masq requires KPR=strict.
+            # Disable IPv6 until https://github.com/cilium/cilium/issues/14350 has been resolved
+            MASQ="--helm-set=bpf.masquerade=true --helm-set=enableIPv6Masquerade=false"
+          fi
+          EGRESS_GATEWAY=""
+          if [ "${{ matrix.egress-gateway }}" == "true" ]; then
+            EGRESS_GATEWAY="--helm-set=egressGateway.enabled=true"
+          fi
+          LB_ACCELERATION=""
+          if [ "${{ matrix.lb-acceleration }}" != "" ]; then
+            LB_ACCELERATION="--helm-set=loadBalancer.acceleration=${{ matrix.lb-acceleration }}"
+          fi
 
-          CONFIG="${CILIUM_INSTALL_DEFAULTS} ${TUNNEL} ${LB_MODE} ${ENDPOINT_ROUTES} ${IPV6}"
+          ENCRYPT=""
+          if [ "${{ matrix.encryption }}" != "" ]; then
+            ENCRYPT="--encryption=${{ matrix.encryption }}"
+            if [ "${{ matrix.encryption-node }}" != "" ]; then
+              ENCRYPT+=" --node-encryption=${{ matrix.encryption-node }}"
+            fi
+          fi
+
+          HOST_FW=""
+          if [ "${{ matrix.host-fw }}" == "true" ]; then
+            HOST_FW="--helm-set=hostFirewall.enabled=true"
+          fi
+
+          L7=""
+          if [ "${{ matrix.egress-gateway }}" == "true" ] || [ "${{ matrix.encryption }}" == "wireguard" ]; then
+            L7="--helm-set=l7Proxy=false"
+          fi
+
+          CONFIG="${CILIUM_INSTALL_DEFAULTS} ${TUNNEL} ${LB_MODE} ${ENDPOINT_ROUTES} ${IPV6} ${MASQ} ${EGRESS_GATEWAY} ${ENCRYPT} ${HOST_FW} ${LB_ACCELERATION} ${L7}"
           echo "cilium_install_defaults=${CONFIG}" >> $GITHUB_OUTPUT
 
       - name: Checkout pull request for Helm chart
@@ -299,7 +388,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Cilium CLI-cli
-        uses: cilium/cilium-cli@148f953bd73d103ba1324d59d6cc3204d2258af3 # v0.14.2
+        uses: cilium/cilium-cli@207512ce9e729d9b3cc1a59e92af5c8d50ce37c4 # v0.14.2
         with:
           release-version: ${{ env.cilium_cli_version }}
           ci-version: ${{ env.cilium_cli_ci_version }}
@@ -326,92 +415,23 @@ jobs:
             until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ needs.setup-report.outputs.sha }} &> /dev/null; do sleep 45s; done
           done
 
-      - name: Run kube-proxy tests
+      - name: Run tests
         uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
         with:
           provision: 'false'
           cmd: |
             cd /host/
-            ./contrib/scripts/kind.sh "" 3 "" "" "${{ matrix.kube-proxy }}" "dual"
+            ./contrib/scripts/kind.sh --xdp "" 3 "" "" "${{ matrix.kube-proxy }}" "dual"
             ./cilium-cli install ${{ steps.vars.outputs.cilium_install_defaults }}
 
-            # install static routes
-            EXTERNAL_FROM_CIDRS=(\$(kubectl get nodes -o jsonpath='{range .items[*]}{.spec.podCIDR}{"\n"}{end}'))
-            EXTERNAL_NODE_IPS=() # Nodes IPs are collected to be passed to the Cilium CLI later on.
-            NODES_WITHOUT_CILIUM=kind-worker3 # To add more elements, keep it comma-separated.
-
-            # Loop over each pod CIDR from all nodes.
-            for i in "\${!EXTERNAL_FROM_CIDRS[@]}"; do
-              EXTERNAL_FROM_CIDR=\${EXTERNAL_FROM_CIDRS[i]}
-
-              if [[ \$EXTERNAL_FROM_CIDR =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$ ]]; then
-                IP_FAMILY="v4"
-              elif [[ \$EXTERNAL_FROM_CIDR =~ ^[0-9a-fA-F:]+/[0-9]+$ ]]; then
-                IP_FAMILY="v6"
-              else
-                echo "ERROR: Malformed pod CIDR '\${EXTERNAL_FROM_CIDR}'" >&2
-                exit 1
-              fi
-
-              IFS=',' read -ra NODES_WITHOUT <<< "\$NODES_WITHOUT_CILIUM" # Split by comma into an array
-              for WITHOUT in "\${NODES_WITHOUT[@]}"; do
-                # Fetch node with a specific pod CIDR.
-                node=\$(kubectl get nodes -o jsonpath="{range .items[?(@.spec.podCIDR == '\$EXTERNAL_FROM_CIDR')]}{@.metadata.name}{end}")
-                if [[ -z "\$node" ]]; then
-                  echo "ERROR: Could not find node with .spec.podCIDR matching \${EXTERNAL_FROM_CIDR}" >&2
-                  exit 1
-                fi
-                for NODE_IP in \$(kubectl get node "\$node" -o jsonpath="{.status.addresses[?(@.type == 'InternalIP')].address}"); do
-                  # Skip if the node IP's family mismatches with pod CIDR's
-                  # family. Cannot create a route with the gateway IP family
-                  # mismatching the subnet.
-                  if [[ "\$IP_FAMILY" == "v4" && ! "\$NODE_IP" =~ \. ]]; then
-                    continue
-                  elif [[ "\$IP_FAMILY" == "v6" && ! "\$NODE_IP" =~ \: ]]; then
-                    continue
-                  fi
-                  # Install static route on the host, towards the pod CIDR via the node IP.
-                  docker exec "\$WITHOUT" ip route replace "\${EXTERNAL_FROM_CIDR}" via "\${NODE_IP}"
-                  EXTERNAL_NODE_IPS+=("\${NODE_IP}")
-                done
-              done
-            done
-
-            # Join the elements with a comma delimiter, or leave them unmodified
-            # if there's only one element so that it can be passed properly to
-            # the CLI.
-            if [[ \${#EXTERNAL_NODE_IPS[@]} -eq 1 ]]; then
-              EXTERNAL_NODE_IPS_PARAM="\${EXTERNAL_NODE_IPS[0]}"
-            else
-              EXTERNAL_NODE_IPS_PARAM=\$(IFS=','; echo "\${EXTERNAL_NODE_IPS[*]}")
-            fi
-            EXTERNAL_NODE_IPS_PARAM=\${EXTERNAL_NODE_IPS_PARAM}
-
             ./cilium-cli status --wait
-            ./cilium-cli connectivity test --datapath --collect-sysdump-on-failure \
-              --external-from-cidrs="\${EXTERNAL_NODE_IPS_PARAM}" \
-              --sysdump-output-filename "cilium-sysdump-${{ matrix.name }}-<ts>"
-            ./cilium-cli connectivity test --collect-sysdump-on-failure \
-              --external-from-cidrs="\${EXTERNAL_NODE_IPS_PARAM}" \
-              --sysdump-output-filename "cilium-sysdump-${{ matrix.name }}-<ts>"
-            kind delete cluster
+            kubectl -n kube-system exec daemonset/cilium -- cilium status
 
-      - name: Run encryption tests
-        if: ${{ matrix.encryption != 'disabled' }}
-        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
-        with:
-          provision: 'false'
-          cmd: |
-            cd /host/
-            ./contrib/scripts/kind.sh "" 3 "" "" "${{ matrix.kube-proxy }}" "dual"
-            ./cilium-cli install ${{ steps.vars.outputs.cilium_install_defaults }} \
-              --encryption=${{ matrix.encryption }}
-
-            ./cilium-cli status --wait
             ./cilium-cli connectivity test --datapath --collect-sysdump-on-failure \
               --sysdump-output-filename "cilium-sysdump-${{ matrix.name }}-<ts>"
             ./cilium-cli connectivity test --collect-sysdump-on-failure \
               --sysdump-output-filename "cilium-sysdump-${{ matrix.name }}-<ts>"
+            ./contrib/scripts/kind-down.sh
 
       - name: Fetch artifacts
         if: ${{ !success() }}
@@ -459,7 +479,7 @@ jobs:
           authToken: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.setup-report.outputs.sha }}
           context: ${{ github.workflow }}
-          description: Datapath tests failed
+          description: E2E conformance tests failed
           state: failure
           target_url: ${{ env.check_url }}
 
@@ -474,6 +494,6 @@ jobs:
           authToken: ${{ secrets.GITHUB_TOKEN }}
           sha: ${{ needs.setup-report.outputs.sha }}
           context: ${{ github.workflow }}
-          description: Datapath tests cancelled
+          description: E2E conformance tests cancelled
           state: error
           target_url: ${{ env.check_url }}

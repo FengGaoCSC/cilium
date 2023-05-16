@@ -206,19 +206,19 @@ jobs:
           persist-credentials: false
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@148f953bd73d103ba1324d59d6cc3204d2258af3 # v0.14.2
+        uses: cilium/cilium-cli@207512ce9e729d9b3cc1a59e92af5c8d50ce37c4 # v0.14.2
         with:
           release-version: ${{ env.cilium_cli_version }}
           ci-version: ${{ env.cilium_cli_ci_version }}
 
       - name: Set up gcloud credentials
         id: 'auth'
-        uses: google-github-actions/auth@e8df18b60c5dd38ba618c121b779307266153fbf # v1.1.0
+        uses: google-github-actions/auth@35b0e87d162680511bf346c299f71c9c5c379033 # v1.1.1
         with:
           credentials_json: '${{ secrets.GCP_PR_SA_KEY }}'
 
       - name: Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@62d4898025f6041e16b1068643bfc5a696863587 # v1.1.0
+        uses: google-github-actions/setup-gcloud@e30db14379863a8c79331b04a9969f4c1e225e0b # v1.1.1
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           version: "405.0.0"

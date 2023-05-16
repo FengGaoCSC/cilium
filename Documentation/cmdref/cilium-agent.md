@@ -102,6 +102,7 @@ cilium-agent [flags]
       --enable-external-ips                                     Enable k8s service externalIPs feature (requires enabling enable-node-port) (default true)
       --enable-health-check-nodeport                            Enables a healthcheck nodePort server for NodePort services with 'healthCheckNodePort' being set (default true)
       --enable-health-checking                                  Enable connectivity health checking (default true)
+      --enable-high-scale-ipcache                               Enable the high scale mode for ipcache
       --enable-host-firewall                                    Enable host network policies
       --enable-host-legacy-routing                              Enable the legacy host forwarding model which does not bypass upper stack in host namespace
       --enable-host-port                                        Enable k8s hostPort mapping feature (requires enabling enable-node-port) (default true)
@@ -154,6 +155,7 @@ cilium-agent [flags]
       --envoy-config-timeout duration                           Timeout duration for Envoy Config acknowledgements (default 2m0s)
       --envoy-log string                                        Path to a separate Envoy log file, if any
       --exclude-local-address strings                           Exclude CIDR from being recognized as local address
+      --external-envoy-proxy                                    whether the Envoy is deployed externally in form of a DaemonSet or not
       --fixed-identity-mapping map                              Key-value for the fixed identity mapping which allows to use reserved label for fixed identities, e.g. 128=kv-store,129=kube-dns
       --gops-port uint16                                        Port for gops server to listen on (default 9890)
   -h, --help                                                    help for cilium-agent

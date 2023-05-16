@@ -290,6 +290,11 @@ func initializeFlags() {
 	flags.StringSlice(option.IPv6PodSubnets, []string{}, "List of IPv6 pod subnets to preconfigure for encryption")
 	option.BindEnv(Vp, option.IPv6PodSubnets)
 
+	flags.Var(option.NewNamedMapOptions(option.IPAMMultiPoolNodePreAlloc, &option.Config.IPAMMultiPoolNodePreAlloc, nil),
+		option.IPAMMultiPoolNodePreAlloc, "List of IP pools which should be pre-allocated on this node")
+	flags.MarkHidden(option.IPAMMultiPoolNodePreAlloc)
+	option.BindEnv(Vp, option.IPAMMultiPoolNodePreAlloc)
+
 	flags.StringSlice(option.ExcludeLocalAddress, []string{}, "Exclude CIDR from being recognized as local address")
 	option.BindEnv(Vp, option.ExcludeLocalAddress)
 
@@ -606,6 +611,9 @@ func initializeFlags() {
 	flags.Bool(option.EnableIdentityMark, true, "Enable setting identity mark for local traffic")
 	option.BindEnv(Vp, option.EnableIdentityMark)
 
+	flags.Bool(option.EnableHighScaleIPcache, defaults.EnableHighScaleIPcache, "Enable the high scale mode for ipcache")
+	option.BindEnv(Vp, option.EnableHighScaleIPcache)
+
 	flags.Bool(option.EnableHostFirewall, false, "Enable host network policies")
 	option.BindEnv(Vp, option.EnableHostFirewall)
 
@@ -730,6 +738,9 @@ func initializeFlags() {
 
 	flags.String(option.StateDir, defaults.RuntimePath, "Directory path to store runtime state")
 	option.BindEnv(Vp, option.StateDir)
+
+	flags.Bool(option.ExternalEnvoyProxy, false, "whether the Envoy is deployed externally in form of a DaemonSet or not")
+	option.BindEnv(Vp, option.ExternalEnvoyProxy)
 
 	flags.StringP(option.TunnelName, "t", "", fmt.Sprintf("Tunnel mode {%s} (default \"vxlan\" for the \"veth\" datapath mode)", option.GetTunnelModes()))
 	option.BindEnv(Vp, option.TunnelName)
@@ -1186,23 +1197,6 @@ func initEnv() {
 		loadinfo.StartBackgroundLogger()
 	}
 
-	if option.Config.DisableEnvoyVersionCheck {
-		log.Info("Envoy version check disabled")
-	} else {
-		envoyVersion := envoy.GetEnvoyVersion()
-		log.Infof("%s", envoyVersion)
-
-		envoyVersionArray := strings.Fields(envoyVersion)
-		if len(envoyVersionArray) < 3 {
-			log.Fatal("Truncated Envoy version string, cannot verify version match.")
-		}
-		// Make sure Envoy version matches ours
-		if !strings.HasPrefix(envoyVersionArray[2], envoy.RequiredEnvoyVersionSHA) {
-			log.Fatalf("Envoy version %s does not match with required version %s ,aborting.",
-				envoyVersionArray[2], envoy.RequiredEnvoyVersionSHA)
-		}
-	}
-
 	if option.Config.PreAllocateMaps {
 		bpf.EnableMapPreAllocation()
 	}
@@ -1236,6 +1230,12 @@ func initEnv() {
 	// Restore permissions of executable files
 	if err := restoreExecPermissions(option.Config.LibDir, `.*\.sh`); err != nil {
 		scopedLog.WithError(err).Fatal("Unable to restore agent asset permissions")
+	}
+
+	// Creating Envoy sockets directory for cases which doesn't provide a volume mount
+	// (e.g. embedded Envoy, external workload in ClusterMesh scenario)
+	if err := os.MkdirAll(envoy.GetSocketDir(option.Config.RunDir), defaults.RuntimePathRights); err != nil {
+		scopedLog.WithError(err).Fatal("Could not create envoy sockets directory")
 	}
 
 	if option.Config.MaxControllerInterval < 0 {
@@ -1393,6 +1393,24 @@ func initEnv() {
 		log.Fatal("BPF masquerade is not supported for IPv6.")
 	}
 
+	if option.Config.EnableHighScaleIPcache {
+		if option.Config.TunnelingEnabled() {
+			log.Fatal("The high-scale IPcache mode requires native routing.")
+		}
+		if option.Config.EnableIPv4EgressGateway {
+			log.Fatal("The egress gateway is not supported in high scale IPcache mode.")
+		}
+		if option.Config.EnableIPSec {
+			log.Fatal("IPsec is not supported in high scale IPcache mode.")
+		}
+		if option.Config.EnableIPv6 {
+			log.Fatal("The high-scale IPcache mode is not supported with IPv6.")
+		}
+		if !option.Config.EnableWellKnownIdentities {
+			log.Fatal("The high-scale IPcache mode requires well-known identities to be enabled.")
+		}
+	}
+
 	// If there is one device specified, use it to derive better default
 	// allocation prefixes
 	node.InitDefaultPrefix(option.Config.DirectRoutingDevice)
@@ -1460,12 +1478,12 @@ func initEnv() {
 		)
 	}
 
-	if option.Config.IPAM == ipamOption.IPAMClusterPoolV2 {
+	if option.Config.IPAM == ipamOption.IPAMClusterPoolV2 || option.Config.IPAM == ipamOption.IPAMMultiPool {
 		if option.Config.TunnelingEnabled() {
-			log.Fatalf("Cannot specify IPAM mode %s in tunnel mode.", ipamOption.IPAMClusterPoolV2)
+			log.Fatalf("Cannot specify IPAM mode %s in tunnel mode.", option.Config.IPAM)
 		}
 		if option.Config.EnableIPSec {
-			log.Fatalf("Cannot specify IPAM mode %s with %s.", ipamOption.IPAMClusterPoolV2, option.EnableIPSecName)
+			log.Fatalf("Cannot specify IPAM mode %s with %s.", option.Config.IPAM, option.EnableIPSecName)
 		}
 	}
 

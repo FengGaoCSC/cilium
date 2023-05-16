@@ -134,8 +134,11 @@ jobs:
 
       - name: Install Bom
         shell: bash
+        env:
+          # renovate: datasource=github-releases depName=kubernetes-sigs/bom
+          BOM_VERSION: v0.5.1
         run: |
-          curl -L https://github.com/kubernetes-sigs/bom/releases/download/v0.4.1/bom-linux-amd64 -o bom
+          curl -L https://github.com/kubernetes-sigs/bom/releases/download/${{ env.BOM_VERSION }}/bom-amd64-linux -o bom
           sudo mv ./bom /usr/local/bin/bom
           sudo chmod +x /usr/local/bin/bom
 
@@ -212,7 +215,7 @@ jobs:
             quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-race
           target: release
           build-args: |
-            BASE_IMAGE=quay.io/cilium/cilium-runtime:63b8f55b1ee5ca82766065d9278062b89c6d1766@sha256:0025a9d8b5bf0013d97ca74b5b6e2f4911057eb6f843f319fa1bff97e30911ad
+            BASE_IMAGE=quay.io/cilium/cilium-runtime:1282c882a45a458bcfb17cdc184647d00e0cd4f7@sha256:f5325a9843bc8fa3fc4c3853f3e383ced445ec757c9e9b6e89bc523462cd4fa1
             LOCKDEBUG=1
             RACE=1
             OPERATOR_VARIANT=${{ matrix.name }}
@@ -326,7 +329,7 @@ jobs:
             quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-race
           target: release
           build-args: |
-            BASE_IMAGE=quay.io/cilium/cilium-runtime:63b8f55b1ee5ca82766065d9278062b89c6d1766@sha256:0025a9d8b5bf0013d97ca74b5b6e2f4911057eb6f843f319fa1bff97e30911ad
+            BASE_IMAGE=quay.io/cilium/cilium-runtime:1282c882a45a458bcfb17cdc184647d00e0cd4f7@sha256:f5325a9843bc8fa3fc4c3853f3e383ced445ec757c9e9b6e89bc523462cd4fa1
             LOCKDEBUG=1
             RACE=1
             OPERATOR_VARIANT=${{ matrix.name }}

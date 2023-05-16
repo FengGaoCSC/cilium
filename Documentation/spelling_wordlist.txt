@@ -518,6 +518,7 @@ healthcheck
 healthz
 herokuapp
 hexData
+highScaleIPcache
 hoc
 hostAliases
 hostConfDirMountPath
@@ -735,6 +736,7 @@ mov
 mtls
 mul
 multi
+multiPoolMap
 multicore
 multihoming
 multinode

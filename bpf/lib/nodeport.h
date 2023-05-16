@@ -650,8 +650,8 @@ int tail_nodeport_dsr_ingress_ipv6(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 
-	ret = ct_lb_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off,
-			    CT_EGRESS, &ct_state, &monitor);
+	ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, ACTION_CREATE,
+			      CT_EGRESS, &ct_state, &monitor);
 	switch (ret) {
 	case CT_NEW:
 	case CT_REOPENED:
@@ -763,15 +763,14 @@ declare_tailcall_if(__not(is_defined(IS_BPF_LXC)), CILIUM_CALL_IPV6_NODEPORT_NAT
 int tail_nodeport_nat_ingress_ipv6(struct __ctx_buff *ctx)
 {
 	struct ipv6_nat_target target = {
-		.addr = IPV6_DIRECT_ROUTING,
 		.min_port = NODEPORT_PORT_MIN_NAT,
 		.max_port = NODEPORT_PORT_MAX_NAT,
 		.src_from_world = true,
 	};
+	__s8 ext_err = 0;
 	int ret;
 
-	/* ext_err is NULL because errors don't survive the tailcall anyway. */
-	ret = snat_v6_rev_nat(ctx, &target, NULL);
+	ret = snat_v6_rev_nat(ctx, &target, &ext_err);
 	if (IS_ERR(ret)) {
 		if (ret == NAT_PUNT_TO_STACK ||
 		    /* DROP_NAT_NO_MAPPING is unwanted behavior in a
@@ -805,7 +804,8 @@ int tail_nodeport_nat_ingress_ipv6(struct __ctx_buff *ctx)
 	ret = DROP_MISSED_TAIL_CALL;
 
  drop_err:
-	return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP, METRIC_INGRESS);
+	return send_drop_notify_error_ext(ctx, 0, ret, ext_err, CTX_ACT_DROP,
+					  METRIC_INGRESS);
 }
 
 declare_tailcall_if(__not(is_defined(IS_BPF_LXC)), CILIUM_CALL_IPV6_NODEPORT_NAT_EGRESS)
@@ -1021,8 +1021,8 @@ skip_service_lookup:
 	if (backend_local || !nodeport_uses_dsr6(&tuple)) {
 		struct ct_state ct_state = {};
 
-		ret = ct_lb_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off,
-				    CT_EGRESS, &ct_state, &monitor);
+		ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, ACTION_CREATE,
+				      CT_EGRESS, &ct_state, &monitor);
 		switch (ret) {
 		case CT_REPLY:
 			ipv6_ct_tuple_reverse(&tuple);
@@ -1113,8 +1113,8 @@ nodeport_rev_dnat_fwd_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace)
 					   is_defined(ENABLE_DSR)))
 		return CTX_ACT_OK;
 
-	ret = ct_lb_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, CT_INGRESS,
-			    &ct_state, &trace->monitor);
+	ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, ACTION_CREATE,
+			      CT_INGRESS, &ct_state, &trace->monitor);
 	if (ret == CT_REPLY) {
 		trace->reason = TRACE_REASON_CT_REPLY;
 
@@ -1175,8 +1175,8 @@ static __always_inline int rev_nodeport_lb6(struct __ctx_buff *ctx, __s8 *ext_er
 	if (!ct_has_nodeport_egress_entry6(get_ct_map6(&tuple), &tuple, false))
 		goto out;
 
-	ret = ct_lb_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, CT_INGRESS,
-			    &ct_state, &monitor);
+	ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, ACTION_CREATE,
+			      CT_INGRESS, &ct_state, &monitor);
 	if (ret == CT_REPLY && ct_state.node_port == 1 && ct_state.rev_nat_index != 0) {
 		ret = lb6_rev_nat(ctx, l4_off, ct_state.rev_nat_index,
 				  &tuple, REV_NAT_F_TUPLE_SADDR);
@@ -1908,8 +1908,8 @@ int tail_nodeport_dsr_ingress_ipv4(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 
-	ret = ct_lb_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off,
-			    has_l4_header, CT_EGRESS, &ct_state, &monitor);
+	ret = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off,
+			      has_l4_header, ACTION_CREATE, CT_EGRESS, &ct_state, &monitor);
 	switch (ret) {
 	case CT_NEW:
 	/* Maybe we can be a bit more selective about CT_REOPENED?
@@ -1975,17 +1975,11 @@ int tail_nodeport_nat_ingress_ipv4(struct __ctx_buff *ctx)
 		.min_port = NODEPORT_PORT_MIN_NAT,
 		.max_port = NODEPORT_PORT_MAX_NAT,
 		.src_from_world = true,
-		/* Unfortunately, the bpf_fib_lookup() is not able to set src IP addr.
-		 * So we need to assume that the direct routing device is going to be
-		 * used to fwd the NodePort request, thus SNAT-ing to its IP addr.
-		 * This will change once we have resolved GH#17158.
-		 */
-		.addr = IPV4_DIRECT_ROUTING,
 	};
+	__s8 ext_err = 0;
 	int ret;
 
-	/* ext_err is NULL because errors don't survive the tailcall anyway. */
-	ret = snat_v4_rev_nat(ctx, &target, NULL);
+	ret = snat_v4_rev_nat(ctx, &target, &ext_err);
 	if (IS_ERR(ret)) {
 		if (ret == NAT_PUNT_TO_STACK ||
 		    /* DROP_NAT_NO_MAPPING is unwanted behavior in a
@@ -2031,7 +2025,8 @@ int tail_nodeport_nat_ingress_ipv4(struct __ctx_buff *ctx)
 	ret = DROP_MISSED_TAIL_CALL;
 
  drop_err:
-	return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP, METRIC_INGRESS);
+	return send_drop_notify_error_ext(ctx, 0, ret, ext_err, CTX_ACT_DROP,
+					  METRIC_INGRESS);
 }
 
 declare_tailcall_if(__not(is_defined(IS_BPF_LXC)), CILIUM_CALL_IPV4_NODEPORT_NAT_EGRESS)
@@ -2275,8 +2270,8 @@ skip_service_lookup:
 	if (backend_local || !nodeport_uses_dsr4(&tuple)) {
 		struct ct_state ct_state = {};
 
-		ret = ct_lb_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off,
-				    has_l4_header, CT_EGRESS, &ct_state, &monitor);
+		ret = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, has_l4_header,
+				      ACTION_CREATE, CT_EGRESS, &ct_state, &monitor);
 		switch (ret) {
 		case CT_REPLY:
 			/* SVC request should never be considered a reply, so this
@@ -2363,8 +2358,8 @@ nodeport_rev_dnat_fwd_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace)
 					   is_defined(ENABLE_DSR)))
 		return CTX_ACT_OK;
 
-	ret = ct_lb_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off,
-			    has_l4_header, CT_INGRESS, &ct_state, &trace->monitor);
+	ret = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, has_l4_header,
+			      ACTION_CREATE, CT_INGRESS, &ct_state, &trace->monitor);
 	if (ret == CT_REPLY) {
 		trace->reason = TRACE_REASON_CT_REPLY;
 
@@ -2437,8 +2432,8 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, __s8 *ext_er
 	if (!ct_has_nodeport_egress_entry4(get_ct_map4(&tuple), &tuple, false))
 		goto out;
 
-	ret = ct_lb_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off,
-			    has_l4_header, CT_INGRESS, &ct_state, &monitor);
+	ret = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, l4_off, has_l4_header,
+			      ACTION_CREATE, CT_INGRESS, &ct_state, &monitor);
 	if (ret == CT_REPLY && ct_state.node_port == 1 && ct_state.rev_nat_index != 0) {
 		reason = TRACE_REASON_CT_REPLY;
 		ret = lb4_rev_nat(ctx, l3_off, l4_off, &ct_state, &tuple,

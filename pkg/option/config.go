@@ -311,6 +311,11 @@ const (
 	// conflicting marks.
 	EnableIdentityMark = "enable-identity-mark"
 
+	// EnableHighScaleIPcache enables the special ipcache mode for high scale
+	// clusters. The ipcache content will be reduced to the strict minimum and
+	// traffic will be encapsulated to carry security identities.
+	EnableHighScaleIPcache = "enable-high-scale-ipcache"
+
 	// AddressScopeMax controls the maximum address scope for addresses to be
 	// considered local ones with HOST_ID in the ipcache
 	AddressScopeMax = "local-max-addr-scope"
@@ -427,6 +432,9 @@ const (
 
 	// PrometheusServeAddr IP:Port on which to serve prometheus metrics (pass ":Port" to bind on all interfaces, "" is off)
 	PrometheusServeAddr = "prometheus-serve-addr"
+
+	// ExternalEnvoyProxy defines whether the Envoy is deployed externally in form of a DaemonSet or not.
+	ExternalEnvoyProxy = "external-envoy-proxy"
 
 	// CMDRef is the path to cmdref output directory
 	CMDRef = "cmdref"
@@ -838,6 +846,9 @@ const (
 
 	// IPAM is the IPAM method to use
 	IPAM = "ipam"
+
+	// IPAMMultiPoolNodePreAlloc contains the list of IP pools which should be pre-allocated on this node
+	IPAMMultiPoolNodePreAlloc = "multi-pool-node-pre-alloc"
 
 	// XDPModeNative for loading progs with XDPModeLinkDriver
 	XDPModeNative = "native"
@@ -1360,6 +1371,7 @@ type DaemonConfig struct {
 	BpfDir              string       // BPF template files directory
 	LibDir              string       // Cilium library files directory
 	RunDir              string       // Cilium runtime directory
+	ExternalEnvoyProxy  bool         // Whether Envoy is deployed as external DaemonSet or not
 	devicesMu           lock.RWMutex // Protects devices
 	devices             []string     // bpf_host device
 	DirectRoutingDevice string       // Direct routing device (used by BPF NodePort and BPF Host Routing)
@@ -2027,6 +2039,11 @@ type DaemonConfig struct {
 	// conflicting marks.
 	EnableIdentityMark bool
 
+	// EnableHighScaleIPcache enables the special ipcache mode for high scale
+	// clusters. The ipcache content will be reduced to the strict minimum and
+	// traffic will be encapsulated to carry security identities.
+	EnableHighScaleIPcache bool
+
 	// KernelHz is the HZ rate the kernel is operating in
 	KernelHz int
 
@@ -2042,6 +2059,9 @@ type DaemonConfig struct {
 
 	// IPAM is the IPAM method to use
 	IPAM string
+
+	// IPAMMultiPoolNodePreAlloc contains the list of IP pools which should be pre-allocated on this node
+	IPAMMultiPoolNodePreAlloc map[string]string
 
 	// AutoCreateCiliumNodeResource enables automatic creation of a
 	// CiliumNode resource for the local node
@@ -3030,6 +3050,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.RestoreState = vp.GetBool(Restore)
 	c.RouteMetric = vp.GetInt(RouteMetric)
 	c.RunDir = vp.GetString(StateDir)
+	c.ExternalEnvoyProxy = vp.GetBool(ExternalEnvoyProxy)
 	c.SidecarIstioProxyImage = vp.GetString(SidecarIstioProxyImage)
 	c.UseSingleClusterRoute = vp.GetBool(SingleClusterRouteName)
 	c.SocketPath = vp.GetString(SocketPath)
@@ -3059,6 +3080,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.BGPConfigPath = vp.GetString(BGPConfigPath)
 	c.ExternalClusterIP = vp.GetBool(ExternalClusterIPName)
 	c.EnableNat46X64Gateway = vp.GetBool(EnableNat46X64Gateway)
+	c.EnableHighScaleIPcache = vp.GetBool(EnableHighScaleIPcache)
 	c.EnableIPv4Masquerade = vp.GetBool(EnableIPv4Masquerade) && c.EnableIPv4
 	c.EnableIPv6Masquerade = vp.GetBool(EnableIPv6Masquerade) && c.EnableIPv6
 	c.EnableBPFMasquerade = vp.GetBool(EnableBPFMasquerade)
@@ -3354,6 +3376,11 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 		if c.EnableIPv6 {
 			c.K8sRequireIPv6PodCIDR = true
 		}
+	}
+	if m, err := command.GetStringMapStringE(vp, IPAMMultiPoolNodePreAlloc); err != nil {
+		log.Fatalf("unable to parse %s: %s", IPAMMultiPoolNodePreAlloc, err)
+	} else {
+		c.IPAMMultiPoolNodePreAlloc = m
 	}
 
 	c.KubeProxyReplacementHealthzBindAddr = vp.GetString(KubeProxyReplacementHealthzBindAddr)

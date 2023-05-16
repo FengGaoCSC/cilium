@@ -346,6 +346,21 @@ ipv6_ct_tuple_reverse(struct ipv6_ct_tuple *tuple)
 	ct_flip_tuple_dir6(tuple);
 }
 
+static __always_inline void
+ipv6_ct_tuple_swap_ports(struct ipv6_ct_tuple *tuple)
+{
+	__be16 tmp;
+
+	/* Conntrack code uses tuples that have source and destination ports in
+	 * the reversed order. Other code, such as BPF helpers and NAT, requires
+	 * normal tuples that match the actual packet contents. This function
+	 * converts between these two formats.
+	 */
+	tmp = tuple->sport;
+	tuple->sport = tuple->dport;
+	tuple->dport = tmp;
+}
+
 static __always_inline int
 __ct_lookup6(const void *map, struct ipv6_ct_tuple *tuple, struct __ctx_buff *ctx,
 	     int l4_off, int action, enum ct_dir dir, struct ct_state *ct_state,
@@ -394,10 +409,11 @@ out:
 	return ret;
 }
 
+/* An IPv6 version of ct_lazy_lookup4. */
 static __always_inline int
-ct_lb_lookup6(const void *map, struct ipv6_ct_tuple *tuple,
-	      struct __ctx_buff *ctx, int l4_off, enum ct_dir dir,
-	      struct ct_state *ct_state, __u32 *monitor)
+ct_lazy_lookup6(const void *map, struct ipv6_ct_tuple *tuple,
+		struct __ctx_buff *ctx, int l4_off, int action, enum ct_dir dir,
+		struct ct_state *ct_state, __u32 *monitor)
 {
 	/* The tuple is created in reverse order initially to find a
 	 * potential reverse flow. This is required because the RELATED
@@ -415,7 +431,7 @@ ct_lb_lookup6(const void *map, struct ipv6_ct_tuple *tuple,
 	else
 		return DROP_CT_INVALID_HDR;
 
-	return __ct_lookup6(map, tuple, ctx, l4_off, ACTION_CREATE, dir,
+	return __ct_lookup6(map, tuple, ctx, l4_off, action, dir,
 			    ct_state, monitor);
 }
 
@@ -557,6 +573,21 @@ ipv4_ct_tuple_reverse(struct ipv4_ct_tuple *tuple)
 {
 	__ipv4_ct_tuple_reverse(tuple);
 	ct_flip_tuple_dir4(tuple);
+}
+
+static __always_inline void
+ipv4_ct_tuple_swap_ports(struct ipv4_ct_tuple *tuple)
+{
+	__be16 tmp;
+
+	/* Conntrack code uses tuples that have source and destination ports in
+	 * the reversed order. Other code, such as BPF helpers and NAT, requires
+	 * normal tuples that match the actual packet contents. This function
+	 * converts between these two formats.
+	 */
+	tmp = tuple->sport;
+	tuple->sport = tuple->dport;
+	tuple->dport = tmp;
 }
 
 static __always_inline int ipv4_ct_extract_l4_ports(struct __ctx_buff *ctx,
@@ -733,15 +764,21 @@ out:
  * @arg dir		lookup direction
  * @arg ct_state	returned CT entry
  * @arg monitor		monitor feedback for trace aggregation
+ * @arg action          ACTION_CREATE or ACTION_UNSPEC for __ct_lookup
  *
- * This differs from ct_lookup4(), as here we expect that
- * - the CT tuple has its L4 ports populated,
- * - the L4 protocol is a SVC protocol (ie SCTP / UDP / TCP)
+ * This differs from ct_lookup4(), as here we expect that the CT tuple has its
+ * L4 ports populated.
+ *
+ * Note that certain ICMP types are not supported by this function (see cases
+ * where ct_extract_ports4 sets tuple->flags), because it overwrites
+ * tuple->flags, but this works well in LB and NAT flows that don't pass these
+ * ICMP types to ct_lazy_lookup4.
  */
 static __always_inline int
-ct_lb_lookup4(const void *map, struct ipv4_ct_tuple *tuple,
-	      struct __ctx_buff *ctx, int l4_off, bool has_l4_header,
-	      enum ct_dir dir, struct ct_state *ct_state, __u32 *monitor)
+ct_lazy_lookup4(const void *map, struct ipv4_ct_tuple *tuple,
+		struct __ctx_buff *ctx, int l4_off, bool has_l4_header,
+		int action, enum ct_dir dir, struct ct_state *ct_state,
+		__u32 *monitor)
 {
 	/* The tuple is created in reverse order initially to find a
 	 * potential reverse flow. This is required because the RELATED
@@ -760,7 +797,7 @@ ct_lb_lookup4(const void *map, struct ipv4_ct_tuple *tuple,
 		return DROP_CT_INVALID_HDR;
 
 	return __ct_lookup4(map, tuple, ctx, l4_off, has_l4_header,
-			    ACTION_CREATE, dir, ct_state, monitor);
+			    action, dir, ct_state, monitor);
 }
 
 /* Offset must point to IPv4 header */
@@ -1106,7 +1143,8 @@ ct_has_dsr_egress_entry6(const void *map, struct ipv6_ct_tuple *ingress_tuple)
 }
 
 static __always_inline void
-ct_update_backend_id(const void *map, const void *tuple, const struct ct_state *state)
+ct_update_svc_entry(const void *map, const void *tuple,
+		    __u32 backend_id, __u16 rev_nat_index)
 {
 	struct ct_entry *entry;
 
@@ -1114,7 +1152,8 @@ ct_update_backend_id(const void *map, const void *tuple, const struct ct_state *
 	if (!entry)
 		return;
 
-	entry->backend_id = state->backend_id;
+	entry->backend_id = backend_id;
+	entry->rev_nat_index = rev_nat_index;
 }
 
 static __always_inline void
