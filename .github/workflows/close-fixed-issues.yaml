@@ -15,6 +15,10 @@ on:
         required: true
         type: string
         description: "The PR description containing the 'Fixes #xyz' line."
+      remove-label:
+        required: false
+        type: string
+        description: "A label to remove from the issue to be closed."
 
 jobs:
   closer:
@@ -27,8 +31,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ inputs.pr-number }}
           PR_BODY: ${{ inputs.pr-body }}
+          REMOVE_LABEL: ${{ inputs.remove-label }}
         run: |
           echo $PR_BODY | grep -Eio "(fix|clos|resolv)(e|ed|es)?:? +(https://github.com/${GITHUB_REPOSITORY}/issues/|#)[0-9]+" | grep -Eo '[0-9]+' | while read -r issue; do
+            if [[ ! -z "$REMOVE_LABEL"]]; then
+              echo "Removing label ${REMOVE_LABEL} from issue #${issue}."
+              gh issue edit ${issue} --repo "${GITHUB_REPOSITORY}" --remove-label "${REMOVE_LABEL}"
+            fi
             echo "Closing issue #${issue} as completed in #${PR_NUMBER}."
             gh issue close ${issue} --repo "${GITHUB_REPOSITORY}" --reason "completed" --comment "Done in #${PR_NUMBER}"
           done || true
