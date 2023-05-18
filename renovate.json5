@@ -1,0 +1,58 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base",
+    ":gitSignOff",
+    "helpers:pinGitHubActionDigests"
+  ],
+  // This ensures that the gitAuthor and gitSignOff fields match
+  "gitAuthor": "renovate[bot] <bot@renovateapp.com>",
+  "includePaths": [
+    "images/cilium/download-hubble-enterprise.sh"
+  ],
+  "pinDigests": true,
+  "ignorePresets": [":prHourlyLimit2"],
+  "separateMajorMinor": true,
+  "separateMultipleMajor": true,
+  "separateMinorPatch": true,
+  "pruneStaleBranches": true,
+  "baseBranches": [
+    "main-ce",
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true
+  },
+  "labels": [
+    "kind/enhancement",
+    "release-note/misc"
+  ],
+  "stopUpdatingLabel": "renovate/stop-updating",
+  "packageRules": [
+    {
+      "groupName": "Hubble CLI Enterprise",
+      "groupSlug": "hubble-cli-ee",
+      "matchDepNames": [
+        "isovalent/hubble-releases",
+      ],
+    },
+  ],
+  "regexManagers": [
+    {
+      "fileMatch": [
+        "images/cilium/download-hubble-enterprise\\.sh",
+      ],
+      // These regexes manage version and digest strings in shell scripts,
+      // similar to the examples shown here:
+      //   https://docs.renovatebot.com/modules/manager/regex/#advanced-capture
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+_version=\"(?<currentValue>.*)\"",
+        // The digestVersion in this regex is required for Renovate to be able
+        // to match the digest to the pinned version. It will not work without it.
+        // Note that for GitHub release artifact digests, you likely want to use
+        // github-release-attachments as the datasource here.
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?) digestVersion=(?<currentValue>.*)\\s+.+_sha256.*=\"(?<currentDigest>.*)\""
+      ]
+    },
+  ]
+}
+
