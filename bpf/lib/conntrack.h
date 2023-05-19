@@ -220,7 +220,9 @@ static __always_inline __u8 __ct_lookup(const void *map, struct __ctx_buff *ctx,
 				ct_state->backend_id = entry->backend_id;
 				ct_state->syn = syn;
 			} else if (dir == CT_INGRESS || dir == CT_EGRESS) {
+#ifndef DISABLE_LOOPBACK_LB
 				ct_state->loopback = entry->lb_loopback;
+#endif
 				ct_state->node_port = entry->node_port;
 				ct_state->dsr = entry->dsr;
 				ct_state->proxy_redirect = entry->proxy_redirect;
@@ -850,7 +852,6 @@ static __always_inline int ct_create6(const void *map_main, const void *map_rela
 	if (dir == CT_SERVICE) {
 		entry.backend_id = ct_state->backend_id;
 	} else if (dir == CT_INGRESS || dir == CT_EGRESS) {
-		entry.lb_loopback = ct_state->loopback;
 		entry.node_port = ct_state->node_port;
 		entry.dsr = ct_state->dsr;
 		entry.ifindex = ct_state->ifindex;
@@ -925,7 +926,9 @@ static __always_inline int ct_create4(const void *map_main,
 	if (dir == CT_SERVICE) {
 		entry.backend_id = ct_state->backend_id;
 	} else if (dir == CT_INGRESS || dir == CT_EGRESS) {
+#ifndef DISABLE_LOOPBACK_LB
 		entry.lb_loopback = ct_state->loopback;
+#endif
 		entry.node_port = ct_state->node_port;
 		entry.dsr = ct_state->dsr;
 		entry.from_tunnel = ct_state->from_tunnel;
@@ -951,14 +954,15 @@ static __always_inline int ct_create4(const void *map_main,
 	}
 
 	cilium_dbg3(ctx, DBG_CT_CREATED4, entry.rev_nat_index,
-		    ct_state->src_sec_id, ct_state->addr);
+		    ct_state->src_sec_id, 0);
 
 	entry.src_sec_id = ct_state->src_sec_id;
 	err = map_update_elem(map_main, tuple, &entry, 0);
 	if (unlikely(err < 0))
 		goto err_ct_fill_up;
 
-	if (ct_state->addr && ct_state->loopback) {
+#ifndef DISABLE_LOOPBACK_LB
+	if (dir == CT_EGRESS && ct_state->addr && ct_state->loopback) {
 		__u8 flags = tuple->flags;
 		__be32 saddr, daddr;
 
@@ -966,18 +970,13 @@ static __always_inline int ct_create4(const void *map_main,
 		daddr = tuple->daddr;
 
 		/* We are looping back into the origin endpoint through a
-		 * service, set up a conntrack tuple for the reply to ensure we
+		 * service. Set up a conntrack tuple for the reply to ensure we
 		 * do rev NAT before attempting to route the destination
 		 * address which will not point back to the right source.
 		 */
 		tuple->flags = TUPLE_F_IN;
-		if (dir == CT_INGRESS) {
-			tuple->saddr = ct_state->addr;
-			tuple->daddr = ct_state->svc_addr;
-		} else {
-			tuple->saddr = ct_state->svc_addr;
-			tuple->daddr = ct_state->addr;
-		}
+		tuple->saddr = ct_state->svc_addr;
+		tuple->daddr = ct_state->addr;
 
 		err = map_update_elem(map_main, tuple, &entry, 0);
 		if (unlikely(err < 0))
@@ -987,6 +986,7 @@ static __always_inline int ct_create4(const void *map_main,
 		tuple->daddr = daddr;
 		tuple->flags = flags;
 	}
+#endif
 
 	if (map_related != NULL) {
 		/* Create an ICMP entry to relate errors */

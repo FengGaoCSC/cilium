@@ -1036,7 +1036,8 @@ lb6_to_lb4_service(const struct lb6_service *svc __maybe_unused)
 static __always_inline int __lb4_rev_nat(struct __ctx_buff *ctx, int l3_off, int l4_off,
 					 struct ipv4_ct_tuple *tuple, int flags,
 					 const struct lb4_reverse_nat *nat,
-					 const struct ct_state *ct_state, bool has_l4_header)
+					 const struct ct_state *ct_state __maybe_unused,
+					 bool has_l4_header)
 {
 	struct csum_offset csum_off = {};
 	__be32 old_sip, new_sip, sum = 0;
@@ -1064,6 +1065,7 @@ static __always_inline int __lb4_rev_nat(struct __ctx_buff *ctx, int l3_off, int
 		new_sip = nat->address;
 	}
 
+#ifndef DISABLE_LOOPBACK_LB
 	if (ct_state->loopback) {
 		/* The packet was looped back to the sending endpoint on the
 		 * forward service translation. This implies that the original
@@ -1088,6 +1090,7 @@ static __always_inline int __lb4_rev_nat(struct __ctx_buff *ctx, int l3_off, int
 		/* Update the tuple address which is representing the destination address */
 		tuple->saddr = old_sip;
 	}
+#endif
 
 	ret = ctx_store_bytes(ctx, l3_off + offsetof(struct iphdr, saddr),
 			      &new_sip, 4, 0);
@@ -1635,7 +1638,6 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 	 * service lookup happens and future lookups use EGRESS or INGRESS.
 	 */
 	tuple->flags = flags;
-	state->addr = backend->address;
 #ifdef ENABLE_SESSION_AFFINITY
 	if (lb4_svc_is_affinity(svc))
 		lb4_update_affinity_by_addr(svc, &client_id, backend_id);
@@ -1651,7 +1653,6 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 	if (saddr == backend->address) {
 		new_saddr = IPV4_LOOPBACK;
 		state->loopback = 1;
-		state->addr = new_saddr;
 		state->svc_addr = saddr;
 	}
 
@@ -1689,7 +1690,11 @@ static __always_inline void lb4_ctx_store_state(struct __ctx_buff *ctx,
 {
 	ctx_store_meta(ctx, CB_PROXY_MAGIC, (__u32)proxy_port << 16);
 	ctx_store_meta(ctx, CB_CT_STATE, (__u32)state->rev_nat_index << 16 |
+#ifndef DISABLE_LOOPBACK_LB
 		       state->loopback);
+#else
+		       0);
+#endif
 	ctx_store_meta(ctx, CB_CLUSTER_ID_EGRESS, cluster_id);
 }
 
