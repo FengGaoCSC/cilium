@@ -22,9 +22,6 @@
 /* Pass unknown ICMPv6 NS to stack */
 #define ACTION_UNKNOWN_ICMP6_NS CTX_ACT_OK
 
-/* CB_PROXY_MAGIC overlaps with CB_ENCRYPT_MAGIC */
-#define ENCRYPT_OR_PROXY_MAGIC 0
-
 #ifndef VLAN_FILTER
 # define VLAN_FILTER(ifindex, vlan_id) return false;
 #endif
@@ -344,13 +341,9 @@ handle_ipv6_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 
 #ifdef TUNNEL_MODE
 	if (info != NULL && info->tunnel_endpoint != 0) {
-		/* If IPSEC is needed recirc through ingress to use xfrm stack
-		 * and then result will routed back through bpf_netdev on egress
-		 * but with encrypt marks.
-		 */
 		return encap_and_redirect_with_nodeid(ctx, info->tunnel_endpoint,
-						      info->key, info->node_id,
-						      secctx, info->sec_identity,
+						      info->node_id, secctx,
+						      info->sec_identity,
 						      &trace);
 	} else {
 		struct tunnel_key key = {};
@@ -372,15 +365,6 @@ handle_ipv6_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 		/* See IPv4 comment. */
 		return DROP_UNROUTABLE;
 	}
-
-#ifdef ENABLE_IPSEC
-	if (info->key && info->tunnel_endpoint) {
-		__u8 key = get_min_encrypt_key(info->key);
-
-		set_encrypt_key_meta(ctx, key, info->node_id);
-		set_identity_meta(ctx, secctx);
-	}
-#endif
 	return CTX_ACT_OK;
 }
 
@@ -759,7 +743,7 @@ handle_ipv4_cont(struct __ctx_buff *ctx, __u32 secctx, const bool from_host,
 		if (vtep->vtep_mac && vtep->tunnel_endpoint) {
 			if (eth_store_daddr(ctx, (__u8 *)&vtep->vtep_mac, 0) < 0)
 				return DROP_WRITE_ERROR;
-			return __encap_and_redirect_with_nodeid(ctx, vtep->tunnel_endpoint,
+			return __encap_and_redirect_with_nodeid(ctx, 0, vtep->tunnel_endpoint,
 								secctx, WORLD_ID, WORLD_ID, &trace);
 		}
 	}
@@ -771,8 +755,8 @@ skip_vtep:
 #ifdef TUNNEL_MODE
 	if (info != NULL && info->tunnel_endpoint != 0) {
 		return encap_and_redirect_with_nodeid(ctx, info->tunnel_endpoint,
-						      info->key, info->node_id,
-						      secctx, info->sec_identity,
+						      info->node_id, secctx,
+						      info->sec_identity,
 						      &trace);
 	} else {
 		/* IPv4 lookup key: daddr & IPV4_MASK */
@@ -800,15 +784,6 @@ skip_vtep:
 		 */
 		return DROP_UNROUTABLE;
 	}
-
-#ifdef ENABLE_IPSEC
-	if (info->key && info->tunnel_endpoint) {
-		__u8 key = get_min_encrypt_key(info->key);
-
-		set_encrypt_key_meta(ctx, key, info->node_id);
-		set_identity_meta(ctx, secctx);
-	}
-#endif
 	return CTX_ACT_OK;
 }
 
@@ -961,8 +936,9 @@ static __always_inline int do_netdev_encrypt_encap(struct __ctx_buff *ctx, __u32
 
 	ctx->mark = 0;
 	bpf_clear_meta(ctx);
-	return __encap_and_redirect_with_nodeid(ctx, ep->tunnel_endpoint, src_id,
-						0, NOT_VTEP_DST, &trace);
+	return __encap_and_redirect_with_nodeid(ctx, 0, ep->tunnel_endpoint,
+						src_id, 0, NOT_VTEP_DST,
+						&trace);
 }
 
 static __always_inline int do_netdev_encrypt(struct __ctx_buff *ctx,
@@ -1299,7 +1275,8 @@ int cil_from_netdev(struct __ctx_buff *ctx)
 			}
 		}
 #endif
-		ret = __encap_and_redirect_with_nodeid(ctx, ctx_get_xfer(ctx, XFER_ENCAP_NODEID),
+		ret = __encap_and_redirect_with_nodeid(ctx, 0,
+						       ctx_get_xfer(ctx, XFER_ENCAP_NODEID),
 						       ctx_get_xfer(ctx, XFER_ENCAP_SECLABEL),
 						       ctx_get_xfer(ctx, XFER_ENCAP_DSTID),
 						       NOT_VTEP_DST, &trace);
@@ -1324,6 +1301,18 @@ drop_err:
 __section("from-host")
 int cil_from_host(struct __ctx_buff *ctx)
 {
+#ifdef ENABLE_HIGH_SCALE_IPCACHE
+	__u32 src_id = 0;
+	int ret;
+
+	ret = decapsulate_overlay(ctx, &src_id);
+	if (IS_ERR(ret))
+		send_drop_notify_error(ctx, src_id, ret, CTX_ACT_DROP,
+				       METRIC_INGRESS);
+	if (ret == CTX_ACT_REDIRECT)
+		return ret;
+#endif /* ENABLE_HIGH_SCALE_IPCACHE */
+
 	/* Traffic from the host ns going through cilium_host device must
 	 * not be subject to EDT rate-limiting.
 	 */
@@ -1482,7 +1471,7 @@ out:
 __section("to-host")
 int cil_to_host(struct __ctx_buff *ctx)
 {
-	__u32 magic = ctx_load_meta(ctx, ENCRYPT_OR_PROXY_MAGIC);
+	__u32 magic = ctx_load_meta(ctx, CB_PROXY_MAGIC);
 	__u16 __maybe_unused proto = 0;
 	struct trace_ctx trace = {
 		.reason = TRACE_REASON_UNKNOWN,
@@ -1493,10 +1482,7 @@ int cil_to_host(struct __ctx_buff *ctx)
 	__u32 src_id = 0;
 	__s8 ext_err = 0;
 
-	if ((magic & MARK_MAGIC_HOST_MASK) == MARK_MAGIC_ENCRYPT) {
-		ctx->mark = magic; /* CB_ENCRYPT_MAGIC */
-		src_id = ctx_load_meta(ctx, CB_ENCRYPT_IDENTITY);
-	} else if ((magic & 0xFFFF) == MARK_MAGIC_TO_PROXY) {
+	if ((magic & 0xFFFF) == MARK_MAGIC_TO_PROXY) {
 		/* Upper 16 bits may carry proxy port number */
 		__be16 port = magic >> 16;
 

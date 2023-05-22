@@ -9,32 +9,10 @@
 #include "trace.h"
 #include "l3.h"
 #include "lib/wireguard.h"
+#include "high_scale_ipcache.h"
 
 #ifdef HAVE_ENCAP
 #ifdef ENABLE_IPSEC
-static __always_inline int
-encap_and_redirect_nomark_ipsec(struct __ctx_buff *ctx, __u8 key,
-				__u16 node_id, __u32 seclabel)
-{
-	/* Traffic from local host in tunnel mode will be passed to
-	 * cilium_host. In non-IPSec case traffic with non-local dst
-	 * will then be redirected to tunnel device. In IPSec case
-	 * though we need to traverse xfrm path still. The mark +
-	 * cb[4] hints will not survive a veth pair xmit to ingress
-	 * however so below encap_and_redirect_ipsec will not work.
-	 * Instead pass hints via cb[0], cb[4] (cb is not cleared
-	 * by dev_ctx_forward) and catch hints with bpf_host
-	 * prog that will populate mark/cb as expected by xfrm and 2nd
-	 * traversal into bpf_host. Remember we can't use cb[0-3]
-	 * in both cases because xfrm layer would overwrite them. We
-	 * use cb[4] here so it doesn't need to be reset by
-	 * bpf_host.
-	 */
-	set_encrypt_key_meta(ctx, key, node_id);
-	set_identity_meta(ctx, seclabel);
-	return CTX_ACT_OK;
-}
-
 static __always_inline int
 encap_and_redirect_ipsec(struct __ctx_buff *ctx, __u8 key, __u16 node_id,
 			 __u32 seclabel)
@@ -53,7 +31,7 @@ encap_and_redirect_ipsec(struct __ctx_buff *ctx, __u8 key, __u16 node_id,
 #endif /* ENABLE_IPSEC */
 
 static __always_inline int
-__encap_with_nodeid(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
+__encap_with_nodeid(struct __ctx_buff *ctx, __u32 src_ip, __be32 tunnel_endpoint,
 		    __u32 seclabel, __u32 dstid, __u32 vni __maybe_unused,
 		    enum trace_reason ct_reason, __u32 monitor, int *ifindex)
 {
@@ -71,7 +49,8 @@ __encap_with_nodeid(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
 
 	cilium_dbg(ctx, DBG_ENCAP, node_id, seclabel);
 
-	ret = ctx_set_encap_info(ctx, node_id, seclabel, dstid, vni, NULL, 0, false, ifindex);
+	ret = ctx_set_encap_info(ctx, src_ip, node_id, seclabel, dstid, vni,
+				 NULL, 0, false, ifindex);
 	if (ret == CTX_ACT_REDIRECT)
 		send_trace_notify(ctx, TRACE_TO_OVERLAY, seclabel, dstid, 0, *ifindex,
 				  ct_reason, monitor);
@@ -80,7 +59,8 @@ __encap_with_nodeid(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
 }
 
 static __always_inline int
-__encap_and_redirect_with_nodeid(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
+__encap_and_redirect_with_nodeid(struct __ctx_buff *ctx, __u32 src_ip __maybe_unused,
+				 __be32 tunnel_endpoint,
 				 __u32 seclabel, __u32 dstid, __u32 vni,
 				 const struct trace_ctx *trace)
 {
@@ -102,7 +82,7 @@ __encap_and_redirect_with_nodeid(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
 		return ret;
 #endif /* ENABLE_WIREGUARD */
 
-	ret = __encap_with_nodeid(ctx, tunnel_endpoint, seclabel, dstid,
+	ret = __encap_with_nodeid(ctx, src_ip, tunnel_endpoint, seclabel, dstid,
 				  vni, trace->reason, trace->monitor,
 				  &ifindex);
 	if (ret != CTX_ACT_REDIRECT)
@@ -112,22 +92,18 @@ __encap_and_redirect_with_nodeid(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
 }
 
 /* encap_and_redirect_with_nodeid returns CTX_ACT_OK after ctx meta-data is
- * set (eg. when IPSec is enabled). Caller should pass the ctx to the stack at this
- * point. Otherwise returns CTX_ACT_REDIRECT on successful redirect to tunnel device.
+ * set. Caller should pass the ctx to the stack at this point. Otherwise
+ * returns CTX_ACT_REDIRECT on successful redirect to tunnel device.
  * On error returns CTX_ACT_DROP or DROP_WRITE_ERROR.
  */
 static __always_inline int
 encap_and_redirect_with_nodeid(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
-			       __u8 key __maybe_unused,
 			       __u16 node_id __maybe_unused,
 			       __u32 seclabel, __u32 dstid,
 			       const struct trace_ctx *trace)
 {
-#ifdef ENABLE_IPSEC
-	if (key)
-		return encap_and_redirect_nomark_ipsec(ctx, key, node_id, seclabel);
-#endif
-	return __encap_and_redirect_with_nodeid(ctx, tunnel_endpoint, seclabel, dstid, NOT_VTEP_DST,
+	return __encap_and_redirect_with_nodeid(ctx, 0, tunnel_endpoint,
+						seclabel, dstid, NOT_VTEP_DST,
 						trace);
 }
 
@@ -157,20 +133,21 @@ __encap_and_redirect_lxc(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
 	 * the tunnel, to apply the correct reverse DNAT.
 	 * See #14674 for details.
 	 */
-	ret = __encap_with_nodeid(ctx, tunnel_endpoint, seclabel, dstid, NOT_VTEP_DST,
-				  trace->reason, trace->monitor, &ifindex);
+	ret = __encap_with_nodeid(ctx, 0, tunnel_endpoint, seclabel, dstid,
+				  NOT_VTEP_DST, trace->reason, trace->monitor,
+				  &ifindex);
 	if (ret != CTX_ACT_REDIRECT)
 		return ret;
 
 	/* tell caller that this packet needs to go through the stack: */
 	return CTX_ACT_OK;
 #else
-	return __encap_and_redirect_with_nodeid(ctx, tunnel_endpoint,
+	return __encap_and_redirect_with_nodeid(ctx, 0, tunnel_endpoint,
 						seclabel, dstid, NOT_VTEP_DST, trace);
 #endif /* !ENABLE_NODEPORT && (ENABLE_IPSEC || ENABLE_HOST_FIREWALL) */
 }
 
-#ifdef TUNNEL_MODE
+#if defined(TUNNEL_MODE) || defined(ENABLE_HIGH_SCALE_IPCACHE)
 /* encap_and_redirect_lxc adds IPSec metadata (if enabled) and returns the packet
  * so that it can be passed to the IP stack. Without IPSec the packet is
  * typically redirected to the output tunnel device and ctx will not be seen by
@@ -181,13 +158,30 @@ __encap_and_redirect_lxc(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
  * and finally on successful redirect returns CTX_ACT_REDIRECT.
  */
 static __always_inline int
-encap_and_redirect_lxc(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
-		       __u8 encrypt_key, struct tunnel_key *key,
-		       __u16 node_id, __u32 seclabel, __u32 dstid,
+encap_and_redirect_lxc(struct __ctx_buff *ctx,
+		       __be32 tunnel_endpoint __maybe_unused,
+		       __u32 src_ip __maybe_unused,
+		       __u32 dst_ip __maybe_unused,
+		       __u8 encrypt_key __maybe_unused,
+		       struct tunnel_key *key __maybe_unused,
+		       __u16 node_id __maybe_unused,
+		       __u32 seclabel, __u32 dstid,
 		       const struct trace_ctx *trace)
 {
-	struct tunnel_value *tunnel;
+	struct tunnel_value *tunnel __maybe_unused;
 
+#ifdef ENABLE_HIGH_SCALE_IPCACHE
+	/* If the destination doesn't match one of the world CIDRs, we assume
+	 * it's destined to a remote pod. In that case, since the high-scale
+	 * ipcache is enabled, we want to encapsulate with the remote pod's IP
+	 * itself.
+	 */
+	if (!world_cidrs_lookup4(dst_ip))
+		return __encap_and_redirect_with_nodeid(ctx, src_ip, dst_ip,
+							seclabel, dstid,
+							NOT_VTEP_DST, trace);
+	return DROP_NO_TUNNEL_ENDPOINT;
+#else /* ENABLE_HIGH_SCALE_IPCACHE */
 	if (tunnel_endpoint)
 		return __encap_and_redirect_lxc(ctx, tunnel_endpoint,
 						encrypt_key, node_id, seclabel,
@@ -197,16 +191,17 @@ encap_and_redirect_lxc(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
 	if (!tunnel)
 		return DROP_NO_TUNNEL_ENDPOINT;
 
-#ifdef ENABLE_IPSEC
+# ifdef ENABLE_IPSEC
 	if (tunnel->key) {
 		__u8 min_encrypt_key = get_min_encrypt_key(tunnel->key);
 
 		return encap_and_redirect_ipsec(ctx, min_encrypt_key, node_id,
 						seclabel);
 	}
-#endif
-	return __encap_and_redirect_with_nodeid(ctx, tunnel->ip4, seclabel,
+# endif
+	return __encap_and_redirect_with_nodeid(ctx, 0, tunnel->ip4, seclabel,
 						dstid, NOT_VTEP_DST, trace);
+#endif /* ENABLE_HIGH_SCALE_IPCACHE */
 }
 
 static __always_inline int
@@ -219,19 +214,10 @@ encap_and_redirect_netdev(struct __ctx_buff *ctx, struct tunnel_key *k,
 	if (!tunnel)
 		return DROP_NO_TUNNEL_ENDPOINT;
 
-#ifdef ENABLE_IPSEC
-	if (tunnel->key) {
-		__u8 key = get_min_encrypt_key(tunnel->key);
-
-		return encap_and_redirect_nomark_ipsec(ctx, key,
-						       tunnel->node_id,
-						       seclabel);
-	}
-#endif
-	return __encap_and_redirect_with_nodeid(ctx, tunnel->ip4, seclabel,
+	return __encap_and_redirect_with_nodeid(ctx, 0, tunnel->ip4, seclabel,
 						0, NOT_VTEP_DST, trace);
 }
-#endif /* TUNNEL_MODE */
+#endif /* TUNNEL_MODE || ENABLE_HIGH_SCALE_IPCACHE */
 
 #if defined(ENABLE_DSR) && DSR_ENCAP_MODE == DSR_ENCAP_GENEVE
 static __always_inline int
@@ -255,7 +241,7 @@ __encap_with_nodeid_opt(struct __ctx_buff *ctx, __u32 tunnel_endpoint,
 
 	cilium_dbg(ctx, DBG_ENCAP, node_id, seclabel);
 
-	ret = ctx_set_encap_info(ctx, node_id, seclabel, dstid, vni,
+	ret = ctx_set_encap_info(ctx, 0, node_id, seclabel, dstid, vni,
 				 opt, opt_len, is_ipv6, ifindex);
 	if (ret == CTX_ACT_REDIRECT)
 		send_trace_notify(ctx, TRACE_TO_OVERLAY, seclabel, dstid, 0, *ifindex,

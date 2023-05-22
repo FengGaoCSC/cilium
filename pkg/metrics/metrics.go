@@ -68,9 +68,12 @@ const (
 	// SubsystemAPILimiter is the subsystem to scope metrics related to the API limiter package.
 	SubsystemAPILimiter = "api_limiter"
 
-	// Namespace is used to scope metrics from cilium. It is prepended to metric
-	// names and separated with a '_'
-	Namespace = "cilium"
+	// CiliumAgentNamespace is used to scope metrics from the Cilium Agent
+	CiliumAgentNamespace = "cilium"
+
+	// CiliumClusterMeshAPIServerNamespace is used to scope metrics from the
+	// Cilium Cluster Mesh API Server
+	CiliumClusterMeshAPIServerNamespace = "cilium_clustermesh_apiserver"
 
 	// LabelError indicates the type of error (string)
 	LabelError = "error"
@@ -220,6 +223,10 @@ const (
 )
 
 var (
+	// Namespace is used to scope metrics from cilium. It is prepended to metric
+	// names and separated with a '_'
+	Namespace = CiliumAgentNamespace
+
 	// goCustomCollectorsRX tracks enabled go runtime metrics.
 	goCustomCollectorsRX = regexp.MustCompile(`^/sched/latencies:seconds`)
 
@@ -1244,7 +1251,7 @@ func CreateConfiguration(metricsEnabled []string) (Configuration, []prometheus.C
 				Namespace: Namespace,
 				Subsystem: SubsystemKVStore,
 				Name:      "events_queue_seconds",
-				Help:      "Duration in seconds of time received event was blocked before it could be queued",
+				Help:      "Seconds waited before a received event was queued",
 				Buckets:   []float64{.002, .005, .01, .015, .025, .05, .1, .25, .5, .75, 1},
 			}, []string{LabelScope, LabelAction})
 
