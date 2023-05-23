@@ -527,4 +527,4 @@ Vagrantfile @cilium/ci-structure
 
 * @isovalent/core-structure
 /enterprise @isovalent/isovalent
-*/**enterprise* @isovalent/isovalent
+*enterprise* @isovalent/isovalent
