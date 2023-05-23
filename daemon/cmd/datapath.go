@@ -40,7 +40,6 @@ import (
 	"github.com/cilium/cilium/pkg/maps/neighborsmap"
 	"github.com/cilium/cilium/pkg/maps/nodemap"
 	"github.com/cilium/cilium/pkg/maps/policymap"
-	"github.com/cilium/cilium/pkg/maps/signalmap"
 	"github.com/cilium/cilium/pkg/maps/srv6map"
 	"github.com/cilium/cilium/pkg/maps/tunnel"
 	"github.com/cilium/cilium/pkg/maps/vtep"
@@ -389,10 +388,6 @@ func (d *Daemon) initMaps() error {
 		return err
 	}
 
-	if err := signalmap.InitMap(possibleCPUs); err != nil {
-		return err
-	}
-
 	if err := policymap.InitCallMaps(option.Config.EnableEnvoyConfig); err != nil {
 		return err
 	}
@@ -623,7 +618,7 @@ func setupRouteToVtepCidr() error {
 			To:       prefix.IPNet,
 			Table:    linux_defaults.RouteTableVtep,
 		}
-		if err := route.DeleteRule(rule); err != nil {
+		if err := route.DeleteRule(netlink.FAMILY_V4, rule); err != nil {
 			return fmt.Errorf("Delete VTEP CIDR rule error: %w", err)
 		}
 	}
