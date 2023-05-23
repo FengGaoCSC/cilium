@@ -31,6 +31,7 @@
     {
       "groupName": "Hubble CLI Enterprise",
       "groupSlug": "hubble-cli-ee",
+      "ignoreUnstable": false,
       "matchDepNames": [
         "isovalent/hubble-releases",
       ],
