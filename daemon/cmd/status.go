@@ -6,7 +6,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -500,41 +499,6 @@ func (c *clusterNodesClient) NodeValidateImplementation(node nodeTypes.Node) err
 func (c *clusterNodesClient) NodeConfigurationChanged(config datapath.LocalNodeConfiguration) error {
 	// no-op
 	return nil
-}
-
-func (c *clusterNodesClient) NodeNeighDiscoveryEnabled() bool {
-	// no-op
-	return false
-}
-
-func (c *clusterNodesClient) NodeNeighborRefresh(ctx context.Context, node nodeTypes.Node) {
-	// no-op
-	return
-}
-
-func (c *clusterNodesClient) NodeCleanNeighbors(migrateOnly bool) {
-	// no-op
-	return
-}
-
-func (c *clusterNodesClient) AllocateNodeID(_ net.IP) uint16 {
-	// no-op
-	return 0
-}
-
-func (c *clusterNodesClient) GetNodeIP(_ uint16) string {
-	// no-op
-	return ""
-}
-
-func (c *clusterNodesClient) DumpNodeIDs() []*models.NodeID {
-	// no-op
-	return nil
-}
-
-func (c *clusterNodesClient) RestoreNodeIDs() {
-	// no-op
-	return
 }
 
 func (h *getNodes) cleanupClients() {

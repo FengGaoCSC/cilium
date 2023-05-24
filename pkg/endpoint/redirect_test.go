@@ -6,7 +6,7 @@ package endpoint
 import (
 	"context"
 
-	"gopkg.in/check.v1"
+	check "github.com/cilium/checkmate"
 
 	"github.com/cilium/cilium/pkg/completion"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
@@ -138,7 +138,7 @@ func (s *RedirectSuite) TestAddVisibilityRedirects(c *check.C) {
 	idAllocatorOwner := &DummyIdentityAllocatorOwner{}
 
 	mgr := NewCachingIdentityAllocator(idAllocatorOwner)
-	<-mgr.InitIdentityAllocator(nil, nil)
+	<-mgr.InitIdentityAllocator(nil)
 	defer mgr.Close()
 
 	do := &DummyOwner{

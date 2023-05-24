@@ -13,9 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/check.v1"
+	check "github.com/cilium/checkmate"
 
-	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/pkg/checker"
 	"github.com/cilium/cilium/pkg/datapath/fake"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
@@ -175,34 +174,6 @@ func (n *signalNodeHandler) NodeValidateImplementation(node nodeTypes.Node) erro
 
 func (n *signalNodeHandler) NodeConfigurationChanged(config datapath.LocalNodeConfiguration) error {
 	return nil
-}
-
-func (n *signalNodeHandler) NodeNeighDiscoveryEnabled() bool {
-	return false
-}
-
-func (n *signalNodeHandler) NodeNeighborRefresh(ctx context.Context, node nodeTypes.Node) {
-	return
-}
-
-func (n *signalNodeHandler) NodeCleanNeighbors(migrateOnly bool) {
-	return
-}
-
-func (n *signalNodeHandler) AllocateNodeID(_ net.IP) uint16 {
-	return 0
-}
-
-func (n *signalNodeHandler) GetNodeIP(_ uint16) string {
-	return ""
-}
-
-func (n *signalNodeHandler) DumpNodeIDs() []*models.NodeID {
-	return nil
-}
-
-func (n *signalNodeHandler) RestoreNodeIDs() {
-	return
 }
 
 func (s *managerTestSuite) SetUpSuite(c *check.C) {

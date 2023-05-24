@@ -11,10 +11,10 @@ import (
 	"runtime"
 	"time"
 
+	. "github.com/cilium/checkmate"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
-	. "gopkg.in/check.v1"
 
 	"github.com/cilium/cilium/pkg/checker"
 	"github.com/cilium/cilium/pkg/node"
@@ -39,7 +39,7 @@ type DevicesSuite struct {
 var _ = Suite(&DevicesSuite{})
 
 func (s *DevicesSuite) SetUpSuite(c *C) {
-	testutils.PrivilegedCheck(c)
+	testutils.PrivilegedTest(c)
 
 	var err error
 

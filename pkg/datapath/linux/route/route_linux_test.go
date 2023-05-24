@@ -7,11 +7,11 @@ import (
 	"net"
 	"time"
 
+	. "github.com/cilium/checkmate"
 	"github.com/google/go-cmp/cmp"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
-	. "gopkg.in/check.v1"
 
 	"github.com/cilium/cilium/pkg/testutils"
 )
@@ -21,7 +21,7 @@ type RouteSuitePrivileged struct{}
 var _ = Suite(&RouteSuitePrivileged{})
 
 func (s *RouteSuitePrivileged) SetUpSuite(c *C) {
-	testutils.PrivilegedCheck(c)
+	testutils.PrivilegedTest(c)
 }
 
 func testReplaceNexthopRoute(c *C, link netlink.Link, routerNet *net.IPNet) {

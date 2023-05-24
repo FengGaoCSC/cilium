@@ -7,7 +7,7 @@ import (
 	"net"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	. "github.com/cilium/checkmate"
 
 	"github.com/cilium/ebpf/rlimit"
 
@@ -24,7 +24,7 @@ func Test(t *testing.T) {
 }
 
 func (s *TunnelMapTestSuite) SetUpSuite(c *C) {
-	testutils.PrivilegedCheck(c)
+	testutils.PrivilegedTest(c)
 	err := rlimit.RemoveMemlock()
 	c.Assert(err, IsNil)
 }

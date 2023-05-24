@@ -6,7 +6,7 @@ package ctmap
 import (
 	"unsafe"
 
-	. "gopkg.in/check.v1"
+	. "github.com/cilium/checkmate"
 
 	"github.com/cilium/ebpf/rlimit"
 
@@ -29,7 +29,7 @@ func init() {
 }
 
 func (k *CTMapPrivilegedTestSuite) SetUpSuite(c *C) {
-	testutils.PrivilegedCheck(c)
+	testutils.PrivilegedTest(c)
 
 	bpf.CheckOrMountFS("")
 	err := rlimit.RemoveMemlock()
