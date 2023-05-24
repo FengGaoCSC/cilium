@@ -9,13 +9,13 @@ set -o pipefail
 set -o nounset
 
 # renovate: datasource=github-release-attachments depName=isovalent/hubble-releases
-hubble_version="v0.11.4-cee.1"
+hubble_version="v0.11.5-cee.1"
 
 declare -A hubble_sha256
-# renovate: datasource=github-release-attachments depName=isovalent/hubble-releases digestVersion=v0.11.4-cee.1
-hubble_sha256[amd64]="523a1a67f38eeb6a3392168e5cd55fbec4716f70895257be76f82720be49db17"
-# renovate: datasource=github-release-attachments depName=isovalent/hubble-releases digestVersion=v0.11.4-cee.1
-hubble_sha256[arm64]="83495e18493ce1690279c6d3c511f7e61889f0987dcfa7056516f86fe605a483"
+# renovate: datasource=github-release-attachments depName=isovalent/hubble-releases digestVersion=v0.11.5-cee.1
+hubble_sha256[amd64]="f945841eb9c92922f558c8c1b60eae084fa9efd7d28bfaf0878a1359dd24e5c3"
+# renovate: datasource=github-release-attachments depName=isovalent/hubble-releases digestVersion=v0.11.5-cee.1
+hubble_sha256[arm64]="58bacf3e9764d53c66fae63378b0bab85b035f97e7b71219f332f07cdfc9e5d8"
 
 for arch in amd64 arm64 ; do
   curl --fail --show-error --silent --location "https://github.com/isovalent/hubble-releases/releases/download/${hubble_version}/hubble-linux-${arch}.tar.gz" --output "/tmp/hubble-${arch}.tgz"
