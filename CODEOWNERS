@@ -526,5 +526,5 @@ Vagrantfile @cilium/ci-structure
 /VERSION @cilium/tophat
 
 * @isovalent/core-structure
-/enterprise @isovalent/isovalent
-*enterprise* @isovalent/isovalent
+/enterprise @isovalent/void
+*enterprise* @isovalent/void
