@@ -4,14 +4,11 @@
 package nat
 
 import (
-	"errors"
 	"fmt"
-	"os"
 	"strconv"
-	"syscall"
 	"unsafe"
 
-	"golang.org/x/sys/unix"
+	"github.com/cilium/ebpf"
 
 	"github.com/cilium/cilium/pkg/bpf"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
@@ -95,34 +92,25 @@ func newPerClusterNATMap(name string, v4 bool, innerMapEntries int) (*PerCluster
 		valSize = uint32(unsafe.Sizeof(NatEntry6{}))
 	}
 
-	fd, err := bpf.CreateMap(
-		bpf.MapTypeLRUHash,
-		keySize,
-		valSize,
-		uint32(innerMapEntries),
-		0, 0,
-		name+"_tmp",
-	)
-	if err != nil {
-		return nil, err
+	inner := &ebpf.MapSpec{
+		Type:       ebpf.LRUHash,
+		KeySize:    keySize,
+		ValueSize:  valSize,
+		MaxEntries: uint32(innerMapEntries),
 	}
 
-	defer syscall.Close(fd)
-
-	om := bpf.NewMap(
+	om := bpf.NewMapWithInnerSpec(
 		name,
 		bpf.MapTypeArrayOfMaps,
 		&PerClusterNATMapKey{},
-		int(unsafe.Sizeof(PerClusterNATMapKey{})),
 		&PerClusterNATMapVal{},
-		int(unsafe.Sizeof(PerClusterNATMapVal{})),
 		perClusterNATMapMaxEntries,
 		0,
-		uint32(fd),
+		inner,
 		bpf.ConvertKeyValue,
 	)
 
-	if _, err := om.OpenOrCreate(); err != nil {
+	if err := om.OpenOrCreate(); err != nil {
 		return nil, err
 	}
 
@@ -152,8 +140,7 @@ func (om *PerClusterNATMap) updateClusterNATMap(clusterID uint32) error {
 
 	im := om.newInnerMap(om.getInnerMapName(clusterID))
 
-	_, err := im.OpenOrCreate()
-	if err != nil {
+	if err := im.OpenOrCreate(); err != nil {
 		return err
 	}
 
@@ -161,7 +148,7 @@ func (om *PerClusterNATMap) updateClusterNATMap(clusterID uint32) error {
 
 	if err := om.Update(
 		&PerClusterNATMapKey{clusterID},
-		&PerClusterNATMapVal{uint32(im.GetFd())},
+		&PerClusterNATMapVal{uint32(im.FD())},
 	); err != nil {
 		return err
 	}
@@ -176,7 +163,7 @@ func (om *PerClusterNATMap) deleteClusterNATMap(clusterID uint32) error {
 
 	im := om.newInnerMap(om.getInnerMapName(clusterID))
 
-	if _, err := im.OpenOrCreate(); err != nil {
+	if err := im.OpenOrCreate(); err != nil {
 		return err
 	}
 
@@ -202,9 +189,7 @@ func (om *PerClusterNATMap) getClusterNATMap(clusterID uint32) (*Map, error) {
 	im := om.newInnerMap(om.getInnerMapName(clusterID))
 
 	if err := im.Open(); err != nil {
-		if pathErr, ok := err.(*os.PathError); ok && errors.Is(pathErr.Err, unix.ENOENT) {
-			return nil, nil
-		}
+		return nil, fmt.Errorf("open inner map: %w", err)
 	}
 
 	return im, nil

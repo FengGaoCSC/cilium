@@ -373,6 +373,7 @@ static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	bool hairpin_flow = false; /* endpoint wants to access itself via service IP */
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	__u8 audited = 0;
+	__u8 auth_type = 0;
 	__u16 proxy_port = 0;
 	bool from_l7lb = false;
 
@@ -462,15 +463,18 @@ static __always_inline int handle_ipv6_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	verdict = policy_can_egress6(ctx, tuple, SECLABEL, *dst_sec_identity,
 				     &policy_match_type, &audited, ext_err, &proxy_port);
 
-	if (verdict == DROP_POLICY_AUTH_REQUIRED)
-		verdict = auth_lookup(ctx, SECLABEL, *dst_sec_identity, node_id, (__u8)*ext_err);
+	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
+		auth_type = (__u8)*ext_err;
+		verdict = auth_lookup(ctx, SECLABEL, *dst_sec_identity, node_id, auth_type);
+	}
 
 	/* Emit verdict if drop or if allow for CT_NEW or CT_REOPENED. */
 	if (verdict != CTX_ACT_OK || ct_status != CT_ESTABLISHED) {
 		send_policy_verdict_notify(ctx, *dst_sec_identity, tuple->dport,
 					   tuple->nexthdr, POLICY_EGRESS, 1,
 					   verdict, proxy_port,
-					   policy_match_type, audited);
+					   policy_match_type, audited,
+					   auth_type);
 	}
 
 	if (verdict != CTX_ACT_OK)
@@ -807,6 +811,7 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	struct ct_buffer4 *ct_buffer;
 	__u8 audited = 0;
+	__u8 auth_type = 0;
 	bool has_l4_header = false;
 	enum ct_status ct_status;
 	__u16 proxy_port = 0;
@@ -894,15 +899,18 @@ static __always_inline int handle_ipv4_from_lxc(struct __ctx_buff *ctx, __u32 *d
 	verdict = policy_can_egress4(ctx, tuple, SECLABEL, *dst_sec_identity,
 				     &policy_match_type, &audited, ext_err, &proxy_port);
 
-	if (verdict == DROP_POLICY_AUTH_REQUIRED)
-		verdict = auth_lookup(ctx, SECLABEL, *dst_sec_identity, node_id, (__u8)*ext_err);
+	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
+		auth_type = (__u8)*ext_err;
+		verdict = auth_lookup(ctx, SECLABEL, *dst_sec_identity, node_id, auth_type);
+	}
 
 	/* Emit verdict if drop or if allow for CT_NEW or CT_REOPENED. */
 	if (verdict != CTX_ACT_OK || ct_status != CT_ESTABLISHED) {
 		send_policy_verdict_notify(ctx, *dst_sec_identity, tuple->dport,
 					   tuple->nexthdr, POLICY_EGRESS, 0,
 					   verdict, proxy_port,
-					   policy_match_type, audited);
+					   policy_match_type, audited,
+					   auth_type);
 	}
 
 	if (verdict != CTX_ACT_OK)
@@ -1413,6 +1421,7 @@ ipv6_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
 	__u32 monitor = 0;
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	__u8 audited = 0;
+	__u8 auth_type = 0;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip6))
 		return DROP_INVALID;
@@ -1486,16 +1495,18 @@ ipv6_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label,
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		struct remote_endpoint_info *sep = lookup_ip6_remote_endpoint(&orig_sip, 0);
 
-		if (sep)
-			verdict = auth_lookup(ctx, SECLABEL, src_label, sep->node_id,
-					      (__u8)*ext_err);
+		if (sep) {
+			auth_type = (__u8)*ext_err;
+			verdict = auth_lookup(ctx, SECLABEL, src_label, sep->node_id, auth_type);
+		}
 	}
 
 	/* Emit verdict if drop or if allow for CT_NEW or CT_REOPENED. */
 	if (verdict != CTX_ACT_OK || ret != CT_ESTABLISHED)
 		send_policy_verdict_notify(ctx, src_label, tuple->dport,
 					   tuple->nexthdr, POLICY_INGRESS, 1,
-					   verdict, *proxy_port, policy_match_type, audited);
+					   verdict, *proxy_port, policy_match_type, audited,
+					   auth_type);
 
 	if (verdict != CTX_ACT_OK)
 		return verdict;
@@ -1717,6 +1728,7 @@ ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label, enum ct_status
 	__be32 orig_sip;
 	__u8 policy_match_type = POLICY_MATCH_NONE;
 	__u8 audited = 0;
+	__u8 auth_type = 0;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
@@ -1810,15 +1822,17 @@ ipv4_policy(struct __ctx_buff *ctx, int ifindex, __u32 src_label, enum ct_status
 	if (verdict == DROP_POLICY_AUTH_REQUIRED) {
 		struct remote_endpoint_info *sep = lookup_ip4_remote_endpoint(orig_sip, 0);
 
-		if (sep)
-			verdict = auth_lookup(ctx, SECLABEL, src_label, sep->node_id,
-					      (__u8)*ext_err);
+		if (sep) {
+			auth_type = (__u8)*ext_err;
+			verdict = auth_lookup(ctx, SECLABEL, src_label, sep->node_id, auth_type);
+		}
 	}
 	/* Emit verdict if drop or if allow for CT_NEW or CT_REOPENED. */
 	if (verdict != CTX_ACT_OK || ret != CT_ESTABLISHED)
 		send_policy_verdict_notify(ctx, src_label, tuple->dport,
 					   tuple->nexthdr, POLICY_INGRESS, 0,
-					   verdict, *proxy_port, policy_match_type, audited);
+					   verdict, *proxy_port, policy_match_type, audited,
+					   auth_type);
 
 	if (verdict != CTX_ACT_OK)
 		return verdict;
@@ -2184,7 +2198,6 @@ int cil_to_container(struct __ctx_buff *ctx)
 	}
 #endif /* ENABLE_HOST_FIREWALL && !ENABLE_ROUTING */
 
-	ctx_store_meta(ctx, CB_SRC_LABEL, identity);
 
 	switch (proto) {
 #if defined(ENABLE_ARP_PASSTHROUGH) || defined(ENABLE_ARP_RESPONDER)
@@ -2194,12 +2207,42 @@ int cil_to_container(struct __ctx_buff *ctx)
 #endif
 #ifdef ENABLE_IPV6
 	case bpf_htons(ETH_P_IPV6):
+# ifdef ENABLE_HIGH_SCALE_IPCACHE
+	if (identity == WORLD_ID) {
+		struct endpoint_info *ep;
+		void *data, *data_end;
+		struct ipv6hdr *ip6;
+
+		if (!revalidate_data(ctx, &data, &data_end, &ip6))
+			return DROP_INVALID;
+
+		ep = __lookup_ip6_endpoint((union v6addr *)&ip6->saddr);
+		if (ep)
+			identity = ep->sec_id;
+	}
+# endif /* ENABLE_HIGH_SCALE_IPCACHE */
+		ctx_store_meta(ctx, CB_SRC_LABEL, identity);
 		ep_tail_call(ctx, CILIUM_CALL_IPV6_CT_INGRESS);
 		ret = DROP_MISSED_TAIL_CALL;
 		break;
 #endif /* ENABLE_IPV6 */
 #ifdef ENABLE_IPV4
 	case bpf_htons(ETH_P_IP):
+# ifdef ENABLE_HIGH_SCALE_IPCACHE
+	if (identity == WORLD_ID) {
+		struct endpoint_info *ep;
+		void *data, *data_end;
+		struct iphdr *ip4;
+
+		if (!revalidate_data(ctx, &data, &data_end, &ip4))
+			return DROP_INVALID;
+
+		ep = __lookup_ip4_endpoint(ip4->saddr);
+		if (ep)
+			identity = ep->sec_id;
+	}
+# endif /* ENABLE_HIGH_SCALE_IPCACHE */
+		ctx_store_meta(ctx, CB_SRC_LABEL, identity);
 		ep_tail_call(ctx, CILIUM_CALL_IPV4_CT_INGRESS);
 		ret = DROP_MISSED_TAIL_CALL;
 		break;

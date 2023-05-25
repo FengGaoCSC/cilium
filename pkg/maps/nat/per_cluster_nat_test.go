@@ -68,7 +68,6 @@ func (k *PerClusterNATMapPrivilegedTestSuite) TestPerClusterCtMap(c *C) {
 	c.Assert(err, NotNil)
 
 	// Basic update
-	cluster1MapName := innerMapNamePrefix4 + "1"
 	err = om.updateClusterNATMap(1)
 	c.Assert(err, IsNil)
 
@@ -77,12 +76,6 @@ func (k *PerClusterNATMapPrivilegedTestSuite) TestPerClusterCtMap(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(v, Not(Equals), 0)
 
-	// Inner map should be closed and only exist on the bpffs
-	c.Assert(bpf.GetMap(cluster1MapName), IsNil)
-	fd, err := bpf.ObjGet(bpf.MapPath(cluster1MapName))
-	c.Assert(err, IsNil)
-	c.Assert(fd, Not(Equals), 0)
-
 	// Basic Get
 	im, err := om.getClusterNATMap(1)
 	c.Assert(im, NotNil)
@@ -90,10 +83,9 @@ func (k *PerClusterNATMapPrivilegedTestSuite) TestPerClusterCtMap(c *C) {
 
 	im.Close()
 
-	// Getting unexisting entry returns nil, nil
-	im, err = om.getClusterNATMap(2)
-	c.Assert(im, IsNil)
-	c.Assert(err, IsNil)
+	// Getting nonexistent entry returns error
+	_, err = om.getClusterNATMap(2)
+	c.Assert(err, NotNil)
 
 	// Basic delete
 	err = om.deleteClusterNATMap(1)
@@ -101,10 +93,6 @@ func (k *PerClusterNATMapPrivilegedTestSuite) TestPerClusterCtMap(c *C) {
 
 	// After delete, outer map shouldn't contain the inner map
 	_, err = om.Lookup(&PerClusterNATMapKey{1})
-	c.Assert(err, NotNil)
-
-	// Inner map shouldn't exist on the bpffs
-	_, err = bpf.ObjGet(bpf.MapPath(cluster1MapName))
 	c.Assert(err, NotNil)
 }
 

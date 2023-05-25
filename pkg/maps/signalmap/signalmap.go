@@ -67,18 +67,18 @@ func initMap(maxEntries int) *signalMap {
 			int(unsafe.Sizeof(Value{})),
 			maxEntries,
 			0,
-			0,
 			bpf.ConvertKeyValue,
 		),
 	}
 }
 
 func (sm *signalMap) open() error {
-	_, err := sm.oldBpfMap.Create()
-	if err != nil {
+	if err := sm.oldBpfMap.Create(); err != nil {
 		return err
 	}
 	path := bpf.MapPath(MapName)
+
+	var err error
 	sm.ebpfMap, err = ebpf.LoadPinnedMap(path, nil)
 	return err
 }
