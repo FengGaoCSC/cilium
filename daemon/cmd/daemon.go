@@ -74,8 +74,6 @@ import (
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
 	"github.com/cilium/cilium/pkg/mtu"
 	"github.com/cilium/cilium/pkg/node"
-	nodemanager "github.com/cilium/cilium/pkg/node/manager"
-	nodeStore "github.com/cilium/cilium/pkg/node/store"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/nodediscovery"
 	"github.com/cilium/cilium/pkg/option"
@@ -274,10 +272,6 @@ func (d *Daemon) init() error {
 
 	if !option.Config.DryMode {
 		bandwidth.InitBandwidthManager()
-
-		if err := d.createNodeConfigHeaderfile(); err != nil {
-			return fmt.Errorf("failed while creating node config header file: %w", err)
-		}
 
 		if err := d.Datapath().Loader().Reinitialize(d.ctx, d, d.mtuConfig.GetDeviceMTU(), d.Datapath(), d.l7Proxy); err != nil {
 			return fmt.Errorf("failed while reinitializing datapath: %w", err)
@@ -541,6 +535,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		policyUpdater:        params.PolicyUpdater,
 		egressGatewayManager: params.EgressGatewayManager,
 		cniConfigManager:     params.CNIConfigManager,
+		clustermesh:          params.ClusterMesh,
 	}
 
 	if option.Config.RunMonitorAgent {
@@ -679,6 +674,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.ipcache,
 		d.cgroupManager,
 		params.SharedResources,
+		params.ServiceCache,
 	)
 	nd.RegisterK8sGetters(d.k8sWatcher)
 
@@ -692,16 +688,16 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		}
 	}
 	if option.Config.EnableServiceTopology {
-		d.k8sWatcher.RegisterNodeSubscriber(&d.k8sWatcher.K8sSvcCache)
+		d.k8sWatcher.RegisterNodeSubscriber(d.k8sWatcher.K8sSvcCache)
 	}
 
 	// watchers.NewCiliumNodeUpdater needs to be registered *after* d.endpointManager
 	d.k8sWatcher.RegisterNodeSubscriber(watchers.NewCiliumNodeUpdater(d.nodeDiscovery))
 
-	d.redirectPolicyManager.RegisterSvcCache(&d.k8sWatcher.K8sSvcCache)
+	d.redirectPolicyManager.RegisterSvcCache(d.k8sWatcher.K8sSvcCache)
 	d.redirectPolicyManager.RegisterGetStores(d.k8sWatcher)
 	if option.Config.BGPAnnounceLBIP {
-		d.bgpSpeaker.RegisterSvcCache(&d.k8sWatcher.K8sSvcCache)
+		d.bgpSpeaker.RegisterSvcCache(d.k8sWatcher.K8sSvcCache)
 	}
 
 	bootstrapStats.daemonInit.End(true)
@@ -768,7 +764,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		bootstrapStats.restore.End(true)
 	}
 
-	debug.RegisterStatusObject("k8s-service-cache", &d.k8sWatcher.K8sSvcCache)
+	debug.RegisterStatusObject("k8s-service-cache", d.k8sWatcher.K8sSvcCache)
 	debug.RegisterStatusObject("ipam", d.ipam)
 	debug.RegisterStatusObject("ongoing-endpoint-creations", d.endpointCreations)
 
@@ -1104,7 +1100,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.nodeDiscovery.JoinCluster(nodeTypes.GetName())
 
 		// Start services watcher
-		serviceStore.JoinClusterServices(&d.k8sWatcher.K8sSvcCache, option.Config)
+		serviceStore.JoinClusterServices(d.k8sWatcher.K8sSvcCache, option.Config)
 	}
 
 	// Start IPAM
@@ -1183,8 +1179,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		// identity allocator to run asynchronously.
 		realIdentityAllocator := d.identityAllocator
 		realIdentityAllocator.InitIdentityAllocator(params.Clientset)
-
-		d.bootstrapClusterMesh(params.NodeManager)
 	}
 
 	// Must be done at least after initializing BPF LB-related maps
@@ -1282,33 +1276,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	return &d, restoredEndpoints, nil
 }
 
-func (d *Daemon) bootstrapClusterMesh(nodeMngr nodemanager.NodeManager) {
-	bootstrapStats.clusterMeshInit.Start()
-	if path := option.Config.ClusterMeshConfig; path != "" {
-		if option.Config.ClusterID == 0 {
-			log.Info("Cluster-ID is not specified, skipping ClusterMesh initialization")
-		} else {
-			log.WithField("path", path).Info("Initializing ClusterMesh routing")
-			clustermesh, err := clustermesh.NewClusterMesh(clustermesh.Configuration{
-				Name:                  option.Config.ClusterName,
-				NodeName:              nodeTypes.GetName(),
-				ConfigDirectory:       path,
-				NodeKeyCreator:        nodeStore.KeyCreator,
-				ServiceMerger:         &d.k8sWatcher.K8sSvcCache,
-				NodeManager:           nodeMngr,
-				RemoteIdentityWatcher: d.identityAllocator,
-				IPCache:               d.ipcache,
-			})
-			if err != nil {
-				log.WithError(err).Fatal("Unable to initialize ClusterMesh")
-			}
-
-			d.clustermesh = clustermesh
-		}
-	}
-	bootstrapStats.clusterMeshInit.End(true)
-}
-
 // ReloadOnDeviceChange regenerates device related information and reloads the datapath.
 // The devices is the new set of devices that replaces the old set.
 func (d *Daemon) ReloadOnDeviceChange(devices []string) {
@@ -1328,15 +1295,6 @@ func (d *Daemon) ReloadOnDeviceChange(devices []string) {
 			d.svc.SyncServicesOnDeviceChange(d.Datapath().LocalNodeAddressing())
 			d.controllers.TriggerController(syncHostIPsController)
 		}
-	}
-
-	// Recreate node_config.h to reflect the mac addresses of the new devices.
-	d.compilationMutex.Lock()
-	err := d.createNodeConfigHeaderfile()
-	d.compilationMutex.Unlock()
-	if err != nil {
-		log.WithError(err).Warn("Failed to re-create node config header")
-		return
 	}
 
 	// Reload the datapath.

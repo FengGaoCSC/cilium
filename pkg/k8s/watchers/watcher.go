@@ -219,7 +219,7 @@ type K8sWatcher struct {
 	k8sAPIGroups synced.APIGroups
 
 	// K8sSvcCache is a cache of all Kubernetes services and endpoints
-	K8sSvcCache k8s.ServiceCache
+	K8sSvcCache *k8s.ServiceCache
 
 	// NodeChain is the root of a notification chain for k8s Node events.
 	// This NodeChain allows registration of subscriber.Node implementations.
@@ -297,10 +297,11 @@ func NewK8sWatcher(
 	ipcache ipcacheManager,
 	cgroupManager cgroupManager,
 	sharedResources k8s.SharedResources,
+	serviceCache *k8s.ServiceCache,
 ) *K8sWatcher {
 	return &K8sWatcher{
 		clientset:             clientset,
-		K8sSvcCache:           k8s.NewServiceCache(datapath.LocalNodeAddressing()),
+		K8sSvcCache:           serviceCache,
 		endpointManager:       endpointManager,
 		nodeDiscoverManager:   nodeDiscoverManager,
 		policyManager:         policyManager,

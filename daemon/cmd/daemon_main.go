@@ -33,6 +33,7 @@ import (
 	bgpv1 "github.com/cilium/cilium/pkg/bgpv1/agent"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/cgroups"
+	"github.com/cilium/cilium/pkg/clustermesh"
 	"github.com/cilium/cilium/pkg/common"
 	"github.com/cilium/cilium/pkg/components"
 	"github.com/cilium/cilium/pkg/controller"
@@ -191,9 +192,6 @@ func initializeFlags() {
 
 	flags.String(option.ClusterName, defaults.ClusterName, "Name of the cluster")
 	option.BindEnv(Vp, option.ClusterName)
-
-	flags.String(option.ClusterMeshConfigName, "", "Path to the ClusterMesh configuration directory")
-	option.BindEnv(Vp, option.ClusterMeshConfigName)
 
 	flags.StringSlice(option.CompilerFlags, []string{}, "Extra CFLAGS for BPF compilation")
 	flags.MarkHidden(option.CompilerFlags)
@@ -402,6 +400,9 @@ func initializeFlags() {
 
 	flags.Int64(option.ProxyMaxConnectionDuration, 0, "Set Envoy HTTP option max_connection_duration seconds. Default 0 (disable)")
 	option.BindEnv(Vp, option.ProxyMaxConnectionDuration)
+
+	flags.Int64(option.ProxyIdleTimeout, 60, "Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s")
+	option.BindEnv(Vp, option.ProxyIdleTimeout)
 
 	flags.Bool(option.DisableEnvoyVersionCheck, false, "Do not perform Envoy binary version check on startup")
 	flags.MarkHidden(option.DisableEnvoyVersionCheck)
@@ -1569,7 +1570,7 @@ func (d *Daemon) initKVStore() {
 		)
 		log := log.WithField(logfields.LogSubsys, "etcd")
 		goopts.DialOption = []grpc.DialOption{
-			grpc.WithContextDialer(k8s.CreateCustomDialer(&d.k8sWatcher.K8sSvcCache, log)),
+			grpc.WithContextDialer(k8s.CreateCustomDialer(d.k8sWatcher.K8sSvcCache, log)),
 		}
 	}
 
@@ -1620,6 +1621,8 @@ type daemonParams struct {
 	CNIConfigManager     cni.CNIConfigManager
 	SwaggerSpec          *server.Spec
 	HealthAPISpec        *healthApi.Spec
+	ServiceCache         *k8s.ServiceCache
+	ClusterMesh          *clustermesh.ClusterMesh
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
