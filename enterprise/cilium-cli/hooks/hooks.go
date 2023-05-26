@@ -13,6 +13,8 @@ package hooks
 import (
 	"github.com/cilium/cilium-cli/cli"
 	"github.com/cilium/cilium-cli/connectivity/check"
+
+	"github.com/cilium/cilium-cli/sysdump"
 )
 
 // EnterpriseHooks implements cli.Hooks interface to add connectivity tests and
@@ -21,7 +23,14 @@ type EnterpriseHooks struct {
 	cli.NopHooks
 }
 
-// AddConnectivityTests implements cli.Hooks
+// AddConnectivityTests registers connectivity tests that are specific to
+// Isovalent Enterprise for Cilium.
 func (eh *EnterpriseHooks) AddConnectivityTests(ct *check.ConnectivityTest) error {
 	return addConnectivityTests(ct)
+}
+
+// AddSysdumpTasks registers sysdump tasks that are specific to Isovalent
+// Enterprise for Cilium.
+func (eh *EnterpriseHooks) AddSysdumpTasks(collector *sysdump.Collector) error {
+	return addSysdumpTasks(collector)
 }

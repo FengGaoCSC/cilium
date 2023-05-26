@@ -2,7 +2,11 @@ module github.com/isovalent/cilium/enterprise/cilium-cli
 
 go 1.20
 
-require github.com/cilium/cilium-cli v0.14.4-0.20230524133138-3237c9b041d4
+require (
+	github.com/cilium/cilium-cli v0.14.4-0.20230524133138-3237c9b041d4
+	k8s.io/api v0.27.1
+	k8s.io/apimachinery v0.27.1
+)
 
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230106234847-43070de90fa1 // indirect
@@ -182,9 +186,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	helm.sh/helm/v3 v3.12.0 // indirect
-	k8s.io/api v0.27.1 // indirect
 	k8s.io/apiextensions-apiserver v0.27.1 // indirect
-	k8s.io/apimachinery v0.27.1 // indirect
 	k8s.io/apiserver v0.27.1 // indirect
 	k8s.io/cli-runtime v0.27.1 // indirect
 	k8s.io/client-go v0.27.1 // indirect
