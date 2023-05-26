@@ -4,7 +4,7 @@ name: CODEOWNERS checks
 on:
   pull_request:
     branches:
-      - main
+      - main-ce
       - ft/main/**
 
 permissions: read-all
