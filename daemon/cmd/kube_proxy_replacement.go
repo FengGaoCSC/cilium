@@ -30,7 +30,6 @@ import (
 	"github.com/cilium/cilium/pkg/mountinfo"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
-	"github.com/cilium/cilium/pkg/probe"
 	"github.com/cilium/cilium/pkg/safeio"
 	"github.com/cilium/cilium/pkg/sysctl"
 	wgTypes "github.com/cilium/cilium/pkg/wireguard/types"
@@ -275,7 +274,7 @@ func probeKubeProxyReplacementOptions() error {
 	if option.Config.EnableSocketLB {
 		// Try to auto-load IPv6 module if it hasn't been done yet as there can
 		// be v4-in-v6 connections even if the agent has v6 support disabled.
-		probe.HaveIPv6Support()
+		probes.HaveIPv6Support()
 
 		if option.Config.EnableMKE {
 			if probes.HaveProgramHelper(ebpf.CGroupSockAddr, asm.FnGetCgroupClassid) != nil ||
@@ -337,12 +336,6 @@ func probeKubeProxyReplacementOptions() error {
 				"to work properly when accessed from inside cluster: the same service endpoint " +
 				"will be selected from all network namespaces on the host.")
 		}
-	}
-
-	if option.Config.EnableSVCSourceRangeCheck && !probe.HaveFullLPM() {
-		msg := fmt.Sprintf("--%s requires kernel 4.16 or newer.",
-			option.EnableSVCSourceRangeCheck)
-		return fmt.Errorf(msg)
 	}
 
 	if option.Config.BPFSocketLBHostnsOnly {

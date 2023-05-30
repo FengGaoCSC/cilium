@@ -55,6 +55,7 @@ import (
 	"github.com/cilium/cilium/pkg/hubble/exporter/exporteroption"
 	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
 	"github.com/cilium/cilium/pkg/identity"
+	ipamMetadata "github.com/cilium/cilium/pkg/ipam/metadata"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/ipmasq"
@@ -1051,6 +1052,10 @@ func initializeFlags() {
 	flags.MarkHidden(option.EnableICMPRules)
 	option.BindEnv(Vp, option.EnableICMPRules)
 
+	flags.Bool(option.UseCiliumInternalIPForIPsec, defaults.UseCiliumInternalIPForIPsec, "Use the CiliumInternalIPs (vs. NodeInternalIPs) for IPsec encapsulation")
+	flags.MarkHidden(option.UseCiliumInternalIPForIPsec)
+	option.BindEnv(Vp, option.UseCiliumInternalIPForIPsec)
+
 	flags.Bool(option.BypassIPAvailabilityUponRestore, false, "Bypasses the IP availability error within IPAM upon endpoint restore")
 	flags.MarkHidden(option.BypassIPAvailabilityUponRestore)
 	option.BindEnv(Vp, option.BypassIPAvailabilityUponRestore)
@@ -1618,6 +1623,7 @@ type daemonParams struct {
 	PolicyUpdater        *policy.Updater
 	IPCache              *ipcache.IPCache
 	EgressGatewayManager *egressgateway.Manager
+	IPAMMetadataManager  *ipamMetadata.Manager
 	CNIConfigManager     cni.CNIConfigManager
 	SwaggerSpec          *server.Spec
 	HealthAPISpec        *healthApi.Spec
