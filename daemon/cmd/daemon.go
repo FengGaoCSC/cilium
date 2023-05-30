@@ -54,6 +54,7 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
 	"github.com/cilium/cilium/pkg/ipam"
+	ipamMetadata "github.com/cilium/cilium/pkg/ipam/metadata"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/k8s"
@@ -79,7 +80,6 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	policyAPI "github.com/cilium/cilium/pkg/policy/api"
-	"github.com/cilium/cilium/pkg/probe"
 	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/recorder"
@@ -189,6 +189,8 @@ type Daemon struct {
 	egressGatewayManager *egressgateway.Manager
 
 	cgroupManager *manager.CgroupManager
+
+	ipamMetadata *ipamMetadata.Manager
 
 	apiLimiterSet *rate.APILimiterSet
 
@@ -534,6 +536,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		policy:               params.Policy,
 		policyUpdater:        params.PolicyUpdater,
 		egressGatewayManager: params.EgressGatewayManager,
+		ipamMetadata:         params.IPAMMetadataManager,
 		cniConfigManager:     params.CNIConfigManager,
 		clustermesh:          params.ClusterMesh,
 	}
@@ -1010,10 +1013,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		if !option.Config.EnableIPv4 {
 			log.WithError(err).Errorf("BPF ip-masq-agent requires IPv4 support (--%s=\"true\")", option.EnableIPv4Name)
 			return nil, nil, fmt.Errorf("BPF ip-masq-agent requires IPv4 support (--%s=\"true\")", option.EnableIPv4Name)
-		}
-		if !probe.HaveFullLPM() {
-			log.WithError(err).Error("BPF ip-masq-agent needs kernel 4.16 or newer")
-			return nil, nil, fmt.Errorf("BPF ip-masq-agent needs kernel 4.16 or newer")
 		}
 	}
 	if len(option.Config.GetDevices()) == 0 {

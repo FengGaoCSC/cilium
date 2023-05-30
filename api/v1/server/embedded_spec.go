@@ -938,7 +938,7 @@ func init() {
         "summary": "Release an allocated IP address",
         "parameters": [
           {
-            "$ref": "#/parameters/ipam-release-arg"
+            "$ref": "#/parameters/ipam-ip"
           },
           {
             "$ref": "#/parameters/ipam-pool"
@@ -1566,12 +1566,20 @@ func init() {
           "description": "UUID of IPv4 expiration timer",
           "type": "string"
         },
+        "ipv4-pool-name": {
+          "description": "IPAM pool from which this IPv4 address was allocated",
+          "type": "string"
+        },
         "ipv6": {
           "description": "IPv6 address",
           "type": "string"
         },
         "ipv6-expiration-uuid": {
           "description": "UUID of IPv6 expiration timer",
+          "type": "string"
+        },
+        "ipv6-pool-name": {
+          "description": "IPAM pool from which this IPv6 address was allocated",
           "type": "string"
         }
       }
@@ -4590,13 +4598,6 @@ func init() {
       "name": "pool",
       "in": "query"
     },
-    "ipam-release-arg": {
-      "type": "string",
-      "description": "IP address or owner name",
-      "name": "ip",
-      "in": "path",
-      "required": true
-    },
     "labels": {
       "description": "List of labels\n",
       "name": "labels",
@@ -5733,7 +5734,7 @@ func init() {
         "parameters": [
           {
             "type": "string",
-            "description": "IP address or owner name",
+            "description": "IP address",
             "name": "ip",
             "in": "path",
             "required": true
@@ -6431,12 +6432,20 @@ func init() {
           "description": "UUID of IPv4 expiration timer",
           "type": "string"
         },
+        "ipv4-pool-name": {
+          "description": "IPAM pool from which this IPv4 address was allocated",
+          "type": "string"
+        },
         "ipv6": {
           "description": "IPv6 address",
           "type": "string"
         },
         "ipv6-expiration-uuid": {
           "description": "UUID of IPv6 expiration timer",
+          "type": "string"
+        },
+        "ipv6-pool-name": {
+          "description": "IPAM pool from which this IPv6 address was allocated",
           "type": "string"
         }
       }
@@ -9973,13 +9982,6 @@ func init() {
       "type": "string",
       "name": "pool",
       "in": "query"
-    },
-    "ipam-release-arg": {
-      "type": "string",
-      "description": "IP address or owner name",
-      "name": "ip",
-      "in": "path",
-      "required": true
     },
     "labels": {
       "description": "List of labels\n",
