@@ -21,6 +21,13 @@ import (
 	"github.com/cilium/cilium-cli/sysdump"
 )
 
+const (
+	enterpriseLabelSelector      = "app.kubernetes.io/name=hubble-enterprise"
+	enterpriseAgentContainerName = "enterprise"
+	enterpriseBugtoolPrefix      = "hubble-enterprise-bugtool"
+	enterpriseCLICommand         = "hubble-enterprise"
+)
+
 func addSysdumpTasks(collector *sysdump.Collector) error {
 	collector.AddTasks([]sysdump.Task{
 		{
@@ -29,7 +36,7 @@ func addSysdumpTasks(collector *sysdump.Collector) error {
 			Quick:           false,
 			Task: func(ctx context.Context) error {
 				p, err := collector.Client.ListPods(ctx, collector.Options.CiliumNamespace, metav1.ListOptions{
-					LabelSelector: "app.kubernetes.io/name=hubble-enterprise",
+					LabelSelector: enterpriseLabelSelector,
 				})
 				if err != nil {
 					return fmt.Errorf("failed to get logs from 'hubble-enterprise' pods")
@@ -37,6 +44,24 @@ func addSysdumpTasks(collector *sysdump.Collector) error {
 				if err = collector.SubmitLogsTasks(sysdump.FilterPods(p, collector.NodeList),
 					collector.Options.LogsSinceTime, collector.Options.LogsLimitBytes); err != nil {
 					return fmt.Errorf("failed to collect logs from 'hubble-enterprise' pods")
+				}
+				return nil
+			},
+		},
+		{
+			CreatesSubtasks: true,
+			Description:     "Collecting bugtool output from 'hubble-enterprise' pods",
+			Quick:           false,
+			Task: func(ctx context.Context) error {
+				p, err := collector.Client.ListPods(ctx, collector.Options.CiliumNamespace, metav1.ListOptions{
+					LabelSelector: enterpriseLabelSelector,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to get 'hubble-enterprise' pods")
+				}
+				if err = collector.SubmitTetragonBugtoolTasks(sysdump.FilterPods(p, collector.NodeList),
+					enterpriseAgentContainerName, enterpriseBugtoolPrefix, enterpriseCLICommand); err != nil {
+					return fmt.Errorf("failed to collect bugtool output from 'hubble-enterprise' pods: %w", err)
 				}
 				return nil
 			},
