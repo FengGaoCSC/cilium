@@ -3,7 +3,7 @@ module github.com/isovalent/cilium/enterprise/cilium-cli
 go 1.20
 
 require (
-	github.com/cilium/cilium-cli v0.14.4-0.20230524133138-3237c9b041d4
+	github.com/cilium/cilium-cli v0.14.5
 	k8s.io/api v0.27.1
 	k8s.io/apimachinery v0.27.1
 )

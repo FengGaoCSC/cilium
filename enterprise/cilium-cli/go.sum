@@ -110,8 +110,8 @@ github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1/go.mod h1:Q3SI9o4m/ZMn
 github.com/cilium/charts v0.0.0-20230517183441-c9396080c47d h1:hDMrd8EOhcY+6pdfkT8TbXomkb/BG2u7FPP9qhKGBuI=
 github.com/cilium/charts v0.0.0-20230517183441-c9396080c47d/go.mod h1:M3C9VOlFvRzuV+a01t07Tw4uFLSfkCH3L542IWjf6BU=
 github.com/cilium/checkmate v1.0.3 h1:CQC5eOmlAZeEjPrVZY3ZwEBH64lHlx9mXYdUehEwI5w=
-github.com/cilium/cilium-cli v0.14.4-0.20230524133138-3237c9b041d4 h1:uxr71kS+4mqs6+51BDx0wGfn+zQQw2B4eWzv6LjNViA=
-github.com/cilium/cilium-cli v0.14.4-0.20230524133138-3237c9b041d4/go.mod h1:2Gg8KvYja4Mp99TG0O7u/KAmkAdneQb2f4W0qYPpfac=
+github.com/cilium/cilium-cli v0.14.5 h1:CNo5Guku2saavxBMZjBYao2j86/TF0ytx50M/z1jE7M=
+github.com/cilium/cilium-cli v0.14.5/go.mod h1:2Gg8KvYja4Mp99TG0O7u/KAmkAdneQb2f4W0qYPpfac=
 github.com/cilium/hubble v0.11.5 h1:1FGI+mNR+zx1B3jSqskmM4dV5smD/tuhTbXCdueuEfc=
 github.com/cilium/hubble v0.11.5/go.mod h1:pbR0F37lKRo8d9fNVe+oMmOKD67VYkm1gvjq1pVTdkc=
 github.com/cilium/proxy v0.0.0-20230420184820-797bea843de1 h1:vQBT/pz9CxfPUHLiCN/mIXhmQp2eJLPsfJdrKwR70H0=
