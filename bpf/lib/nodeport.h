@@ -1993,8 +1993,7 @@ int tail_nodeport_ipv4_dsr(struct __ctx_buff *ctx)
 		ret = DROP_INVALID;
 		goto drop_err;
 	}
-	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err,
-			      ctx_get_ifindex(ctx), &oif);
+	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err, &oif);
 	if (fib_ok(ret)) {
 		cilium_capture_out(ctx);
 		return ret;
@@ -2233,8 +2232,7 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 
-	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err,
-			      ctx_get_ifindex(ctx), &oif);
+	ret = fib_redirect_v4(ctx, ETH_HLEN, ip4, true, &ext_err, &oif);
 	if (fib_ok(ret)) {
 		cilium_capture_out(ctx);
 		return ret;
@@ -2635,8 +2633,7 @@ encap_redirect:
 #endif
 
 fib_lookup:
-	return fib_redirect_v4(ctx, l3_off, ip4, true, ext_err,
-			       ctx_get_ifindex(ctx), &ifindex);
+	return fib_redirect_v4(ctx, l3_off, ip4, true, ext_err, &ifindex);
 }
 
 __section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV4_NODEPORT_REVNAT)
