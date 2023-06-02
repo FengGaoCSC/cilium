@@ -533,6 +533,15 @@ Vagrantfile @cilium/ci-structure
 /vendor/ @cilium/vendor
 /VERSION @cilium/tophat
 
+# Isovalent Teams
+# +++++++++++++++
+#
+# - @isovalent/core-structure
+#   A team responsible for mindfulness of isovalent/cilium codebase.
+# - @isovalent/void
+#   An empty team to indicate the lack of code owners.
 * @isovalent/core-structure
+/atlantis.yaml @isovalent/void
+/renovate.json5 @isovalent/void
 /enterprise @isovalent/void
 *enterprise* @isovalent/void
