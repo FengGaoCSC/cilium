@@ -1,21 +1,15 @@
-# Cilium Enterprise
+# Isovalent Enterprise for Cilium
 
-## (**EXPERIMENTAL**) `main-ce`: Development branch for Cilium Enterprise
+## `main-ce`: Development branch for Isovalent Enterprise for Cilium
 
-[`main-ce`](https://github.com/isovalent/cilium/tree/main-ce) is an experimental
-development branch for Cilium Enterprise that is regularly synchronized with the
-OSS main branch. Please see the following resources for more details:
+[`main-ce`](https://github.com/isovalent/cilium/tree/main-ce) is the development
+branch for Isovalent Enterprise for Cilium. Backporters regularly synchronize
+the `main-ce` branch with the OSS `main` branch. Please see the following
+resources for more details:
 
 - [CFP](https://docs.google.com/document/d/1zcAttwopuhA_BzpfjH0yjlxScijSv2ZqGkphSHpnrRE/edit)
 - [GitHub Issue](https://github.com/isovalent/roadmap/issues/616)
-
-We'll share the proposal with the engineering team after Cilium Enterprise v1.13
-is released. In the meantime, we are currently experimenting with `main-ce`
-branch using a small number of enterprise-only features:
-
-- [Egress Gateway HA](https://github.com/isovalent/cilium/pull/850)
-- [Buried Treasure](https://github.com/isovalent/cilium/pull/869)
-- FQDN Ingress
+- [Porting existing enterprise features to main-ce branch](https://github.com/isovalent/cilium/issues/1167)
 
 Please post a message in [#prj-cee-oss-codebase Slack channel](https://isovalent.slack.com/archives/C05188W95GT)
 if you are interested in participating in the experiment.
@@ -33,3 +27,54 @@ If any of these files conflict with upstream, remove them and regenerate:
     rm -f Documentation/helm-values.rst install/kubernetes/cilium/README.md install/kubernetes/cilium/values.yaml
     make -C install/kubernetes
     make -C Documentation update-helm-values
+
+## Isovalent Enterprise for Cilium installation cheat sheet for the rest of us
+
+### Using Helm
+
+To add `isovalent` Helm repo, run:
+```
+helm repo add isovalent https://helm.isovalent.com
+```
+
+To list all the available versions, run:
+```
+helm repo update
+helm search repo isovalent/cilium -l | grep 'eBPF-based Networking, Security, and Observability'
+```
+
+Specify `isovalent/cilium` instead of `cilium/cilium` to install Isovalent Enterprise for Cilium.
+For example:
+```
+helm install cilium isovalent/cilium --version 1.13.2 --namespace kube-system
+```
+
+Use the [OCI Helm dev chart repository](https://quay.io/repository/isovalent-charts-dev/cilium?tab=tags)
+to install CI images. For example:
+```
+helm install -n kube-system cilium oci://quay.io/isovalent-charts-dev/cilium --version 1.14.0-dev-dev.30-main-b93af2b484
+```
+
+### Using Cilium CLI
+
+Download the latest `cilium-cli` from https://github.com/cilium/cilium-cli/releases.
+
+Make sure `cilium-cli` is in [Helm mode](https://github.com/cilium/cilium-cli#experimental-helm-installation-mode):
+```
+export CILIUM_CLI_MODE=helm
+```
+
+To install Isovalent Enterprise for Cilium:
+```
+cilium install --repository https://helm.isovalent.com --version 1.13.2
+```
+
+You can also specify Cilium release tag with the `v` prefix as the version:
+```
+cilium install --repository https://helm.isovalent.com --version v1.13.2
+```
+
+To install from the [OCI Helm dev chart repository](https://quay.io/repository/isovalent-charts-dev/cilium?tab=tags):
+```
+cilium install --repository oci://quay.io/cilium-charts-dev/cilium --version 1.14.0-dev-dev.30-main-b93af2b484
+```
