@@ -35,7 +35,7 @@ const (
 var defaultSelectors = []*types.Selector{
 	{
 		Type:  "cilium",
-		Value: "mtls",
+		Value: "mutual-auth",
 	},
 }
 
@@ -47,9 +47,16 @@ var Cell = cell.Module(
 	cell.Provide(NewClient),
 )
 
+var FakeCellClient = cell.Module(
+	"fake-spire-client",
+	"Fake Spire Server API Client",
+	cell.Config(ClientConfig{}),
+	cell.Provide(NewFakeClient),
+)
+
 // ClientConfig contains the configuration for the SPIRE client.
 type ClientConfig struct {
-	AuthMTLSEnabled              bool          `mapstructure:"mesh-auth-mtls-enabled"`
+	MutualAuthEnabled            bool          `mapstructure:"mesh-auth-mutual-enabled"`
 	SpireAgentSocketPath         string        `mapstructure:"mesh-auth-spire-agent-socket"`
 	SpireServerAddress           string        `mapstructure:"mesh-auth-spire-server-address"`
 	SpireServerConnectionTimeout time.Duration `mapstructure:"mesh-auth-spire-server-connection-timeout"`
@@ -58,10 +65,10 @@ type ClientConfig struct {
 
 // Flags adds the flags used by ClientConfig.
 func (cfg ClientConfig) Flags(flags *pflag.FlagSet) {
-	flags.BoolVar(&cfg.AuthMTLSEnabled,
-		"mesh-auth-mtls-enabled",
+	flags.BoolVar(&cfg.MutualAuthEnabled,
+		"mesh-auth-mutual-enabled",
 		false,
-		"The flag to enable mTLS for the SPIRE server.")
+		"The flag to enable mutual authentication for the SPIRE server.")
 	flags.StringVar(&cfg.SpireAgentSocketPath,
 		"mesh-auth-spire-agent-socket",
 		"/run/spire/sockets/agent/agent.sock",
@@ -87,9 +94,9 @@ type Client struct {
 }
 
 // NewClient creates a new SPIRE client.
-// If the mTLS is not enabled, it returns a noop client.
+// If the mutual authentication is not enabled, it returns a noop client.
 func NewClient(lc hive.Lifecycle, cfg ClientConfig, log logrus.FieldLogger) identity.Provider {
-	if !cfg.AuthMTLSEnabled {
+	if !cfg.MutualAuthEnabled {
 		return &noopClient{}
 	}
 	client := &Client{
@@ -197,6 +204,10 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("unable to connect to SPIRE server %s", c.cfg.SpireServerAddress)
 	}
 
+	if len(id) == 0 {
+		return nil
+	}
+
 	entries, err := c.listEntries(ctx, id)
 	if err != nil {
 		if strings.Contains(err.Error(), notFoundError) {
@@ -217,6 +228,32 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 	})
 
 	return err
+}
+
+func (c *Client) List(ctx context.Context) ([]string, error) {
+	entries, err := c.entry.ListEntries(ctx, &entryv1.ListEntriesRequest{
+		Filter: &entryv1.ListEntriesRequest_Filter{
+			ByParentId: &types.SPIFFEID{
+				TrustDomain: c.cfg.SpiffeTrustDomain,
+				Path:        defaultParentID,
+			},
+			BySelectors: &types.SelectorMatch{
+				Selectors: defaultSelectors,
+				Match:     types.SelectorMatch_MATCH_EXACT,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(entries.Entries) == 0 {
+		return nil, nil
+	}
+	var ids = make([]string, 0, len(entries.Entries))
+	for _, e := range entries.Entries {
+		ids = append(ids, e.Id)
+	}
+	return ids, nil
 }
 
 // listEntries returns the list of entries for the given ID.

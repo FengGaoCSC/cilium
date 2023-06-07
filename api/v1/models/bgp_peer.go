@@ -47,8 +47,16 @@ type BgpPeer struct {
 	// Initial value for the BGP ConnectRetryTimer (RFC 4271, Section 8) in seconds
 	ConnectRetryTimeSeconds int64 `json:"connect-retry-time-seconds,omitempty"`
 
+	// Time To Live (TTL) value used in BGP packets sent to the eBGP neighbor.
+	// 0 if eBGP multi-hop feature is disabled.
+	//
+	EbgpMultihopTTL int64 `json:"ebgp-multihop-ttl,omitempty"`
+
 	// BGP peer address family state
 	Families []*BgpPeerFamilies `json:"families"`
+
+	// Graceful restart capability
+	GracefulRestart *BgpGracefulRestart `json:"graceful-restart,omitempty"`
 
 	// Local AS Number
 	LocalAsn int64 `json:"local-asn,omitempty"`
@@ -73,6 +81,10 @@ func (m *BgpPeer) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateFamilies(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateGracefulRestart(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -108,11 +120,34 @@ func (m *BgpPeer) validateFamilies(formats strfmt.Registry) error {
 	return nil
 }
 
+func (m *BgpPeer) validateGracefulRestart(formats strfmt.Registry) error {
+	if swag.IsZero(m.GracefulRestart) { // not required
+		return nil
+	}
+
+	if m.GracefulRestart != nil {
+		if err := m.GracefulRestart.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("graceful-restart")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("graceful-restart")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
 // ContextValidate validate this bgp peer based on the context it is used
 func (m *BgpPeer) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.contextValidateFamilies(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateGracefulRestart(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -137,6 +172,22 @@ func (m *BgpPeer) contextValidateFamilies(ctx context.Context, formats strfmt.Re
 			}
 		}
 
+	}
+
+	return nil
+}
+
+func (m *BgpPeer) contextValidateGracefulRestart(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.GracefulRestart != nil {
+		if err := m.GracefulRestart.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("graceful-restart")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("graceful-restart")
+			}
+			return err
+		}
 	}
 
 	return nil

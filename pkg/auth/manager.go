@@ -4,7 +4,9 @@
 package auth
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/cilium/cilium/pkg/auth/certs"
@@ -23,18 +25,19 @@ func (key signalAuthKey) String() string {
 }
 
 type authManager struct {
-	signalChannel <-chan signalAuthKey
-	ipCache       ipCache
-	authHandlers  map[policy.AuthType]authHandler
-	authmap       authMap
+	ipCache      ipCache
+	authHandlers map[policy.AuthType]authHandler
+	authmap      authMap
 
-	mutex   lock.Mutex
-	pending map[authKey]struct{}
+	mutex                    lock.Mutex
+	pending                  map[authKey]struct{}
+	handleAuthenticationFunc func(a *authManager, k authKey, reAuth bool)
 }
 
 // ipCache is the set of interactions the auth manager performs with the IPCache
 type ipCache interface {
 	GetNodeIP(uint16) string
+	AllocateNodeID(net.IP) uint16
 }
 
 // authHandler is responsible to handle authentication for a specific auth type
@@ -54,12 +57,7 @@ type authResponse struct {
 	expirationTime time.Time
 }
 
-func newAuthManager(
-	signalChannel <-chan signalAuthKey,
-	authHandlers []authHandler,
-	authmap authMap,
-	ipCache ipCache,
-) (*authManager, error) {
+func newAuthManager(authHandlers []authHandler, authmap authMap, ipCache ipCache) (*authManager, error) {
 	ahs := map[policy.AuthType]authHandler{}
 	for _, ah := range authHandlers {
 		if ah == nil {
@@ -72,45 +70,67 @@ func newAuthManager(
 	}
 
 	return &authManager{
-		signalChannel: signalChannel,
-		authHandlers:  ahs,
-		authmap:       authmap,
-		ipCache:       ipCache,
-		pending:       make(map[authKey]struct{}),
+		authHandlers:             ahs,
+		authmap:                  authmap,
+		ipCache:                  ipCache,
+		pending:                  make(map[authKey]struct{}),
+		handleAuthenticationFunc: handleAuthentication,
 	}, nil
 }
 
-// start receives auth required signals from the signal channel and spawns
-// a new go routine for each authentication request
-func (a *authManager) start() {
-	go func() {
-		for key := range a.signalChannel {
-			k := authKey{
-				localIdentity:  identity.NumericIdentity(key.LocalIdentity),
-				remoteIdentity: identity.NumericIdentity(key.RemoteIdentity),
-				remoteNodeID:   key.RemoteNodeID,
-				authType:       policy.AuthType(key.AuthType),
-			}
+// handleAuthRequest receives auth required signals and spawns a new go routine for each authentication request.
+func (a *authManager) handleAuthRequest(_ context.Context, key signalAuthKey) error {
+	k := authKey{
+		localIdentity:  identity.NumericIdentity(key.LocalIdentity),
+		remoteIdentity: identity.NumericIdentity(key.RemoteIdentity),
+		remoteNodeID:   key.RemoteNodeID,
+		authType:       policy.AuthType(key.AuthType),
+	}
 
-			if a.markPendingAuth(k) {
-				go func(key authKey) {
-					defer a.clearPendingAuth(key)
+	log.Debugf("auth: Handle authentication request for key %s", k)
 
-					// Check if the auth is actually required, as we might have
-					// updated the authmap since the datapath issued the auth
-					// required signal.
-					if i, err := a.authmap.Get(key); err == nil && i.expiration.After(time.Now()) {
-						log.Debugf("auth: Already authenticated, skipped authentication for key %v", key)
-						return
-					}
+	a.handleAuthenticationFunc(a, k, false)
 
-					if err := a.authenticate(key); err != nil {
-						log.WithError(err).Warningf("auth: Failed to authenticate request for key %v", key)
-					}
-				}(k)
-			}
+	return nil
+}
+
+func (a *authManager) handleCertificateRotationEvent(_ context.Context, event certs.CertificateRotationEvent) error {
+	log.Debugf("auth: Handle certificate rotation event for identity %s", event.Identity)
+
+	all, err := a.authmap.All()
+	if err != nil {
+		return fmt.Errorf("failed to get all auth map entries: %w", err)
+	}
+
+	for k := range all {
+		if k.localIdentity == event.Identity || k.remoteIdentity == event.Identity {
+			a.handleAuthenticationFunc(a, k, true)
 		}
-	}()
+	}
+
+	return nil
+}
+
+func handleAuthentication(a *authManager, k authKey, reAuth bool) {
+	if a.markPendingAuth(k) {
+		go func(key authKey) {
+			defer a.clearPendingAuth(key)
+
+			if !reAuth {
+				// Check if the auth is actually required, as we might have
+				// updated the authmap since the datapath issued the auth
+				// required signal.
+				if i, err := a.authmap.Get(key); err == nil && i.expiration.After(time.Now()) {
+					log.Debugf("auth: Already authenticated, skipped authentication for key %v", key)
+					return
+				}
+			}
+
+			if err := a.authenticate(key); err != nil {
+				log.WithError(err).Warningf("auth: Failed to authenticate request for key %v", key)
+			}
+		}(k)
+	}
 }
 
 // markPendingAuth checks if there is a pending authentication for the given key.

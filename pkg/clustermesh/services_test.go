@@ -56,6 +56,9 @@ func (s *ClusterMeshServicesTestSuite) SetUpSuite(c *C) {
 }
 
 func (s *ClusterMeshServicesTestSuite) SetUpTest(c *C) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	kvstore.SetupDummy("etcd")
 
 	s.randomName = rand.RandomString()
@@ -77,7 +80,7 @@ func (s *ClusterMeshServicesTestSuite) SetUpTest(c *C) {
 		config := cmtypes.CiliumClusterConfig{
 			ID: uint32(i),
 		}
-		err := SetClusterConfig(cluster, &config, kvstore.Client())
+		err := SetClusterConfig(ctx, cluster, &config, kvstore.Client())
 		c.Assert(err, IsNil)
 	}
 
@@ -89,8 +92,6 @@ func (s *ClusterMeshServicesTestSuite) SetUpTest(c *C) {
 	err = os.WriteFile(config2, etcdConfig, 0644)
 	c.Assert(err, IsNil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	ipc := ipcache.NewIPCache(&ipcache.Configuration{
 		Context: ctx,
 	})
@@ -170,7 +171,7 @@ func (s *ClusterMeshServicesTestSuite) TestClusterMeshServicesGlobal(c *C) {
 			event.Endpoints.Backends[cmtypes.MustParseAddrCluster("20.0.185.196")] != nil
 	})
 
-	k8sEndpoints := &slim_corev1.Endpoints{
+	k8sEndpoints := k8s.ParseEndpoints(&slim_corev1.Endpoints{
 		ObjectMeta: slim_metav1.ObjectMeta{
 			Name:      "foo",
 			Namespace: "default",
@@ -187,7 +188,7 @@ func (s *ClusterMeshServicesTestSuite) TestClusterMeshServicesGlobal(c *C) {
 				},
 			},
 		},
-	}
+	})
 
 	swgEps := lock.NewStoppableWaitGroup()
 	s.svcCache.UpdateEndpoints(k8sEndpoints, swgEps)
@@ -195,7 +196,7 @@ func (s *ClusterMeshServicesTestSuite) TestClusterMeshServicesGlobal(c *C) {
 		return event.Endpoints.Backends[cmtypes.MustParseAddrCluster("30.0.185.196")] != nil
 	})
 
-	s.svcCache.DeleteEndpoints(k8sEndpoints, swgEps)
+	s.svcCache.DeleteEndpoints(k8sEndpoints.EndpointSliceID, swgEps)
 	s.expectEvent(c, k8s.UpdateService, svcID, func(event k8s.ServiceEvent) bool {
 		return event.Endpoints.Backends[cmtypes.MustParseAddrCluster("30.0.185.196")] == nil
 	})

@@ -13,6 +13,7 @@ cilium-agent [flags]
 ```
       --agent-health-port int                                   TCP port for agent health status API (default 9879)
       --agent-labels strings                                    Additional labels to identify this agent
+      --agent-liveness-update-interval duration                 Interval at which the agent updates liveness time for the datapath (default 1s)
       --agent-not-ready-taint-key string                        Key of the taint indicating that Cilium is not ready on the node (default "node.cilium.io/agent-not-ready")
       --allocator-list-timeout duration                         Timeout for listing allocator state before exiting (default 3m0s)
       --allow-icmp-frag-needed                                  Allow ICMP Fragmentation Needed type packets for purposes like TCP Path MTU. (default true)
@@ -75,7 +76,6 @@ cilium-agent [flags]
       --debug-verbose strings                                   List of enabled verbose debug groups
       --devices strings                                         List of devices facing cluster/external network (used for BPF NodePort, BPF masquerading and host firewall); supports '+' as wildcard in device name, e.g. 'eth+'
       --direct-routing-device string                            Device name used to connect nodes in direct routing mode (used by BPF NodePort, BPF host routing; if empty, automatically set to a device with k8s InternalIP/ExternalIP or with a default route)
-      --disable-cnp-status-updates                              Do not send CNP NodeStatus updates to the Kubernetes api-server (recommended to run with "cnp-node-status-gc-interval=0" in cilium-operator)
       --disable-endpoint-crd                                    Disable use of CiliumEndpoint CRD
       --disable-iptables-feeder-rules strings                   Chains to ignore when installing feeder rules.
       --dns-max-ips-per-restored-rule int                       Maximum number of IPs to maintain for each restored DNS rule (default 1000)
@@ -111,6 +111,7 @@ cilium-agent [flags]
       --enable-identity-mark                                    Enable setting identity mark for local traffic (default true)
       --enable-ip-masq-agent                                    Enable BPF ip-masq-agent
       --enable-ipsec                                            Enable IPSec support
+      --enable-ipsec-key-watcher                                Enable watcher for IPsec key. If disabled, a restart of the agent will be necessary on key rotations. (default true)
       --enable-ipv4                                             Enable IPv4 support (default true)
       --enable-ipv4-egress-gateway                              Enable egress gateway for IPv4
       --enable-ipv4-fragment-tracking                           Enable IPv4 fragments tracking for L4-based lookups (default true)
@@ -124,6 +125,7 @@ cilium-agent [flags]
       --enable-k8s-endpoint-slice                               Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it (default true)
       --enable-k8s-event-handover                               Enable k8s event handover to kvstore for improved scalability
       --enable-k8s-terminating-endpoint                         Enable auto-detect of terminating endpoint condition (default true)
+      --enable-l2-announcements                                 Enable L2 announcements
       --enable-l2-neigh-discovery                               Enables L2 neighbor discovery used by kube-proxy-replacement and IPsec (default true)
       --enable-l7-proxy                                         Enable L7 proxy for L7 policy enforcement (default true)
       --enable-local-node-route                                 Enable installation of the route which points the allocation prefix of the local node (default true)
@@ -193,6 +195,7 @@ cilium-agent [flags]
       --ip-masq-agent-config-path string                        ip-masq-agent configuration file path (default "/etc/config/ip-masq-agent")
       --ipam string                                             Backend to use for IPAM (default "cluster-pool")
       --ipam-cilium-node-update-rate duration                   Maximum rate at which the CiliumNode custom resource is updated (default 15s)
+      --ipam-multi-pool-pre-allocation map                      Defines how the minimum number of IPs a node should pre-allocate from each pool (default default=8)
       --ipsec-key-file string                                   Path to IPSec key file
       --ipsec-key-rotation-duration duration                    Maximum duration of the IPsec key rotation. The previous key will be removed after that delay. (default 5m0s)
       --iptables-lock-timeout duration                          Time to pass to each iptables invocation to wait for xtables lock acquisition (default 5s)
@@ -229,6 +232,9 @@ cilium-agent [flags]
       --kvstore-max-consecutive-quorum-errors int               Max acceptable kvstore consecutive quorum errors before the agent assumes permanent failure (default 2)
       --kvstore-opt map                                         Key-value store options e.g. etcd.address=127.0.0.1:4001
       --kvstore-periodic-sync duration                          Periodic KVstore synchronization interval (default 5m0s)
+      --l2-announcements-lease-duration duration                Duration of inactivity after which a new leader is selected (default 15s)
+      --l2-announcements-renew-deadline duration                Interval at which the leader renews a lease (default 5s)
+      --l2-announcements-retry-period duration                  Timeout after a renew failure, before the next retry (default 2s)
       --label-prefix-file string                                Valid label prefixes file path
       --labels strings                                          List of label prefixes used to determine identity of an endpoint
       --lib-dir string                                          Directory path to store runtime build environment (default "/var/lib/cilium")
@@ -237,12 +243,13 @@ cilium-agent [flags]
       --log-driver strings                                      Logging endpoints to use for example syslog
       --log-opt map                                             Log driver options for cilium-agent, configmap example for syslog driver: {"syslog.level":"info","syslog.facility":"local5","syslog.tag":"cilium-agent"}
       --log-system-load                                         Enable periodic logging of system load
-      --mesh-auth-mtls-listener-port int                        Port on which the Cilium Agent will perfom mTLS handshakes between other Agents
+      --mesh-auth-expired-gc-interval duration                  Interval in which expired auth entries are attempted to be garbage collected (default 15m0s)
+      --mesh-auth-mutual-listener-port int                      Port on which the Cilium Agent will perform mutual authentication handshakes between other Agents
       --mesh-auth-queue-size int                                Queue size for the auth manager (default 1024)
       --mesh-auth-rotated-identities-queue-size int             The size of the queue for signaling rotated identities. (default 1024)
       --mesh-auth-spiffe-trust-domain string                    The trust domain for the SPIFFE identity. (default "spiffe.cilium")
       --mesh-auth-spire-admin-socket string                     The path for the SPIRE admin agent Unix socket.
-      --metrics strings                                         Metrics that should be enabled or disabled from the default metric list. The list is expected to be separated by a space. (+metric_foo to enable metric_foo , -metric_bar to disable metric_bar)
+      --metrics strings                                         Metrics that should be enabled or disabled from the default metric list. (+metric_foo to enable metric_foo, -metric_bar to disable metric_bar)
       --monitor-aggregation string                              Level of monitor aggregation for traces from the datapath (default "None")
       --monitor-aggregation-flags strings                       TCP flags that trigger monitor reports when monitor aggregation is enabled (default [syn,fin,rst])
       --monitor-aggregation-interval duration                   Monitor report interval when monitor aggregation is enabled (default 5s)

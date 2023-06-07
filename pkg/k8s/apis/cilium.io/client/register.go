@@ -78,6 +78,12 @@ const (
 
 	// CCGCRDName is the full name of the CiliumCIDRGroup CRD.
 	CCGCRDName = k8sconstv2alpha1.CCGKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
+
+	// L2AnnouncementCRDName is the full name of the CiliumL2AnnouncementPolicy CRD.
+	L2AnnouncementCRDName = k8sconstv2alpha1.L2AnnouncementKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
+
+	// CPIPCRDName is the full name of the CiliumPodIPPool CRD.
+	CPIPCRDName = k8sconstv2alpha1.CPIPKindDefinition + "/" + k8sconstv2alpha1.CustomResourceDefinitionVersion
 )
 
 var (
@@ -95,21 +101,23 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 	g, _ := errgroup.WithContext(context.Background())
 
 	resourceToCreateFnMapping := map[string]crdCreationFn{
-		synced.CRDResourceName(k8sconstv2.CNPName):            createCRD(CNPCRDName, k8sconstv2.CNPName),
-		synced.CRDResourceName(k8sconstv2.CCNPName):           createCRD(CCNPCRDName, k8sconstv2.CCNPName),
-		synced.CRDResourceName(k8sconstv2.CNName):             createCRD(CNCRDName, k8sconstv2.CNName),
-		synced.CRDResourceName(k8sconstv2.CIDName):            createCRD(CIDCRDName, k8sconstv2.CIDName),
-		synced.CRDResourceName(k8sconstv2.CEPName):            createCRD(CEPCRDName, k8sconstv2.CEPName),
-		synced.CRDResourceName(k8sconstv2.CEWName):            createCRD(CEWCRDName, k8sconstv2.CEWName),
-		synced.CRDResourceName(k8sconstv2.CLRPName):           createCRD(CLRPCRDName, k8sconstv2.CLRPName),
-		synced.CRDResourceName(k8sconstv2.CEGPName):           createCRD(CEGPCRDName, k8sconstv2.CEGPName),
-		synced.CRDResourceName(k8sconstv2alpha1.CESName):      createCRD(CESCRDName, k8sconstv2alpha1.CESName),
-		synced.CRDResourceName(k8sconstv2.CCECName):           createCRD(CCECCRDName, k8sconstv2.CCECName),
-		synced.CRDResourceName(k8sconstv2.CECName):            createCRD(CECCRDName, k8sconstv2.CECName),
-		synced.CRDResourceName(k8sconstv2alpha1.BGPPName):     createCRD(BGPPCRDName, k8sconstv2alpha1.BGPPName),
-		synced.CRDResourceName(k8sconstv2alpha1.LBIPPoolName): createCRD(LBIPPoolCRDName, k8sconstv2alpha1.LBIPPoolName),
-		synced.CRDResourceName(k8sconstv2alpha1.CNCName):      createCRD(CNCCRDName, k8sconstv2alpha1.CNCName),
-		synced.CRDResourceName(k8sconstv2alpha1.CCGName):      createCRD(CCGCRDName, k8sconstv2alpha1.CCGName),
+		synced.CRDResourceName(k8sconstv2.CNPName):                  createCRD(CNPCRDName, k8sconstv2.CNPName),
+		synced.CRDResourceName(k8sconstv2.CCNPName):                 createCRD(CCNPCRDName, k8sconstv2.CCNPName),
+		synced.CRDResourceName(k8sconstv2.CNName):                   createCRD(CNCRDName, k8sconstv2.CNName),
+		synced.CRDResourceName(k8sconstv2.CIDName):                  createCRD(CIDCRDName, k8sconstv2.CIDName),
+		synced.CRDResourceName(k8sconstv2.CEPName):                  createCRD(CEPCRDName, k8sconstv2.CEPName),
+		synced.CRDResourceName(k8sconstv2.CEWName):                  createCRD(CEWCRDName, k8sconstv2.CEWName),
+		synced.CRDResourceName(k8sconstv2.CLRPName):                 createCRD(CLRPCRDName, k8sconstv2.CLRPName),
+		synced.CRDResourceName(k8sconstv2.CEGPName):                 createCRD(CEGPCRDName, k8sconstv2.CEGPName),
+		synced.CRDResourceName(k8sconstv2alpha1.CESName):            createCRD(CESCRDName, k8sconstv2alpha1.CESName),
+		synced.CRDResourceName(k8sconstv2.CCECName):                 createCRD(CCECCRDName, k8sconstv2.CCECName),
+		synced.CRDResourceName(k8sconstv2.CECName):                  createCRD(CECCRDName, k8sconstv2.CECName),
+		synced.CRDResourceName(k8sconstv2alpha1.BGPPName):           createCRD(BGPPCRDName, k8sconstv2alpha1.BGPPName),
+		synced.CRDResourceName(k8sconstv2alpha1.LBIPPoolName):       createCRD(LBIPPoolCRDName, k8sconstv2alpha1.LBIPPoolName),
+		synced.CRDResourceName(k8sconstv2alpha1.CNCName):            createCRD(CNCCRDName, k8sconstv2alpha1.CNCName),
+		synced.CRDResourceName(k8sconstv2alpha1.CCGName):            createCRD(CCGCRDName, k8sconstv2alpha1.CCGName),
+		synced.CRDResourceName(k8sconstv2alpha1.L2AnnouncementName): createCRD(L2AnnouncementCRDName, k8sconstv2alpha1.L2AnnouncementName),
+		synced.CRDResourceName(k8sconstv2alpha1.CPIPName):           createCRD(CPIPCRDName, k8sconstv2alpha1.CPIPName),
 	}
 	for _, r := range synced.AllCiliumCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -169,6 +177,12 @@ var (
 
 	//go:embed crds/v2alpha1/ciliumcidrgroups.yaml
 	crdsv2Alpha1CiliumCIDRGroups []byte
+
+	//go:embed crds/v2alpha1/ciliuml2announcementpolicies.yaml
+	crdsv2Alpha1CiliumL2AnnouncementPolicies []byte
+
+	//go:embed crds/v2alpha1/ciliumpodippools.yaml
+	crdsv2Alpha1CiliumPodIPPools []byte
 )
 
 // GetPregeneratedCRD returns the pregenerated CRD based on the requested CRD
@@ -214,6 +228,10 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv2Alpha1CiliumNodeConfigs
 	case CCGCRDName:
 		crdBytes = crdsv2Alpha1CiliumCIDRGroups
+	case L2AnnouncementCRDName:
+		crdBytes = crdsv2Alpha1CiliumL2AnnouncementPolicies
+	case CPIPCRDName:
+		crdBytes = crdsv2Alpha1CiliumPodIPPools
 	default:
 		scopedLog.Fatal("Pregenerated CRD does not exist")
 	}

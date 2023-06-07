@@ -4,7 +4,11 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
+
+	"github.com/cilium/ebpf"
+	"golang.org/x/exp/maps"
 
 	"github.com/cilium/cilium/pkg/lock"
 )
@@ -26,7 +30,11 @@ func (r *authMapCache) All() (map[authKey]authInfo, error) {
 	r.cacheEntriesMutex.RLock()
 	defer r.cacheEntriesMutex.RUnlock()
 
-	return r.cacheEntries, nil
+	result := make(map[authKey]authInfo)
+	for k, v := range r.cacheEntries {
+		result[k] = v
+	}
+	return maps.Clone(result), nil
 }
 
 func (r *authMapCache) Get(key authKey) (authInfo, error) {
@@ -62,6 +70,27 @@ func (r *authMapCache) Delete(key authKey) error {
 	}
 
 	delete(r.cacheEntries, key)
+
+	return nil
+}
+
+func (r *authMapCache) DeleteIf(predicate func(key authKey, info authInfo) bool) error {
+	r.cacheEntriesMutex.Lock()
+	defer r.cacheEntriesMutex.Unlock()
+
+	for k, v := range r.cacheEntries {
+		if predicate(k, v) {
+			// delete every entry individually to keep the cache in sync in case of an error
+			if err := r.authmap.Delete(k); err != nil {
+				if errors.Is(err, ebpf.ErrKeyNotExist) {
+					log.Debugf("auth: failed to delete auth entry with key %s: entry already deleted", k)
+					continue
+				}
+				return fmt.Errorf("failed to delete auth entry from map: %w", err)
+			}
+			delete(r.cacheEntries, k)
+		}
+	}
 
 	return nil
 }

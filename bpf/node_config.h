@@ -43,7 +43,9 @@ DEFINE_IPV6(HOST_IP, 0xbe, 0xef, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0xa, 0x
 #define TUNNEL_PORT 8472
 #define TUNNEL_PROTOCOL_VXLAN 1
 #define TUNNEL_PROTOCOL_GENEVE 2
-#define TUNNEL_PROTOCOL 1
+#ifndef TUNNEL_PROTOCOL
+#define TUNNEL_PROTOCOL TUNNEL_PROTOCOL_VXLAN
+#endif
 
 #define HOST_ID 1
 #define WORLD_ID 2
@@ -77,6 +79,10 @@ DEFINE_IPV6(HOST_IP, 0xbe, 0xef, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0xa, 0x
 
 #define HASH_INIT4_SEED 0xcafe
 #define HASH_INIT6_SEED 0xeb9f
+
+#ifndef L2_ANNOUNCEMENTS_MAX_LIVENESS
+# define L2_ANNOUNCEMENTS_MAX_LIVENESS 3000000000ULL
+#endif
 
 #ifdef ENABLE_IPV4
 #define IPV4_MASK 0xffff
@@ -133,6 +139,7 @@ DEFINE_IPV6(HOST_IP, 0xbe, 0xef, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0xa, 0x
 #define IPCACHE_MAP test_cilium_ipcache
 #define NODE_MAP test_cilium_node_map
 #define ENCRYPT_MAP test_cilium_encrypt_state
+#define L2_RESPONDER_MAP4 test_cilium_l2_responder_v4
 #define TUNNEL_MAP test_cilium_tunnel_map
 #define VTEP_MAP test_cilium_vtep_map
 #define LB6_REVERSE_NAT_MAP test_cilium_lb6_reverse_nat
@@ -174,6 +181,7 @@ DEFINE_IPV6(HOST_IP, 0xbe, 0xef, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0xa, 0x
 #define SRV6_POLICY_MAP_SIZE 16384
 #define SRV6_SID_MAP_SIZE 16384
 #define SRV6_STATE_MAP_SIZE 16384
+#define L2_RESPONSER_MAP4_SIZE 4096
 #define POLICY_PROG_MAP_SIZE ENDPOINTS_MAP_SIZE
 #define IPV4_FRAG_DATAGRAMS_MAP test_cilium_ipv4_frag_datagrams
 #define CILIUM_IPV4_FRAG_MAP_MAX_ENTRIES 8192

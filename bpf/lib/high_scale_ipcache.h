@@ -53,6 +53,7 @@ needs_encapsulation(__u32 addr)
 static __always_inline int
 decapsulate_overlay(struct __ctx_buff *ctx, __u32 *src_id)
 {
+	struct geneve_dsr_opt4 dsr_opt __maybe_unused;
 	struct genevehdr geneve __maybe_unused;
 	__u32 opt_len __maybe_unused;
 	void *data, *data_end;
@@ -83,10 +84,26 @@ decapsulate_overlay(struct __ctx_buff *ctx, __u32 *src_id)
 	case TUNNEL_PROTOCOL_GENEVE:
 		off = ((void *)ip4 - data) + ipv4_hdrlen(ip4) + sizeof(struct udphdr);
 		if (ctx_load_bytes(ctx, off, &geneve, sizeof(geneve)) < 0)
-			return CTX_ACT_DROP;
+			return DROP_INVALID;
 
 		opt_len = geneve.opt_len * 4;
 		memcpy(src_id, &geneve.vni, sizeof(__u32));
+
+#if defined(ENABLE_DSR) && DSR_ENCAP_MODE == DSR_ENCAP_GENEVE
+		ctx_store_meta(ctx, CB_HSIPC_ADDR_V4, 0);
+
+		if (opt_len && opt_len >= sizeof(dsr_opt)) {
+			if (ctx_load_bytes(ctx, off + sizeof(geneve), &dsr_opt,
+					   sizeof(dsr_opt)) < 0)
+				return DROP_INVALID;
+
+			if (dsr_opt.hdr.opt_class == bpf_htons(DSR_GENEVE_OPT_CLASS) &&
+			    dsr_opt.hdr.type == DSR_GENEVE_OPT_TYPE) {
+				ctx_store_meta(ctx, CB_HSIPC_ADDR_V4, dsr_opt.addr);
+				ctx_store_meta(ctx, CB_HSIPC_PORT, dsr_opt.port);
+			}
+		}
+#endif /* ENABLE_DSR && DSR_ENCAP_MODE == DSR_ENCAP_GENEVE */
 
 		shrink = ipv4_hdrlen(ip4) + sizeof(struct udphdr) +
 			 sizeof(struct genevehdr) + opt_len +
@@ -100,7 +117,7 @@ decapsulate_overlay(struct __ctx_buff *ctx, __u32 *src_id)
 		      offsetof(struct vxlanhdr, vx_vni);
 
 		if (ctx_load_bytes(ctx, off, src_id, sizeof(__u32)) < 0)
-			return CTX_ACT_DROP;
+			return DROP_INVALID;
 		break;
 	default:
 		/* If the tunnel type is neither VXLAN nor GENEVE, we have an issue. */
@@ -111,7 +128,7 @@ decapsulate_overlay(struct __ctx_buff *ctx, __u32 *src_id)
 	ctx_store_meta(ctx, CB_SRC_LABEL, *src_id);
 
 	if (ctx_adjust_hroom(ctx, -shrink, BPF_ADJ_ROOM_MAC, ctx_adjust_hroom_flags()))
-		return CTX_ACT_DROP;
+		return DROP_INVALID;
 	return ctx_redirect(ctx, ENCAP_IFINDEX, BPF_F_INGRESS);
 }
 #endif /* ENABLE_HIGH_SCALE_IPCACHE */

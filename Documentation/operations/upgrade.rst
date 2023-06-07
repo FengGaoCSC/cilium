@@ -329,6 +329,10 @@ Annotations:
   being rerouted towards an Egress Gateway.
 * If Gateway API feature is enabled, please upgrade related CRDs to v0.6.x. This is
   mainly for ReferenceGrant resource version change (i.e. from v1alpha2 to v1beta1).
+* The attribute ``auth.type`` is renamed to ``authentication.mode`` in both Ingress and
+  Egress rules in CiliumNetworkPolicy CRD. The old attribute name is no longer supported,
+  please update your CiliumNetworkPolicy CRD accordingly. Also applicable values for this
+  attribute are changed to ``disabled``, ``required`` and ``test-always-fail``.
 
 Removed Options
 ~~~~~~~~~~~~~~~
@@ -351,6 +355,9 @@ Deprecated Options
   native-routing mode, set ``routing-mode=native`` (previously
   ``tunnel=disabled``). To configure the tunneling protocol, set
   ``tunnel-protocol=geneve`` (previously ``tunnel=geneve``).
+* The ``disable-cnp-status-updates``, ``cnp-node-status-gc-interval duration`` and ``enable-k8s-event-handover``
+  options are deprecated and will be removed in v1.15. There is no replacement for these
+  flags as enabling them causes scalability and performance issues even in small clusters.
 
 Added Metrics
 ~~~~~~~~~~~~~
@@ -388,6 +395,11 @@ Helm Options
 * Following the deprecation of the ``tunnel`` agent flag, ``tunnel`` is being
   deprecated in favor of ``routingMode`` and ``tunnelProtocol`` and will be
   removed in v1.15.
+* Following the deprecation of the ``disable-cnp-status-updates``,
+  ``cnp-node-status-gc-interval duration`` and ``enable-k8s-event-handover`` options,
+  corresponding helm values ``enableCnpStatusUpdates``, ``enableK8sEventHandover``
+  are being deprecated and will be removed in 1.15. There is no replacement for these
+  values as enabling them causes scalability and performance issues even in small clusters.
 * Values ``encryption.keyFile``, ``encryption.mountPath``,
   ``encryption.secretName`` and ``encryption.interface`` are deprecated in
   favor of their ``encryption.ipsec.*`` counterparts and will be removed in

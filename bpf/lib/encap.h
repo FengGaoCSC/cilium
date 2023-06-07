@@ -31,12 +31,12 @@ encap_and_redirect_ipsec(struct __ctx_buff *ctx, __u8 key, __u16 node_id,
 #endif /* ENABLE_IPSEC */
 
 static __always_inline int
-__encap_with_nodeid(struct __ctx_buff *ctx, __u32 src_ip, __be32 tunnel_endpoint,
+__encap_with_nodeid(struct __ctx_buff *ctx, __u32 src_ip, __be16 src_port,
+		    __be32 tunnel_endpoint,
 		    __u32 seclabel, __u32 dstid, __u32 vni __maybe_unused,
 		    enum trace_reason ct_reason, __u32 monitor, int *ifindex)
 {
 	__u32 node_id;
-	int ret;
 
 	/* When encapsulating, a packet originating from the local host is
 	 * being considered as a packet from a remote node as it is being
@@ -49,13 +49,11 @@ __encap_with_nodeid(struct __ctx_buff *ctx, __u32 src_ip, __be32 tunnel_endpoint
 
 	cilium_dbg(ctx, DBG_ENCAP, node_id, seclabel);
 
-	ret = ctx_set_encap_info(ctx, src_ip, node_id, seclabel, dstid, vni,
-				 NULL, 0, false, ifindex);
-	if (ret == CTX_ACT_REDIRECT)
-		send_trace_notify(ctx, TRACE_TO_OVERLAY, seclabel, dstid, 0, *ifindex,
-				  ct_reason, monitor);
+	send_trace_notify(ctx, TRACE_TO_OVERLAY, seclabel, dstid, 0, *ifindex,
+			  ct_reason, monitor);
 
-	return ret;
+	return ctx_set_encap_info(ctx, src_ip, src_port, node_id, seclabel, vni,
+				  NULL, 0, ifindex);
 }
 
 static __always_inline int
@@ -82,7 +80,7 @@ __encap_and_redirect_with_nodeid(struct __ctx_buff *ctx, __u32 src_ip __maybe_un
 		return ret;
 #endif /* ENABLE_WIREGUARD */
 
-	ret = __encap_with_nodeid(ctx, src_ip, tunnel_endpoint, seclabel, dstid,
+	ret = __encap_with_nodeid(ctx, src_ip, 0, tunnel_endpoint, seclabel, dstid,
 				  vni, trace->reason, trace->monitor,
 				  &ifindex);
 	if (ret != CTX_ACT_REDIRECT)
@@ -133,7 +131,7 @@ __encap_and_redirect_lxc(struct __ctx_buff *ctx, __be32 tunnel_endpoint,
 	 * the tunnel, to apply the correct reverse DNAT.
 	 * See #14674 for details.
 	 */
-	ret = __encap_with_nodeid(ctx, 0, tunnel_endpoint, seclabel, dstid,
+	ret = __encap_with_nodeid(ctx, 0, 0, tunnel_endpoint, seclabel, dstid,
 				  NOT_VTEP_DST, trace->reason, trace->monitor,
 				  &ifindex);
 	if (ret != CTX_ACT_REDIRECT)
@@ -214,16 +212,36 @@ encap_and_redirect_netdev(struct __ctx_buff *ctx, struct tunnel_key *k,
 }
 #endif /* TUNNEL_MODE || ENABLE_HIGH_SCALE_IPCACHE */
 
+static __always_inline __be16 tunnel_gen_src_port_v4(void)
+{
+#if __ctx_is == __ctx_xdp
+	/* TODO hash, based on CT tuple */
+	return bpf_htons(TUNNEL_PORT);
+#else
+	return 0;
+#endif
+}
+
+static __always_inline __be16 tunnel_gen_src_port_v6(void)
+{
+#if __ctx_is == __ctx_xdp
+	/* TODO hash, based on CT tuple */
+	return bpf_htons(TUNNEL_PORT);
+#else
+	return 0;
+#endif
+}
+
 #if defined(ENABLE_DSR) && DSR_ENCAP_MODE == DSR_ENCAP_GENEVE
 static __always_inline int
-__encap_with_nodeid_opt(struct __ctx_buff *ctx, __u32 tunnel_endpoint,
+__encap_with_nodeid_opt(struct __ctx_buff *ctx, __u32 src_ip, __be16 src_port,
+			__u32 tunnel_endpoint,
 			__u32 seclabel, __u32 dstid, __u32 vni,
-			void *opt, __u32 opt_len, bool is_ipv6,
+			void *opt, __u32 opt_len,
 			enum trace_reason ct_reason,
 			__u32 monitor, int *ifindex)
 {
 	__u32 node_id;
-	int ret;
 
 	/* When encapsulating, a packet originating from the local host is
 	 * being considered as a packet from a remote node as it is being
@@ -236,30 +254,11 @@ __encap_with_nodeid_opt(struct __ctx_buff *ctx, __u32 tunnel_endpoint,
 
 	cilium_dbg(ctx, DBG_ENCAP, node_id, seclabel);
 
-	ret = ctx_set_encap_info(ctx, 0, node_id, seclabel, dstid, vni,
-				 opt, opt_len, is_ipv6, ifindex);
-	if (ret == CTX_ACT_REDIRECT)
-		send_trace_notify(ctx, TRACE_TO_OVERLAY, seclabel, dstid, 0, *ifindex,
-				  ct_reason, monitor);
+	send_trace_notify(ctx, TRACE_TO_OVERLAY, seclabel, dstid, 0, *ifindex,
+			  ct_reason, monitor);
 
-	return ret;
-}
-
-static __always_inline int
-encap_and_redirect_with_nodeid_opt(struct __ctx_buff *ctx, __u32 tunnel_endpoint,
-				   __u32 seclabel, __u32 dstid, __u32 vni,
-				   void *opt, __u32 opt_len, bool is_ipv6,
-				   const struct trace_ctx *trace)
-{
-	int ifindex = 0;
-
-	int ret = __encap_with_nodeid_opt(ctx, tunnel_endpoint, seclabel, dstid,
-					  vni, opt, opt_len, is_ipv6,
-					  trace->reason, trace->monitor, &ifindex);
-	if (ret != CTX_ACT_REDIRECT)
-		return ret;
-
-	return ctx_redirect(ctx, ifindex, 0);
+	return ctx_set_encap_info(ctx, src_ip, src_port, node_id, seclabel, vni, opt,
+				  opt_len, ifindex);
 }
 
 static __always_inline void

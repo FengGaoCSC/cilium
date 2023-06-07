@@ -8,10 +8,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
-	"github.com/cilium/cilium/pkg/k8s"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
@@ -25,6 +25,7 @@ type nodeSpecer interface {
 	Annotations() (map[string]string, error)
 	Labels() (map[string]string, error)
 	PodCIDRs() ([]string, error)
+	CurrentNodeName() (string, error)
 }
 
 type localNodeStoreSpecerParams struct {
@@ -140,6 +141,13 @@ func (s *kubernetesNodeSpecer) PodCIDRs() ([]string, error) {
 	return []string{}, nil
 }
 
+func (s *kubernetesNodeSpecer) CurrentNodeName() (string, error) {
+	if s.currentNode == nil {
+		return "", errors.New("node name is not yet available")
+	}
+	return s.currentNode.Name, nil
+}
+
 type ciliumNodeSpecer struct {
 	nodeResource k8s.LocalCiliumNodeResource
 
@@ -211,4 +219,11 @@ func (s *ciliumNodeSpecer) PodCIDRs() ([]string, error) {
 	}
 
 	return []string{}, nil
+}
+
+func (s *ciliumNodeSpecer) CurrentNodeName() (string, error) {
+	if s.currentNode == nil {
+		return "", errors.New("node name is not yet available")
+	}
+	return s.currentNode.Name, nil
 }

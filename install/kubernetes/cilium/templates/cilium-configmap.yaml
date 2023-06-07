@@ -54,6 +54,9 @@
 {{- $bpfCtTcpMax := (coalesce .Values.bpf.ctTcpMax $defaultBpfCtTcpMax) -}}
 {{- $bpfCtAnyMax := (coalesce .Values.bpf.ctAnyMax $defaultBpfCtAnyMax) -}}
 {{- $kubeProxyReplacement := (coalesce .Values.kubeProxyReplacement $defaultKubeProxyReplacement) -}}
+{{- if and (ne $kubeProxyReplacement "disabled") (ne $kubeProxyReplacement "partial") (ne $kubeProxyReplacement "strict") }}
+  {{ fail "kubeproxyReplacement must be explicitly set to a valid value (disabled, partial, or strict) to continue." }}
+{{- end }}
 {{- $azureUsePrimaryAddress = (coalesce .Values.azure.usePrimaryAddress $azureUsePrimaryAddress) -}}
 {{- $socketLB := (coalesce .Values.socketLB .Values.hostServices) -}}
 
@@ -545,6 +548,12 @@ data:
     {{- else if .Values.encryption.interface }}
   encrypt-interface: {{ .Values.encryption.interface }}
     {{- end }}
+    {{- if hasKey .Values.encryption.ipsec "keyWatcher" }}
+  enable-ipsec-key-watcher: {{ .Values.encryption.ipsec.keyWatcher | quote }}
+    {{- end }}
+    {{- if .Values.encryption.ipsec.keyRotationDuration }}
+  ipsec-key-rotation-duration: {{ include "validateDuration" .Values.encryption.ipsec.keyRotationDuration | quote }}
+    {{- end }}
   {{- else if eq .Values.encryption.type "wireguard" }}
   enable-wireguard: {{ .Values.encryption.enabled | quote }}
     {{- if .Values.encryption.wireguard.userspaceFallback }}
@@ -650,7 +659,7 @@ data:
   enable-node-port: {{ .Values.nodePort.enabled | quote }}
 {{- end }}
 {{- if hasKey .Values.nodePort "range" }}
-  node-port-range: {{ .Values.nodePort.range | quote }}
+  node-port-range: {{ get .Values.nodePort "range" | quote }}
 {{- end }}
 {{- if hasKey .Values.nodePort "directRoutingDevice" }}
   direct-routing-device: {{ .Values.nodePort.directRoutingDevice | quote }}
@@ -943,6 +952,20 @@ data:
   enable-custom-calls: {{ .Values.customCalls.enabled | quote }}
 {{- end }}
 
+{{- if .Values.l2announcements.enabled }}
+  # Enable L2 announcements
+  enable-l2-announcements: {{ .Values.l2announcements.enabled | quote }}
+  {{- if .Values.l2announcements.leaseDuration }}
+  l2-announcements-lease-duration: {{ .Values.l2announcements.leaseDuration | quote }}
+  {{- end}}
+  {{- if .Values.l2announcements.leaseRenewDeadline }}
+  l2-announcements-renew-deadline: {{ .Values.l2announcements.leaseRenewDeadline | quote }}
+  {{- end}}
+  {{- if .Values.l2announcements.leaseRetryPeriod }}
+  l2-announcements-retry-period: {{ .Values.l2announcements.leaseRetryPeriod | quote }}
+  {{- end}}
+{{- end}}
+
 {{- if and .Values.bgp.enabled (and (not .Values.bgp.announce.loadbalancerIP) (not .Values.bgp.announce.podCIDR)) }}
   {{ fail "BGP was enabled, but no announcements were enabled. Please enable one or more announcements." }}
 {{- end }}
@@ -1063,14 +1086,14 @@ data:
   agent-not-ready-taint-key: {{ .Values.agentNotReadyTaintKey | quote }}
 {{- end }}
 
-{{- if .Values.auth.mTLS.spire.enabled }}
-  mesh-auth-mtls-enabled: "true"
-  mesh-auth-mtls-listener-port: {{ .Values.auth.mTLS.port | quote }}
-  mesh-auth-spire-agent-socket: {{ .Values.auth.mTLS.spire.agentSocketPath | quote }}
-  mesh-auth-spire-server-address: {{ .Values.auth.mTLS.spire.serverAddress | quote }}
-  mesh-auth-spire-server-connection-timeout: {{ .Values.auth.mTLS.spire.connectionTimeout }}
-  mesh-auth-spire-admin-socket: {{ .Values.auth.mTLS.spire.adminSocketPath | quote }}
-  mesh-auth-spiffe-trust-domain: {{ .Values.auth.mTLS.spire.trustDomain | quote }}
+{{- if .Values.authentication.mutual.spire.enabled }}
+  mesh-auth-mutual-enabled: "true"
+  mesh-auth-mutual-listener-port: {{ .Values.authentication.mutual.port | quote }}
+  mesh-auth-spire-agent-socket: {{ .Values.authentication.mutual.spire.agentSocketPath | quote }}
+  mesh-auth-spire-server-address: {{ .Values.authentication.mutual.spire.serverAddress | quote }}
+  mesh-auth-spire-server-connection-timeout: {{ .Values.authentication.mutual.spire.connectionTimeout }}
+  mesh-auth-spire-admin-socket: {{ .Values.authentication.mutual.spire.adminSocketPath | quote }}
+  mesh-auth-spiffe-trust-domain: {{ .Values.authentication.mutual.spire.trustDomain | quote }}
 {{- end }}
 
   proxy-connect-timeout: {{ .Values.envoy.connectTimeoutSeconds | quote }}

@@ -85,6 +85,8 @@ paths:
           description: Bad configuration parameters
           schema:
             "$ref": "#/definitions/Error"
+        '403':
+          description: Forbidden
         '500':
           description: Recompilation failed
           x-go-name: Failure
@@ -130,6 +132,8 @@ paths:
           x-go-name: Invalid
           schema:
             "$ref": "#/definitions/Error"
+        '403':
+          description: Forbidden
         '409':
           description: Endpoint already exists
           x-go-name: Exists
@@ -158,6 +162,8 @@ paths:
           x-go-name: Invalid
           schema:
             "$ref": "#/definitions/Error"
+        '403':
+          description: Forbidden
         '404':
           description: Endpoint does not exist
         '500':
@@ -198,6 +204,8 @@ paths:
           x-go-name: Invalid
           schema:
             "$ref": "#/definitions/Error"
+        '403':
+          description: Forbidden
         '404':
           description: Endpoint not found
         '429':
@@ -260,6 +268,8 @@ paths:
         '400':
           description: Invalid configuration request
           x-go-name: Invalid
+        '403':
+          description: Forbidden
         '404':
           description: Endpoint not found
         '500':
@@ -302,6 +312,8 @@ paths:
       responses:
         '200':
           description: Success
+        '403':
+          description: Forbidden
         '404':
           description: Endpoint not found
         '500':
@@ -433,6 +445,8 @@ paths:
           description: Success
           schema:
             "$ref": "#/definitions/IPAMResponse"
+        '403':
+          description: Forbidden
         '502':
           description: Allocation failure
           x-go-name: Failure
@@ -453,6 +467,8 @@ paths:
         '400':
           description: Invalid IP address
           x-go-name: Invalid
+        '403':
+          description: Forbidden
         '409':
           description: IP already allocated
           x-go-name: Exists
@@ -477,6 +493,8 @@ paths:
         '400':
           description: Invalid IP address
           x-go-name: Invalid
+        '403':
+          description: Forbidden
         '404':
           description: IP address not found
         '500':
@@ -522,6 +540,8 @@ paths:
           x-go-name: InvalidPolicy
           schema:
             "$ref": "#/definitions/Error"
+        '403':
+          description: Forbidden
         '460':
           description: Invalid path
           x-go-name: InvalidPath
@@ -552,6 +572,8 @@ paths:
           x-go-name: Invalid
           schema:
             "$ref": "#/definitions/Error"
+        '403':
+          description: Forbidden
         '404':
           description: Policy not found
         '500':
@@ -619,6 +641,8 @@ paths:
           description: Updated
         '201':
           description: Created
+        '403':
+          description: Forbidden
         '460':
           description: Invalid frontend in service configuration
           x-go-name: InvalidFrontend
@@ -648,6 +672,8 @@ paths:
       responses:
         '200':
           description: Success
+        '403':
+          description: Forbidden
         '404':
           description: Service not found
         '500':
@@ -705,6 +731,8 @@ paths:
           description: Updated
         '201':
           description: Created
+        '403':
+          description: Forbidden
         '500':
           description: Error while creating recorder
           x-go-name: Failure
@@ -719,6 +747,8 @@ paths:
       responses:
         '200':
           description: Success
+        '403':
+          description: Forbidden
         '404':
           description: Recorder not found
         '500':
@@ -752,6 +782,8 @@ paths:
           description: Updated
           schema:
             "$ref": "#/definitions/Prefilter"
+        '403':
+          description: Forbidden
         '461':
           description: Invalid CIDR prefix
           x-go-name: InvalidCIDR
@@ -773,6 +805,8 @@ paths:
           description: Deleted
           schema:
             "$ref": "#/definitions/Prefilter"
+        '403':
+          description: Forbidden
         '461':
           description: Invalid CIDR prefix
           x-go-name: InvalidCIDR
@@ -907,6 +941,8 @@ paths:
       responses:
         '200':
           description: Success
+        '403':
+          description: Forbidden
         '400':
           description: Invalid request (error parsing parameters)
           schema:
@@ -3493,6 +3529,11 @@ definitions:
       peer-address:
         description: IP Address of peer
         type: string
+      ebgp-multihop-ttl:
+        description: |
+          Time To Live (TTL) value used in BGP packets sent to the eBGP neighbor.
+          0 if eBGP multi-hop feature is disabled.
+        type: integer
       session-state:
         description: |
           BGP peer operational state as described here
@@ -3501,6 +3542,9 @@ definitions:
       uptime-nanoseconds:
         description: BGP peer connection uptime in nano seconds.
         type: integer
+      graceful-restart:
+        description: Graceful restart capability
+        "$ref": "#/definitions/BgpGracefulRestart"
       families:
         description: BGP peer address family state
         type: array
@@ -3549,4 +3593,21 @@ definitions:
         type: integer
       advertised:
         description: Number of routes advertised of this address family to the peer
+        type: integer
+  BgpGracefulRestart:
+    description: |-
+      BGP graceful restart parameters negotiated with the peer.
+
+      +k8s:deepcopy-gen=true
+    properties:
+      enabled:
+        description: |-
+          When set, graceful restart capability is negotiated for all AFI/SAFIs of 
+          this peer.
+        type: boolean
+      restart-time-seconds:
+        description: |-
+          This is the time advertised to peer for the BGP session to be re-established 
+          after a restart. After this period, peer will remove stale routes. 
+          (RFC 4724 section 4.2)
         type: integer

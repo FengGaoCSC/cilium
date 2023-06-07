@@ -13,7 +13,6 @@ import (
 	"time"
 
 	. "github.com/cilium/checkmate"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/cilium/cilium/pkg/datapath/fake"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
@@ -30,6 +29,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 	"github.com/cilium/cilium/pkg/metrics"
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
+	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	fakeConfig "github.com/cilium/cilium/pkg/option/fake"
 	"github.com/cilium/cilium/pkg/policy"
@@ -56,9 +56,6 @@ type EndpointSuite struct {
 	OnRemoveFromEndpointQueue func(epID uint64)
 	OnGetCompilationLock      func() *lock.RWMutex
 	OnSendNotification        func(msg monitorAPI.AgentNotifyMessage) error
-
-	// Metrics
-	collectors []prometheus.Collector
 }
 
 // suite can be used by testing.T benchmarks or tests as a mock regeneration.Owner
@@ -77,15 +74,12 @@ func (s *EndpointSuite) SetUpSuite(c *C) {
 	}
 
 	// Register metrics once before running the suite
-	_, s.collectors = metrics.CreateConfiguration([]string{"cilium_endpoint_state"})
-	metrics.MustRegister(s.collectors...)
+	metrics.NewLegacyMetrics().EndpointStateCount.SetEnabled(true)
 }
 
 func (s *EndpointSuite) TearDownSuite(c *C) {
 	// Unregister the metrics after the suite has finished
-	for _, c := range s.collectors {
-		metrics.Unregister(c)
-	}
+	metrics.EndpointStateCount.SetEnabled(false)
 }
 
 func (s *EndpointSuite) GetPolicyRepository() *policy.Repository {
@@ -153,11 +147,13 @@ func (s *EndpointSuite) SetUpTest(c *C) {
 	mgr := NewCachingIdentityAllocator(&testidentity.IdentityAllocatorOwnerMock{})
 	<-mgr.InitIdentityAllocator(nil)
 	s.mgr = mgr
+	node.SetTestLocalNodeStore()
 }
 
 func (s *EndpointSuite) TearDownTest(c *C) {
 	s.mgr.Close()
 	kvstore.Client().Close(context.TODO())
+	node.UnsetTestLocalNodeStore()
 }
 
 func (s *EndpointSuite) TestEndpointStatus(c *C) {
