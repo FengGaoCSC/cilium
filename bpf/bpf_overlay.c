@@ -310,7 +310,7 @@ static __always_inline int handle_ipv4(struct __ctx_buff *ctx,
 
 #ifdef ENABLE_NODEPORT
 	if (!ctx_skip_nodeport(ctx)) {
-		int ret = nodeport_lb4(ctx, *identity, ext_err);
+		int ret = nodeport_lb4(ctx, ip4, ETH_HLEN, *identity, ext_err);
 
 		if (ret < 0)
 			return ret;
@@ -331,7 +331,7 @@ static __always_inline int handle_ipv4(struct __ctx_buff *ctx,
 			*identity = key.tunnel_id = info->sec_identity;
 	} else {
 #ifdef ENABLE_HIGH_SCALE_IPCACHE
-		*identity = key.tunnel_id = ctx_load_meta(ctx, CB_SRC_LABEL);
+		key.tunnel_id = *identity;
 #else
 		key_size = TUNNEL_KEY_WITHOUT_SRC_IP;
 		if (unlikely(ctx_get_tunnel_key(ctx, &key, key_size, 0) < 0))
@@ -442,8 +442,14 @@ int tail_handle_ipv4(struct __ctx_buff *ctx)
 {
 	__u32 src_sec_identity = 0;
 	__s8 ext_err = 0;
-	int ret = handle_ipv4(ctx, &src_sec_identity, &ext_err);
+	int ret;
 
+#ifdef ENABLE_HIGH_SCALE_IPCACHE
+	src_sec_identity = ctx_load_meta(ctx, CB_SRC_LABEL);
+	ctx_store_meta(ctx, CB_SRC_LABEL, 0);
+#endif
+
+	ret = handle_ipv4(ctx, &src_sec_identity, &ext_err);
 	if (IS_ERR(ret))
 		return send_drop_notify_error_ext(ctx, src_sec_identity, ret, ext_err,
 						  CTX_ACT_DROP, METRIC_INGRESS);
@@ -611,6 +617,30 @@ int cil_from_overlay(struct __ctx_buff *ctx)
 
 	case bpf_htons(ETH_P_IP):
 #ifdef ENABLE_IPV4
+# ifdef ENABLE_HIGH_SCALE_IPCACHE
+#  if defined(ENABLE_DSR) && DSR_ENCAP_MODE == DSR_ENCAP_GENEVE
+		if (ctx_load_meta(ctx, CB_HSIPC_ADDR_V4)) {
+			struct geneve_dsr_opt4 dsr_opt;
+			struct bpf_tunnel_key key = {};
+
+			set_geneve_dsr_opt4((__be16)ctx_load_meta(ctx, CB_HSIPC_PORT),
+					    ctx_load_meta(ctx, CB_HSIPC_ADDR_V4),
+					    &dsr_opt);
+
+			/* Needed to create the metadata_dst for storing tunnel opts: */
+			if (ctx_set_tunnel_key(ctx, &key, sizeof(key), BPF_F_ZERO_CSUM_TX) < 0) {
+				ret = DROP_WRITE_ERROR;
+				goto out;
+			}
+
+			if (ctx_set_tunnel_opt(ctx, &dsr_opt, sizeof(dsr_opt)) < 0) {
+				ret = DROP_WRITE_ERROR;
+				goto out;
+			}
+		}
+#  endif
+# endif
+
 		ep_tail_call(ctx, CILIUM_CALL_IPV4_FROM_OVERLAY);
 		ret = DROP_MISSED_TAIL_CALL;
 #else

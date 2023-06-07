@@ -40,107 +40,107 @@
      - Annotate k8s node upon initialization with Cilium's metadata.
      - bool
      - ``false``
-   * - auth.mTLS.port
-     - Port on the agent where mTLS handshakes between agents will be performed
+   * - authentication.mutual.port
+     - Port on the agent where mutual authentication handshakes between agents will be performed
      - int
      - ``4250``
-   * - auth.mTLS.spire.adminSocketPath
+   * - authentication.mutual.spire.adminSocketPath
      - SPIRE socket path where the SPIRE delegated api agent is listening
      - string
      - ``"/run/spire/sockets/admin.sock"``
-   * - auth.mTLS.spire.agentSocketPath
+   * - authentication.mutual.spire.agentSocketPath
      - SPIRE socket path where the SPIRE workload agent is listening. Applies to both the Cilium Agent and Operator
      - string
      - ``"/run/spire/sockets/agent/agent.sock"``
-   * - auth.mTLS.spire.connectionTimeout
+   * - authentication.mutual.spire.connectionTimeout
      - SPIRE connection timeout
      - string
      - ``"30s"``
-   * - auth.mTLS.spire.enabled
+   * - authentication.mutual.spire.enabled
      - Enable SPIRE integration
      - bool
      - ``false``
-   * - auth.mTLS.spire.install
+   * - authentication.mutual.spire.install
      - Settings to control the SPIRE installation and configuration
      - object
      - ``{"agent":{"annotations":{},"image":"ghcr.io/spiffe/spire-agent:1.6.3@sha256:8eef9857bf223181ecef10d9bbcd2f7838f3689e9bd2445bede35066a732e823","labels":{},"serviceAccount":{"create":true,"name":"spire-agent"},"skipKubeletVerification":true},"enabled":false,"namespace":"cilium-spire","server":{"annotations":{},"ca":{"keyType":"rsa-4096","subject":{"commonName":"Cilium SPIRE CA","country":"US","organization":"SPIRE"}},"dataStorage":{"accessMode":"ReadWriteOnce","enabled":true,"size":"1Gi","storageClass":null},"image":"ghcr.io/spiffe/spire-server:1.6.3@sha256:f4bc49fb0bd1d817a6c46204cc7ce943c73fb0a5496a78e0e4dc20c9a816ad7f","initContainers":[],"labels":{},"service":{"annotations":{},"labels":{},"type":"ClusterIP"},"serviceAccount":{"create":true,"name":"spire-server"}}}``
-   * - auth.mTLS.spire.install.agent
+   * - authentication.mutual.spire.install.agent
      - SPIRE agent configuration
      - object
      - ``{"annotations":{},"image":"ghcr.io/spiffe/spire-agent:1.6.3@sha256:8eef9857bf223181ecef10d9bbcd2f7838f3689e9bd2445bede35066a732e823","labels":{},"serviceAccount":{"create":true,"name":"spire-agent"},"skipKubeletVerification":true}``
-   * - auth.mTLS.spire.install.agent.annotations
+   * - authentication.mutual.spire.install.agent.annotations
      - SPIRE agent annotations
      - object
      - ``{}``
-   * - auth.mTLS.spire.install.agent.image
+   * - authentication.mutual.spire.install.agent.image
      - SPIRE agent image
      - string
      - ``"ghcr.io/spiffe/spire-agent:1.6.3@sha256:8eef9857bf223181ecef10d9bbcd2f7838f3689e9bd2445bede35066a732e823"``
-   * - auth.mTLS.spire.install.agent.labels
+   * - authentication.mutual.spire.install.agent.labels
      - SPIRE agent labels
      - object
      - ``{}``
-   * - auth.mTLS.spire.install.agent.serviceAccount
+   * - authentication.mutual.spire.install.agent.serviceAccount
      - SPIRE agent service account
      - object
      - ``{"create":true,"name":"spire-agent"}``
-   * - auth.mTLS.spire.install.agent.skipKubeletVerification
+   * - authentication.mutual.spire.install.agent.skipKubeletVerification
      - SPIRE Workload Attestor kubelet verification.
      - bool
      - ``true``
-   * - auth.mTLS.spire.install.enabled
-     - Enable SPIRE installation. This will only take effect only if auth.mTLS.spire.enabled is true
+   * - authentication.mutual.spire.install.enabled
+     - Enable SPIRE installation. This will only take effect only if authentication.mutual.spire.enabled is true
      - bool
      - ``false``
-   * - auth.mTLS.spire.install.namespace
+   * - authentication.mutual.spire.install.namespace
      - SPIRE namespace to install into
      - string
      - ``"cilium-spire"``
-   * - auth.mTLS.spire.install.server.annotations
+   * - authentication.mutual.spire.install.server.annotations
      - SPIRE server annotations
      - object
      - ``{}``
-   * - auth.mTLS.spire.install.server.ca
+   * - authentication.mutual.spire.install.server.ca
      - SPIRE CA configuration
      - object
      - ``{"keyType":"rsa-4096","subject":{"commonName":"Cilium SPIRE CA","country":"US","organization":"SPIRE"}}``
-   * - auth.mTLS.spire.install.server.ca.keyType
+   * - authentication.mutual.spire.install.server.ca.keyType
      - SPIRE CA key type AWS requires the use of RSA. EC cryptography is not supported
      - string
      - ``"rsa-4096"``
-   * - auth.mTLS.spire.install.server.ca.subject
+   * - authentication.mutual.spire.install.server.ca.subject
      - SPIRE CA Subject
      - object
      - ``{"commonName":"Cilium SPIRE CA","country":"US","organization":"SPIRE"}``
-   * - auth.mTLS.spire.install.server.dataStorage
+   * - authentication.mutual.spire.install.server.dataStorage
      - SPIRE server datastorage configuration
      - object
      - ``{"accessMode":"ReadWriteOnce","enabled":true,"size":"1Gi","storageClass":null}``
-   * - auth.mTLS.spire.install.server.image
+   * - authentication.mutual.spire.install.server.image
      - SPIRE server image
      - string
      - ``"ghcr.io/spiffe/spire-server:1.6.3@sha256:f4bc49fb0bd1d817a6c46204cc7ce943c73fb0a5496a78e0e4dc20c9a816ad7f"``
-   * - auth.mTLS.spire.install.server.initContainers
+   * - authentication.mutual.spire.install.server.initContainers
      - SPIRE server init containers
      - list
      - ``[]``
-   * - auth.mTLS.spire.install.server.labels
+   * - authentication.mutual.spire.install.server.labels
      - SPIRE server labels
      - object
      - ``{}``
-   * - auth.mTLS.spire.install.server.service
+   * - authentication.mutual.spire.install.server.service
      - SPIRE server service configuration
      - object
      - ``{"annotations":{},"labels":{},"type":"ClusterIP"}``
-   * - auth.mTLS.spire.install.server.serviceAccount
+   * - authentication.mutual.spire.install.server.serviceAccount
      - SPIRE server service account
      - object
      - ``{"create":true,"name":"spire-server"}``
-   * - auth.mTLS.spire.serverAddress
+   * - authentication.mutual.spire.serverAddress
      - SPIRE server address
      - string
      - ``"spire-server.cilium-spire.svc:8081"``
-   * - auth.mTLS.spire.trustDomain
+   * - authentication.mutual.spire.trustDomain
      - SPIFFE trust domain to use for fetching certificates
      - string
      - ``"spiffe.cilium"``
@@ -325,7 +325,7 @@
      - int
      - ``0``
    * - cluster.name
-     - Name of the cluster. Only required for Cluster Mesh and mTLS auth with SPIRE.
+     - Name of the cluster. Only required for Cluster Mesh and mutual authentication with SPIRE.
      - string
      - ``"default"``
    * - clustermesh.apiserver.affinity
@@ -348,6 +348,10 @@
      - Security context to be added to clustermesh-apiserver etcd containers
      - object
      - ``{}``
+   * - clustermesh.apiserver.extraArgs
+     - Additional clustermesh-apiserver arguments.
+     - list
+     - ``[]``
    * - clustermesh.apiserver.extraEnv
      - Additional clustermesh-apiserver environment variables.
      - list
@@ -780,6 +784,14 @@
      - Name of the key file inside the Kubernetes secret configured via secretName.
      - string
      - ``""``
+   * - encryption.ipsec.keyRotationDuration
+     - Maximum duration of the IPsec key rotation. The previous key will be removed after that delay.
+     - string
+     - ``"5m"``
+   * - encryption.ipsec.keyWatcher
+     - Enable the key watcher. If disabled, a restart of the agent will be necessary on key rotations.
+     - bool
+     - ``true``
    * - encryption.ipsec.mountPath
      - Path to mount the secret inside the Cilium pod.
      - string
@@ -797,7 +809,7 @@
      - string
      - ``"/etc/ipsec"``
    * - encryption.nodeEncryption
-     - Enable encryption for pure node to node traffic. This option is only effective when encryption.type is set to ipsec.
+     - Enable encryption for pure node to node traffic. This option is only effective when encryption.type is set to "wireguard".
      - bool
      - ``false``
    * - encryption.secretName
@@ -875,7 +887,7 @@
    * - envoy
      - Configure Cilium Envoy options.
      - object
-     - ``{"affinity":{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"k8s-app":"cilium-envoy"}},"topologyKey":"kubernetes.io/hostname"}]}},"connectTimeoutSeconds":2,"dnsPolicy":null,"enabled":false,"extraArgs":[],"extraContainers":[],"extraEnv":[],"extraHostPathMounts":[],"extraVolumeMounts":[],"extraVolumes":[],"healthPort":9878,"idleTimeoutDurationSeconds":60,"image":{"digest":"sha256:5d03695af25448768062fa42bffec7dbaa970f0d2b320d39e60b0a12f45027e8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.25.6-4350471813b173839df78f7a1ea5d77b5cdf714b","useDigest":true},"livenessProbe":{"failureThreshold":10,"periodSeconds":30},"log":{"format":"[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v","path":""},"maxConnectionDurationSeconds":0,"maxRequestsPerConnection":0,"nodeSelector":{"kubernetes.io/os":"linux"},"podAnnotations":{},"podLabels":{},"podSecurityContext":{},"priorityClassName":null,"prometheus":{"enabled":true,"port":"9964","serviceMonitor":{"annotations":{},"enabled":false,"interval":"10s","labels":{},"metricRelabelings":null,"relabelings":[{"replacement":"${1}","sourceLabels":["__meta_kubernetes_pod_node_name"],"targetLabel":"node"}]}},"readinessProbe":{"failureThreshold":3,"periodSeconds":30},"resources":{},"rollOutPods":false,"securityContext":{"capabilities":{"envoy":["NET_ADMIN","SYS_ADMIN"]},"privileged":false,"seLinuxOptions":{"level":"s0","type":"spc_t"}},"startupProbe":{"failureThreshold":105,"periodSeconds":2},"terminationGracePeriodSeconds":1,"tolerations":[{"operator":"Exists"}],"updateStrategy":{"rollingUpdate":{"maxUnavailable":2},"type":"RollingUpdate"}}``
+     - ``{"affinity":{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"k8s-app":"cilium-envoy"}},"topologyKey":"kubernetes.io/hostname"}]}},"connectTimeoutSeconds":2,"dnsPolicy":null,"enabled":false,"extraArgs":[],"extraContainers":[],"extraEnv":[],"extraHostPathMounts":[],"extraVolumeMounts":[],"extraVolumes":[],"healthPort":9878,"idleTimeoutDurationSeconds":60,"image":{"digest":"sha256:f165787c05050a4d57c5940dcd59de03cafecff9c02965a1d076c2b2935505d8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.25.7-384b5008dce426eba89af8ef17f52e4fb066ff40","useDigest":true},"livenessProbe":{"failureThreshold":10,"periodSeconds":30},"log":{"format":"[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v","path":""},"maxConnectionDurationSeconds":0,"maxRequestsPerConnection":0,"nodeSelector":{"kubernetes.io/os":"linux"},"podAnnotations":{},"podLabels":{},"podSecurityContext":{},"priorityClassName":null,"prometheus":{"enabled":true,"port":"9964","serviceMonitor":{"annotations":{},"enabled":false,"interval":"10s","labels":{},"metricRelabelings":null,"relabelings":[{"replacement":"${1}","sourceLabels":["__meta_kubernetes_pod_node_name"],"targetLabel":"node"}]}},"readinessProbe":{"failureThreshold":3,"periodSeconds":30},"resources":{},"rollOutPods":false,"securityContext":{"capabilities":{"envoy":["NET_ADMIN","SYS_ADMIN"]},"privileged":false,"seLinuxOptions":{"level":"s0","type":"spc_t"}},"startupProbe":{"failureThreshold":105,"periodSeconds":2},"terminationGracePeriodSeconds":1,"tolerations":[{"operator":"Exists"}],"updateStrategy":{"rollingUpdate":{"maxUnavailable":2},"type":"RollingUpdate"}}``
    * - envoy.affinity
      - Affinity for cilium-envoy.
      - object
@@ -915,7 +927,7 @@
    * - envoy.image
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:5d03695af25448768062fa42bffec7dbaa970f0d2b320d39e60b0a12f45027e8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.25.6-4350471813b173839df78f7a1ea5d77b5cdf714b","useDigest":true}``
+     - ``{"digest":"sha256:f165787c05050a4d57c5940dcd59de03cafecff9c02965a1d076c2b2935505d8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.25.7-384b5008dce426eba89af8ef17f52e4fb066ff40","useDigest":true}``
    * - envoy.livenessProbe.failureThreshold
      - failure threshold of liveness probe
      - int
@@ -1832,6 +1844,14 @@
      - Override the agent's default neighbor resolution refresh period.
      - string
      - ``"30s"``
+   * - l2announcements
+     - Configure L2 announcements
+     - object
+     - ``{"enabled":false}``
+   * - l2announcements.enabled
+     - Enable L2 announcements
+     - bool
+     - ``false``
    * - l7Proxy
      - Enable Layer 7 network policy.
      - bool
@@ -1947,7 +1967,7 @@
    * - nodeinit.image
      - node-init image.
      - object
-     - ``{"override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"d69851597ea019af980891a4628fb36b7880ec26"}``
+     - ``{"override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"62093c5c233ea914bfa26a10ba41f8780d9b737f"}``
    * - nodeinit.nodeSelector
      - Node labels for nodeinit pod assignment ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
      - object

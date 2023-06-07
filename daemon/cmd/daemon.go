@@ -62,6 +62,7 @@ import (
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/k8s/watchers"
+	"github.com/cilium/cilium/pkg/l2announcer"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
@@ -120,7 +121,7 @@ type Daemon struct {
 	statusResponse     models.StatusResponse
 	statusCollector    *status.Collector
 
-	monitorAgent *monitoragent.Agent
+	monitorAgent monitoragent.Agent
 	ciliumHealth *health.CiliumHealth
 
 	deviceManager *linuxdatapath.DeviceManager
@@ -153,7 +154,7 @@ type Daemon struct {
 
 	// nodeDiscovery defines the node discovery logic of the agent
 	nodeDiscovery  *nodediscovery.NodeDiscovery
-	nodeLocalStore node.LocalNodeStore
+	nodeLocalStore *node.LocalNodeStore
 
 	// ipam is the IP address manager of the agent
 	ipam *ipam.IPAM
@@ -211,6 +212,8 @@ type Daemon struct {
 
 	// just used to tie together some status reporting
 	cniConfigManager cni.CNIConfigManager
+
+	l2announcer *l2announcer.L2Announcer
 }
 
 func (d *Daemon) initDNSProxyContext(size int) {
@@ -491,6 +494,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		option.Config.EnableIPSec,
 		option.Config.TunnelExists(),
 		option.Config.EnableWireguard,
+		option.Config.EnableHighScaleIPcache && option.Config.EnableNodePort,
 		configuredMTU,
 		externalIP,
 	)
@@ -539,10 +543,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		ipamMetadata:         params.IPAMMetadataManager,
 		cniConfigManager:     params.CNIConfigManager,
 		clustermesh:          params.ClusterMesh,
-	}
-
-	if option.Config.RunMonitorAgent {
-		d.monitorAgent = monitoragent.NewAgent(ctx)
+		monitorAgent:         params.MonitorAgent,
+		l2announcer:          params.L2Announcer,
 	}
 
 	d.configModifyQueue = eventqueue.NewEventQueueBuffered("config-modify-queue", ConfigModifyQueueSize)
@@ -676,7 +678,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		option.Config,
 		d.ipcache,
 		d.cgroupManager,
-		params.SharedResources,
+		params.Resources,
 		params.ServiceCache,
 	)
 	nd.RegisterK8sGetters(d.k8sWatcher)
@@ -928,7 +930,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// This is because the device detection requires self (Cilium)Node object,
 	// and the k8s service watcher depends on option.Config.EnableNodePort flag
 	// which can be modified after the device detection.
-	if _, err := d.deviceManager.Detect(params.Clientset.IsEnabled()); err != nil {
+	devices, err := d.deviceManager.Detect(params.Clientset.IsEnabled())
+	if err != nil {
 		if option.Config.AreDevicesRequired() {
 			// Fail hard if devices are required to function.
 			return nil, nil, fmt.Errorf("failed to detect devices: %w", err)
@@ -936,6 +939,11 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		log.WithError(err).Warn("failed to detect devices, disabling BPF NodePort")
 		disableNodePort()
 	}
+
+	if d.l2announcer != nil {
+		d.l2announcer.DevicesChanged(devices)
+	}
+
 	if err := finishKubeProxyReplacementInit(); err != nil {
 		log.WithError(err).Error("failed to finalise LB initialization")
 		return nil, nil, fmt.Errorf("failed to finalise LB initialization: %w", err)
@@ -1147,11 +1155,14 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 			logfields.V6CiliumHostIP: node.GetIPv6Router(),
 		}).Info("Annotating k8s node")
 
-		_, err := k8s.AnnotateNode(
-			params.Clientset,
-			nodeTypes.GetName(),
-			d.nodeLocalStore.Get().Node,
-			encryptKeyID)
+		latestLocalNode, err := d.nodeLocalStore.Get(ctx)
+		if err == nil {
+			_, err = k8s.AnnotateNode(
+				params.Clientset,
+				nodeTypes.GetName(),
+				latestLocalNode.Node,
+				encryptKeyID)
+		}
 		if err != nil {
 			log.WithError(err).Warning("Cannot annotate k8s node with CIDR range")
 		}
@@ -1194,23 +1205,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	if err != nil {
 		log.WithError(err).Error("error encountered while updating DNS datapath rules.")
 		return nil, restoredEndpoints, fmt.Errorf("error encountered while updating DNS datapath rules: %w", err)
-	}
-
-	// We can only attach the monitor agent once cilium_event has been set up.
-	if option.Config.RunMonitorAgent {
-		err = d.monitorAgent.AttachToEventsMap(defaults.MonitorBufferPages)
-		if err != nil {
-			log.WithError(err).Error("encountered error configuring run monitor agent")
-			return nil, nil, fmt.Errorf("encountered error configuring run monitor agent: %w", err)
-		}
-
-		if option.Config.EnableMonitor {
-			err = monitoragent.ServeMonitorAPI(d.monitorAgent)
-			if err != nil {
-				log.WithError(err).Error("encountered error configuring run monitor agent")
-				return nil, nil, fmt.Errorf("encountered error configuring run monitor agent: %w", err)
-			}
-		}
 	}
 
 	// Start the controller for periodic sync. The purpose of the
@@ -1284,6 +1278,10 @@ func (d *Daemon) ReloadOnDeviceChange(devices []string) {
 		if err := node.InitBPFMasqueradeAddrs(devices); err != nil {
 			log.Warnf("InitBPFMasqueradeAddrs failed: %s", err)
 		}
+	}
+
+	if d.l2announcer != nil {
+		d.l2announcer.DevicesChanged(devices)
 	}
 
 	if option.Config.EnableNodePort {

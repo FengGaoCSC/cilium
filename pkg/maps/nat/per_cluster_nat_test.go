@@ -37,7 +37,7 @@ func (k *PerClusterNATMapPrivilegedTestSuite) SetUpSuite(c *C) {
 }
 
 func (k *PerClusterNATMapPrivilegedTestSuite) SetUpTest(c *C) {
-	InitPerClusterNATMaps(true, true, option.NATMapEntriesGlobalDefault)
+	InitPerClusterNATMaps(testPerClusterNATMapNamePrefix, true, true, option.NATMapEntriesGlobalDefault)
 }
 
 func (k *PerClusterNATMapPrivilegedTestSuite) TearDownTest(c *C) {
@@ -45,7 +45,7 @@ func (k *PerClusterNATMapPrivilegedTestSuite) TearDownTest(c *C) {
 }
 
 func (k *PerClusterNATMapPrivilegedTestSuite) TestPerClusterCtMap(c *C) {
-	om, err := newPerClusterNATMap(testPerClusterNATMapNamePrefix+"v4", true, option.NATMapEntriesGlobalDefault)
+	om, err := newPerClusterNATMap(testPerClusterNATMapNamePrefix+perClusterNATIPv4OuterMapSuffix, true, option.NATMapEntriesGlobalDefault)
 	c.Assert(err, IsNil)
 
 	defer om.Unpin()
@@ -97,7 +97,7 @@ func (k *PerClusterNATMapPrivilegedTestSuite) TestPerClusterCtMap(c *C) {
 }
 
 func (k *PerClusterNATMapPrivilegedTestSuite) TestPerClusterNATMaps(c *C) {
-	gm, err := newPerClusterNATMaps(true, true, option.NATMapEntriesGlobalDefault)
+	gm, err := newPerClusterNATMaps(testPerClusterNATMapNamePrefix, true, true, option.NATMapEntriesGlobalDefault)
 	c.Assert(err, IsNil)
 
 	defer gm.Cleanup()
@@ -122,9 +122,15 @@ func (k *PerClusterNATMapPrivilegedTestSuite) TestPerClusterNATMaps(c *C) {
 	err = gm.UpdateClusterNATMaps(1)
 	c.Assert(err, IsNil)
 
+	err = gm.UpdateClusterNATMaps(cmtypes.ClusterIDMax)
+	c.Assert(err, IsNil)
+
 	for _, om := range []*PerClusterNATMap{gm.v4Map, gm.v6Map} {
 		// After update, outer map should be updated with the inner map
 		v, err := om.Lookup(&PerClusterNATMapKey{1})
+		c.Assert(err, IsNil)
+		c.Assert(v, Not(Equals), 0)
+		v, err = om.Lookup(&PerClusterNATMapKey{cmtypes.ClusterIDMax})
 		c.Assert(err, IsNil)
 		c.Assert(v, Not(Equals), 0)
 	}
@@ -138,8 +144,19 @@ func (k *PerClusterNATMapPrivilegedTestSuite) TestPerClusterNATMaps(c *C) {
 	c.Assert(err, IsNil)
 	im.Close()
 
+	im, err = gm.GetClusterNATMap(cmtypes.ClusterIDMax, true)
+	c.Assert(err, IsNil)
+	im.Close()
+
+	im, err = gm.GetClusterNATMap(cmtypes.ClusterIDMax, false)
+	c.Assert(err, IsNil)
+	im.Close()
+
 	// Basic delete
 	err = gm.DeleteClusterNATMaps(1)
+	c.Assert(err, IsNil)
+
+	err = gm.DeleteClusterNATMaps(cmtypes.ClusterIDMax)
 	c.Assert(err, IsNil)
 
 	_, err = gm.v4Map.Lookup(&PerClusterNATMapKey{1})
@@ -148,9 +165,17 @@ func (k *PerClusterNATMapPrivilegedTestSuite) TestPerClusterNATMaps(c *C) {
 	_, err = gm.v6Map.Lookup(&PerClusterNATMapKey{1})
 	c.Assert(err, NotNil)
 
+	_, err = gm.v4Map.Lookup(&PerClusterNATMapKey{cmtypes.ClusterIDMax})
+	c.Assert(err, NotNil)
+
+	_, err = gm.v6Map.Lookup(&PerClusterNATMapKey{cmtypes.ClusterIDMax})
+	c.Assert(err, NotNil)
+
 	for _, om := range []*PerClusterNATMap{gm.v4Map, gm.v6Map} {
 		// After delete, outer map shouldn't contain the maps
 		_, err := om.Lookup(&PerClusterNATMapKey{1})
+		c.Assert(err, NotNil)
+		_, err = om.Lookup(&PerClusterNATMapKey{cmtypes.ClusterIDMax})
 		c.Assert(err, NotNil)
 	}
 }

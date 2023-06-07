@@ -196,10 +196,13 @@ rules:
   - ciliumnodes.cilium.io
   - ciliumnodeconfigs.cilium.io
   - ciliumcidrgroups.cilium.io
+  - ciliuml2announcementpolicies.cilium.io
+  - ciliumpodippools.cilium.io
 - apiGroups:
   - cilium.io
   resources:
   - ciliumloadbalancerippools
+  - ciliumpodippools
   verbs:
   - get
   - list

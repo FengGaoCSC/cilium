@@ -5,10 +5,7 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -28,6 +25,7 @@ import (
 	"github.com/cilium/cilium/api/v1/server"
 	"github.com/cilium/cilium/api/v1/server/restapi"
 	"github.com/cilium/cilium/daemon/cmd/cni"
+	agentK8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/api"
 	"github.com/cilium/cilium/pkg/aws/eni"
 	bgpv1 "github.com/cilium/cilium/pkg/bgpv1/agent"
@@ -63,6 +61,7 @@ import (
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/watchers/resources"
 	"github.com/cilium/cilium/pkg/kvstore"
+	"github.com/cilium/cilium/pkg/l2announcer"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/labelsfilter"
 	"github.com/cilium/cilium/pkg/loadinfo"
@@ -76,6 +75,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/neighborsmap"
 	"github.com/cilium/cilium/pkg/maps/policymap"
 	"github.com/cilium/cilium/pkg/metrics"
+	monitorAgent "github.com/cilium/cilium/pkg/monitor/agent"
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
 	"github.com/cilium/cilium/pkg/node"
 	nodeManager "github.com/cilium/cilium/pkg/node/manager"
@@ -288,10 +288,11 @@ func initializeFlags() {
 	flags.StringSlice(option.IPv6PodSubnets, []string{}, "List of IPv6 pod subnets to preconfigure for encryption")
 	option.BindEnv(Vp, option.IPv6PodSubnets)
 
-	flags.Var(option.NewNamedMapOptions(option.IPAMMultiPoolNodePreAlloc, &option.Config.IPAMMultiPoolNodePreAlloc, nil),
-		option.IPAMMultiPoolNodePreAlloc, "List of IP pools which should be pre-allocated on this node")
-	flags.MarkHidden(option.IPAMMultiPoolNodePreAlloc)
-	option.BindEnv(Vp, option.IPAMMultiPoolNodePreAlloc)
+	flags.Var(option.NewNamedMapOptions(option.IPAMMultiPoolPreAllocation, &option.Config.IPAMMultiPoolPreAllocation, nil),
+		option.IPAMMultiPoolPreAllocation,
+		fmt.Sprintf("Defines how the minimum number of IPs a node should pre-allocate from each pool (default %s)", defaults.IPAMMultiPoolPreAllocation))
+	Vp.SetDefault(option.IPAMMultiPoolPreAllocation, defaults.IPAMMultiPoolPreAllocation)
+	option.BindEnv(Vp, option.IPAMMultiPoolPreAllocation)
 
 	flags.StringSlice(option.ExcludeLocalAddress, []string{}, "Exclude CIDR from being recognized as local address")
 	option.BindEnv(Vp, option.ExcludeLocalAddress)
@@ -356,8 +357,23 @@ func initializeFlags() {
 	flags.Duration(option.IPsecKeyRotationDuration, defaults.IPsecKeyRotationDuration, "Maximum duration of the IPsec key rotation. The previous key will be removed after that delay.")
 	option.BindEnv(Vp, option.IPsecKeyRotationDuration)
 
+	flags.Bool(option.EnableIPsecKeyWatcher, defaults.EnableIPsecKeyWatcher, "Enable watcher for IPsec key. If disabled, a restart of the agent will be necessary on key rotations.")
+	option.BindEnv(Vp, option.EnableIPsecKeyWatcher)
+
 	flags.Bool(option.EnableWireguard, false, "Enable wireguard")
 	option.BindEnv(Vp, option.EnableWireguard)
+
+	flags.Bool(option.EnableL2Announcements, false, "Enable L2 announcements")
+	option.BindEnv(Vp, option.EnableL2Announcements)
+
+	flags.Duration(option.L2AnnouncerLeaseDuration, 15*time.Second, "Duration of inactivity after which a new leader is selected")
+	option.BindEnv(Vp, option.L2AnnouncerLeaseDuration)
+
+	flags.Duration(option.L2AnnouncerRenewDeadline, 5*time.Second, "Interval at which the leader renews a lease")
+	option.BindEnv(Vp, option.L2AnnouncerRenewDeadline)
+
+	flags.Duration(option.L2AnnouncerRetryPeriod, 2*time.Second, "Timeout after a renew failure, before the next retry")
+	option.BindEnv(Vp, option.L2AnnouncerRetryPeriod)
 
 	flags.Bool(option.EnableWireguardUserspaceFallback, false, "Enables the fallback to the wireguard userspace implementation")
 	option.BindEnv(Vp, option.EnableWireguardUserspaceFallback)
@@ -692,18 +708,9 @@ func initializeFlags() {
 	flags.MarkHidden(option.MaxCtrlIntervalName)
 	option.BindEnv(Vp, option.MaxCtrlIntervalName)
 
-	flags.StringSlice(option.Metrics, []string{}, "Metrics that should be enabled or disabled from the default metric list. The list is expected to be separated by a space. (+metric_foo to enable metric_foo , -metric_bar to disable metric_bar)")
-	option.BindEnv(Vp, option.Metrics)
-
-	flags.Bool(option.EnableMonitorName, true, "Enable the monitor unix domain socket server")
-	option.BindEnv(Vp, option.EnableMonitorName)
-
 	flags.String(option.MonitorAggregationName, "None",
 		"Level of monitor aggregation for traces from the datapath")
 	option.BindEnvWithLegacyEnvFallback(Vp, option.MonitorAggregationName, "CILIUM_MONITOR_AGGREGATION_LEVEL")
-
-	flags.Int(option.MonitorQueueSizeName, 0, "Size of the event queue when reading monitor events")
-	option.BindEnv(Vp, option.MonitorQueueSizeName)
 
 	flags.Int(option.MTUName, 0, "Overwrite auto-detected MTU of underlying network")
 	option.BindEnv(Vp, option.MTUName)
@@ -768,14 +775,6 @@ func initializeFlags() {
 
 	flags.Bool(option.PreAllocateMapsName, defaults.PreAllocateMaps, "Enable BPF map pre-allocation")
 	option.BindEnv(Vp, option.PreAllocateMapsName)
-
-	// We expect only one of the possible variables to be filled. The evaluation order is:
-	// --prometheus-serve-addr, CILIUM_PROMETHEUS_SERVE_ADDR, then PROMETHEUS_SERVE_ADDR
-	// The second environment variable (without the CILIUM_ prefix) is here to
-	// handle the case where someone uses a new image with an older spec, and the
-	// older spec used the older variable name.
-	flags.String(option.PrometheusServeAddr, ":9962", "IP:Port on which to serve prometheus metrics (pass \":Port\" to bind on all interfaces, \"\" is off)")
-	option.BindEnvWithLegacyEnvFallback(Vp, option.PrometheusServeAddr, "PROMETHEUS_SERVE_ADDR")
 
 	flags.Int(option.AuthMapEntriesName, option.AuthMapEntriesDefault, "Maximum number of entries in auth map")
 	option.BindEnv(Vp, option.AuthMapEntriesName)
@@ -893,7 +892,8 @@ func initializeFlags() {
 	flags.MarkHidden(option.PolicyTriggerInterval)
 	option.BindEnv(Vp, option.PolicyTriggerInterval)
 
-	flags.Bool(option.DisableCNPStatusUpdates, false, `Do not send CNP NodeStatus updates to the Kubernetes api-server (recommended to run with "cnp-node-status-gc-interval=0" in cilium-operator)`)
+	flags.Bool(option.DisableCNPStatusUpdates, true, `Do not send CNP NodeStatus updates to the Kubernetes api-server (recommended to run with "cnp-node-status-gc-interval=0" in cilium-operator)`)
+	flags.MarkDeprecated(option.DisableCNPStatusUpdates, "This option will be removed in v1.15 (disabled CNP Status Updates by default)")
 	option.BindEnv(Vp, option.DisableCNPStatusUpdates)
 
 	flags.Bool(option.PolicyAuditModeArg, false, "Enable policy audit (non-drop) mode")
@@ -1159,9 +1159,6 @@ func initEnv() {
 
 	var debugDatapath bool
 
-	// Not running tests -> enable the monitor agent.
-	option.Config.RunMonitorAgent = true
-
 	option.LogRegisteredOptions(Vp, log)
 
 	sysctl.SetProcfs(option.Config.ProcFs)
@@ -1419,29 +1416,6 @@ func initEnv() {
 		}
 	}
 
-	// If there is one device specified, use it to derive better default
-	// allocation prefixes
-	node.InitDefaultPrefix(option.Config.DirectRoutingDevice)
-
-	// Initialize node IP addresses from configuration.
-	if option.Config.IPv6NodeAddr != "auto" {
-		if ip := net.ParseIP(option.Config.IPv6NodeAddr); ip == nil {
-			log.WithField(logfields.IPAddr, option.Config.IPv6NodeAddr).Fatal("Invalid IPv6 node address")
-		} else {
-			if !ip.IsGlobalUnicast() {
-				log.WithField(logfields.IPAddr, ip).Fatal("Invalid IPv6 node address: not a global unicast address")
-			}
-			node.SetIPv6(ip)
-		}
-	}
-	if option.Config.IPv4NodeAddr != "auto" {
-		if ip := net.ParseIP(option.Config.IPv4NodeAddr); ip == nil {
-			log.WithField(logfields.IPAddr, option.Config.IPv4NodeAddr).Fatal("Invalid IPv4 node address")
-		} else {
-			node.SetIPv4(ip)
-		}
-	}
-
 	k8s.SidecarIstioProxyImageRegexp, err = regexp.Compile(option.Config.SidecarIstioProxyImage)
 	if err != nil {
 		log.WithError(err).Fatal("Invalid sidecar-istio-proxy-image regular expression")
@@ -1569,9 +1543,7 @@ func (d *Daemon) initKVStore() {
 		// that service IP.
 		d.k8sWatcher.WaitForCacheSync(
 			resources.K8sAPIGroupServiceV1Core,
-			resources.K8sAPIGroupEndpointV1Core,
-			resources.K8sAPIGroupEndpointSliceV1Discovery,
-			resources.K8sAPIGroupEndpointSliceV1Beta1Discovery,
+			resources.K8sAPIGroupEndpointSliceOrEndpoint,
 		)
 		log := log.WithField(logfields.LogSubsys, "etcd")
 		goopts.DialOption = []grpc.DialOption{
@@ -1609,10 +1581,10 @@ type daemonParams struct {
 	Clientset            k8sClient.Clientset
 	Datapath             datapath.Datapath
 	WGAgent              *wireguard.Agent `optional:"true"`
-	LocalNodeStore       node.LocalNodeStore
+	LocalNodeStore       *node.LocalNodeStore
 	BGPController        *bgpv1.Controller
 	Shutdowner           hive.Shutdowner
-	SharedResources      k8s.SharedResources
+	Resources            agentK8s.Resources
 	CacheStatus          k8s.CacheStatus
 	NodeManager          nodeManager.NodeManager
 	EndpointManager      endpointmanager.EndpointManager
@@ -1629,6 +1601,8 @@ type daemonParams struct {
 	HealthAPISpec        *healthApi.Spec
 	ServiceCache         *k8s.ServiceCache
 	ClusterMesh          *clustermesh.ClusterMesh
+	MonitorAgent         monitorAgent.Agent
+	L2Announcer          *l2announcer.L2Announcer
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
@@ -1815,14 +1789,6 @@ func runDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daem
 	bootstrapStats.healthCheck.End(true)
 
 	d.startStatusCollector(cleaner)
-
-	go func(errs <-chan error) {
-		err := <-errs
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.WithError(err).Error("Cannot start metrics server")
-			params.Shutdowner.Shutdown(hive.ShutdownWithError(err))
-		}
-	}(initMetrics())
 
 	d.startAgentHealthHTTPService()
 	if option.Config.KubeProxyReplacementHealthzBindAddr != "" {
@@ -2051,11 +2017,11 @@ func initClockSourceOption() {
 
 	if option.Config.EnableBPFClockProbe {
 		if probes.HaveProgramHelper(ebpf.XDP, asm.FnJiffies64) == nil {
-			t, err := bpf.GetJtime()
+			t, err := probes.Jiffies()
 			if err == nil && t > 0 {
 				option.Config.ClockSource = option.ClockSourceJiffies
 			} else {
-				log.WithError(err).Warningf("Auto-disabling %q feature since kernel doesn't expose %q.", option.EnableBPFClockProbe, bpf.TimerInfoFilepath)
+				log.WithError(err).Warningf("Auto-disabling %q feature since kernel doesn't expose jiffies", option.EnableBPFClockProbe)
 				option.Config.EnableBPFClockProbe = false
 			}
 		} else {

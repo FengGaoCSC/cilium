@@ -8,6 +8,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sirupsen/logrus"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/annotation"
 	"github.com/cilium/cilium/pkg/bgpv1"
 	"github.com/cilium/cilium/pkg/bgpv1/agent"
@@ -15,7 +19,7 @@ import (
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/job"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
-	"github.com/cilium/cilium/pkg/k8s"
+	k8sPkg "github.com/cilium/cilium/pkg/k8s"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	cilium_api_v2alpha1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
@@ -24,9 +28,6 @@ import (
 	slim_core_v1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/k8s/utils"
 	"github.com/cilium/cilium/pkg/option"
-
-	"github.com/sirupsen/logrus"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -138,6 +139,9 @@ func newFixture(conf fixtureConfig) *fixture {
 			)
 		}),
 
+		// endpoints
+		cell.Provide(k8sPkg.EndpointsResource),
+
 		// Provide the mocked client cells directly
 		cell.Provide(func() k8sClient.Clientset {
 			return f.fakeClientSet
@@ -217,6 +221,8 @@ func setup(ctx context.Context, peerConfigs []gobgpConfig, fixConfig fixtureConf
 		for _, peer := range peers {
 			peer.stopGoBGP()
 		}
+
+		f.bgp.BGPMgr.Stop()
 
 		f.hive.Stop(ctx)
 		teardownLinks()

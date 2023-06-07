@@ -77,19 +77,25 @@ func (n *linuxNodeHandler) GetNodeIP(nodeID uint16) string {
 	return n.nodeIPsByIDs[nodeID]
 }
 
-// allocateIDForNode allocates a new ID for the given node if one hasn't already
-// been assigned. If any of the node IPs have an ID associated, then all other
-// node IPs receive the same. This might happen if we allocated a node ID from
-// the ipcache, where we don't have all node IPs but only one.
-func (n *linuxNodeHandler) allocateIDForNode(node *nodeTypes.Node) uint16 {
+// getNodeIDForNode gets the node ID for the given node if one was allocated
+// for any of the node IP addresses. If none if found, 0 is returned.
+func (n *linuxNodeHandler) getNodeIDForNode(node *nodeTypes.Node) uint16 {
 	nodeID := uint16(0)
-
-	// Did we already allocate a node ID for any IP of that node?
 	for _, addr := range node.IPAddresses {
 		if id, exists := n.nodeIDsByIPs[addr.IP.String()]; exists {
 			nodeID = id
 		}
 	}
+	return nodeID
+}
+
+// allocateIDForNode allocates a new ID for the given node if one hasn't already
+// been assigned. If any of the node IPs have an ID associated, then all other
+// node IPs receive the same. This might happen if we allocated a node ID from
+// the ipcache, where we don't have all node IPs but only one.
+func (n *linuxNodeHandler) allocateIDForNode(node *nodeTypes.Node) uint16 {
+	// Did we already allocate a node ID for any IP of that node?
+	nodeID := n.getNodeIDForNode(node)
 
 	if nodeID == 0 {
 		nodeID = uint16(n.nodeIDs.AllocateID())
@@ -172,7 +178,7 @@ func (n *linuxNodeHandler) mapNodeID(ip string, id uint16) error {
 		return fmt.Errorf("invalid node IP %s", ip)
 	}
 
-	if err := nodemap.NodeMap().Update(nodeIP, id); err != nil {
+	if err := n.nodeMap.Update(nodeIP, id); err != nil {
 		return err
 	}
 
@@ -197,7 +203,7 @@ func (n *linuxNodeHandler) unmapNodeID(ip string) error {
 		return fmt.Errorf("invalid node IP %s", ip)
 	}
 
-	if err := nodemap.NodeMap().Delete(nodeIP); err != nil {
+	if err := n.nodeMap.Delete(nodeIP); err != nil {
 		return err
 	}
 	if id, exists := n.nodeIDsByIPs[ip]; exists {
@@ -246,7 +252,7 @@ func (n *linuxNodeHandler) RestoreNodeIDs() {
 		}
 		nodeIDs[address] = val.NodeID
 	}
-	if err := nodemap.NodeMap().IterateWithCallback(parse); err != nil {
+	if err := n.nodeMap.IterateWithCallback(parse); err != nil {
 		log.WithError(err).Error("Failed to dump content of node map")
 		return
 	}

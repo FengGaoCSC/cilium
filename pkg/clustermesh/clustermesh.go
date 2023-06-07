@@ -25,6 +25,7 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/metrics"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
+	serviceStore "github.com/cilium/cilium/pkg/service/store"
 )
 
 const (
@@ -66,7 +67,7 @@ type Configuration struct {
 	ClusterSizeDependantInterval kvstore.ClusterSizeDependantIntervalFunc `optional:"true"`
 }
 
-func SetClusterConfig(clusterName string, config *cmtypes.CiliumClusterConfig, backend kvstore.BackendOperations) error {
+func SetClusterConfig(ctx context.Context, clusterName string, config *cmtypes.CiliumClusterConfig, backend kvstore.BackendOperations) error {
 	key := path.Join(kvstore.ClusterConfigPrefix, clusterName)
 
 	val, err := json.Marshal(config)
@@ -74,7 +75,7 @@ func SetClusterConfig(clusterName string, config *cmtypes.CiliumClusterConfig, b
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	_, err = backend.UpdateIfDifferent(ctx, key, val, true)
@@ -85,10 +86,10 @@ func SetClusterConfig(clusterName string, config *cmtypes.CiliumClusterConfig, b
 	return nil
 }
 
-func GetClusterConfig(clusterName string, backend kvstore.BackendOperations) (*cmtypes.CiliumClusterConfig, error) {
+func GetClusterConfig(ctx context.Context, clusterName string, backend kvstore.BackendOperations) (*cmtypes.CiliumClusterConfig, error) {
 	var config cmtypes.CiliumClusterConfig
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	val, err := backend.Get(ctx, path.Join(kvstore.ClusterConfigPrefix, clusterName))
@@ -106,6 +107,16 @@ func GetClusterConfig(clusterName string, backend kvstore.BackendOperations) (*c
 	}
 
 	return &config, nil
+}
+
+// IsClusterConfigRequired returns whether the remote kvstore guarantees that the
+// cilium cluster config will be eventually created.
+func IsClusterConfigRequired(ctx context.Context, backend kvstore.BackendOperations) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	val, err := backend.Get(ctx, kvstore.HasClusterConfigPath)
+	return val != nil, err
 }
 
 // RemoteIdentityWatcher is any type which provides identities that have been
@@ -248,7 +259,7 @@ func (cm *ClusterMesh) Stop(hive.HookContext) error {
 	}
 
 	for name, cluster := range cm.clusters {
-		cluster.onRemove()
+		cluster.onStop()
 		delete(cm.clusters, name)
 	}
 
@@ -270,6 +281,20 @@ func (cm *ClusterMesh) newRemoteCluster(name, path string) *remoteCluster {
 		controllers: controller.NewManager(),
 		swg:         lock.NewStoppableWaitGroup(),
 	}
+
+	rc.remoteNodes = store.NewRestartableWatchStore(
+		name,
+		cm.conf.NodeKeyCreator,
+		cm.conf.NodeObserver,
+		store.RWSWithEntriesMetric(rc.mesh.metricTotalNodes.WithLabelValues(rc.mesh.conf.ClusterName, rc.mesh.nodeName, rc.name)),
+	)
+
+	rc.remoteServices = store.NewRestartableWatchStore(
+		name,
+		func() store.Key { return new(serviceStore.ClusterService) },
+		&remoteServiceObserver{remoteCluster: rc, swg: rc.swg},
+		store.RWSWithOnSyncCallback(func(ctx context.Context) { rc.swg.Stop() }),
+	)
 
 	return rc
 }

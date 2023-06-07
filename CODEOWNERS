@@ -438,6 +438,7 @@ jenkinsfiles @cilium/ci-structure
 /pkg/k8s/apis/cilium.io/v2/ @cilium/api @cilium/sig-k8s
 /pkg/kafka/ @cilium/proxy
 /pkg/kvstore/ @cilium/kvstore
+/pkg/l2announcer/ @cilium/sig-agent
 /pkg/labels @cilium/sig-policy @cilium/api
 /pkg/labelsfilter @cilium/sig-policy
 /pkg/launcher @cilium/sig-agent
@@ -473,6 +474,7 @@ jenkinsfiles @cilium/ci-structure
 /pkg/safeio @cilium/sig-agent
 /pkg/serializer @cilium/sig-agent
 /pkg/service @cilium/sig-lb
+/pkg/slices @cilium/sig-foundations
 /pkg/source @cilium/ipcache
 /pkg/status/ @cilium/sig-agent
 /pkg/statedb @cilium/sig-foundations
@@ -532,6 +534,7 @@ Vagrantfile @cilium/ci-structure
 /vagrant_box_defaults.rb @cilium/ci-structure
 /vendor/ @cilium/vendor
 /VERSION @cilium/tophat
+/.clang-format @cilium/contributing
 
 # Isovalent Teams
 # +++++++++++++++

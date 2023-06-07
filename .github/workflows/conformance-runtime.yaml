@@ -64,7 +64,6 @@ env:
   # RuntimeDatapathMonitorTest With Sample Containers cilium monitor check --related-to
   # RuntimeDatapathMonitorTest With Sample Containers cilium monitor check --to
   # RuntimeDatapathMonitorTest With Sample Containers Cilium monitor event types
-  # RuntimeDatapathMonitorTest With Sample Containers Cilium monitor verbose mode
   # RuntimeDatapathMonitorTest With Sample Containers delivers the same information to multiple monitors
   ###
   privileged: "RuntimeDatapathPrivilegedUnitTests"
@@ -108,7 +107,7 @@ jobs:
 
       - name: Install Go
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
-        uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
+        uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
         with:
           # renovate: datasource=golang-version depName=go
           go-version: 1.20.4
@@ -140,7 +139,7 @@ jobs:
           fi
 
       - name: Waiting for images
-        timeout-minutes: 10
+        timeout-minutes: 20
         shell: bash
         run: |
           for image in cilium-ci operator-generic-ci hubble-relay-ci ; do
@@ -196,7 +195,7 @@ jobs:
           echo "focus=${focus}" >> $GITHUB_OUTPUT
 
       - name: Checkout pull request for tests
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
         with:
           ref: ${{ steps.vars.outputs.sha }}
           persist-credentials: false
@@ -204,37 +203,11 @@ jobs:
       - name: Set Environment Variables
         uses: ./.github/actions/set-env-variables
 
-      # Load Ubuntu cache from GitHub
-      - name: Load ${{ matrix.name }} Ubuntu packages from GitHub
-        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
-        id: ubuntu-cache
-        with:
-          path: /tmp/.ubuntu-pkgs
-          key: ${{ runner.os }}-ubuntu-pkgs-bpf-next-20230526.100931
-
-      - name: Download LVH dependencies
-        if: ${{ steps.ubuntu-cache.outputs.cache-hit != 'true' }}
-        shell: bash
-        run: |
-          sudo apt update
-          sudo apt-get clean
-          sudo apt-get -d -y --no-install-recommends install cpu-checker qemu-system-x86 libvirt-daemon-system libvirt-clients bridge-utils virtinst virt-manager
-          sudo mkdir -p /tmp/.ubuntu-pkgs
-          sudo cp /var/cache/apt/archives/*.deb /tmp/.ubuntu-pkgs
-
-      - name: Install LVH dependencies
-        shell: bash
-        run: |
-          # Disable auto update of man-db for every package
-          sudo rm /var/lib/man-db/auto-update
-          sudo cp /tmp/.ubuntu-pkgs/*.deb /var/cache/apt/archives/
-          sudo apt-get -y --no-install-recommends install /tmp/.ubuntu-pkgs/*.deb
-          sudo kvm-ok
-
       - name: Provision LVH VMs
-        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
+        uses: cilium/little-vm-helper@d04a0cf0ee684b1b249a320a0a6030ffda5eef30 # v0.0.5
         with:
           test-name: runtime-tests
+          install-dependencies: true
           image-version: bpf-next-20230526.100931@sha256:859602be3f66a359d9d20f23505b7df5c46d21f174b336a5bc4dd4f9ea558b54
           host-mount: ./
           cpu: 4
@@ -257,7 +230,7 @@ jobs:
 
       - name: Setup runtime
         timeout-minutes: 10
-        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
+        uses: cilium/little-vm-helper@d04a0cf0ee684b1b249a320a0a6030ffda5eef30 # v0.0.5
         with:
           provision: 'false'
           cmd: |
@@ -276,7 +249,7 @@ jobs:
             /tmp/provision/runtime_install.sh
             service docker restart
 
-      - name: Runtime tests [junit]
+      - name: Runtime tests
         if: ${{ matrix.focus == 'agent' || matrix.focus == 'datapath' }}
         timeout-minutes: 20
         shell: bash
@@ -308,10 +281,10 @@ jobs:
           -cilium.operator-suffix=-ci \
           -cilium.SSHConfig="cat ./cilium-ssh-config.txt"
 
-      - name: Runtime privileged tests [junit]
+      - name: Runtime privileged tests
         if: ${{ matrix.focus == 'privileged' }}
         timeout-minutes: 20
-        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
+        uses: cilium/little-vm-helper@d04a0cf0ee684b1b249a320a0a6030ffda5eef30 # v0.0.5
         with:
           provision: 'false'
           cmd: |
@@ -321,6 +294,18 @@ jobs:
             go install github.com/jstemmer/go-junit-report/v2@7fde4641acef5b92f397a8baf8309d1a45d608cc
             export GOTEST_FORMATTER="/root/go/bin/go-junit-report -set-exit-code -iocopy -out test/runtime.xml"
             make tests-privileged NO_COLOR=1
+
+      - name: Debug failure on VM
+        # Only debug the failure on the LVH that have Cilium running as a service,
+        # which is 'agent' and 'datapath' focus.
+        if:  ${{ !success() && (matrix.focus == 'agent' || matrix.focus == 'datapath') }}
+        timeout-minutes: 10
+        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
+        with:
+          provision: 'false'
+          cmd: |
+            journalctl --no-pager -xeu cilium.service
+            systemctl status cilium.service
 
       - name: Fetch artifacts
         if: ${{ !success() && (matrix.focus == 'agent' || matrix.focus == 'datapath') }}
@@ -350,7 +335,7 @@ jobs:
           junit_filename="${{ env.job_name }} (${{ join(matrix.*, ', ') }}).xml"
           for filename in *.xml; do cp "${filename}" "../cilium-junits/${junit_filename}"; done;
 
-      - name: Upload JUnits
+      - name: Upload JUnits [junit]
         if: ${{ always() }}
         uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
         with:
@@ -358,3 +343,9 @@ jobs:
           path: |
             cilium-junits/*.xml
           retention-days: 2
+
+      - name: Publish Test Results As GitHub Summary
+        if: ${{ always() }}
+        uses: aanm/junit2md@86789108ea0fd9be947a4232dd560e2fa3b9467a # v0.0.1
+        with:
+          junit-directory: "cilium-junits"

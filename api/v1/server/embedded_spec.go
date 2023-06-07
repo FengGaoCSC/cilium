@@ -144,6 +144,9 @@ func init() {
               "$ref": "#/definitions/Error"
             }
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "500": {
             "description": "Recompilation failed",
             "schema": {
@@ -267,6 +270,9 @@ func init() {
             },
             "x-go-name": "Invalid"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "409": {
             "description": "Endpoint already exists",
             "x-go-name": "Exists"
@@ -312,6 +318,9 @@ func init() {
             },
             "x-go-name": "Invalid"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "404": {
             "description": "Endpoint not found"
           },
@@ -345,6 +354,9 @@ func init() {
               "$ref": "#/definitions/Error"
             },
             "x-go-name": "Invalid"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Endpoint does not exist"
@@ -415,6 +427,9 @@ func init() {
           "400": {
             "description": "Invalid configuration request",
             "x-go-name": "Invalid"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Endpoint not found"
@@ -511,6 +526,9 @@ func init() {
         "responses": {
           "200": {
             "description": "Success"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Endpoint not found"
@@ -618,6 +636,9 @@ func init() {
             "schema": {
               "$ref": "#/definitions/Error"
             }
+          },
+          "403": {
+            "description": "Forbidden"
           }
         }
       }
@@ -879,6 +900,9 @@ func init() {
               "$ref": "#/definitions/IPAMResponse"
             }
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "502": {
             "description": "Allocation failure",
             "schema": {
@@ -913,6 +937,9 @@ func init() {
           "400": {
             "description": "Invalid IP address",
             "x-go-name": "Invalid"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "409": {
             "description": "IP already allocated",
@@ -951,6 +978,9 @@ func init() {
           "400": {
             "description": "Invalid IP address",
             "x-go-name": "Invalid"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "IP address not found"
@@ -1150,6 +1180,9 @@ func init() {
             },
             "x-go-name": "InvalidPolicy"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "460": {
             "description": "Invalid path",
             "schema": {
@@ -1193,6 +1226,9 @@ func init() {
               "$ref": "#/definitions/Error"
             },
             "x-go-name": "Invalid"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Policy not found"
@@ -1262,6 +1298,9 @@ func init() {
               "$ref": "#/definitions/Prefilter"
             }
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "461": {
             "description": "Invalid CIDR prefix",
             "schema": {
@@ -1294,6 +1333,9 @@ func init() {
             "schema": {
               "$ref": "#/definitions/Prefilter"
             }
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "461": {
             "description": "Invalid CIDR prefix",
@@ -1393,6 +1435,9 @@ func init() {
           "201": {
             "description": "Created"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "500": {
             "description": "Error while creating recorder",
             "schema": {
@@ -1415,6 +1460,9 @@ func init() {
         "responses": {
           "200": {
             "description": "Success"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Recorder not found"
@@ -1491,6 +1539,9 @@ func init() {
           "201": {
             "description": "Created"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "460": {
             "description": "Invalid frontend in service configuration",
             "schema": {
@@ -1534,6 +1585,9 @@ func init() {
         "responses": {
           "200": {
             "description": "Success"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Service not found"
@@ -1744,6 +1798,19 @@ func init() {
         }
       }
     },
+    "BgpGracefulRestart": {
+      "description": "BGP graceful restart parameters negotiated with the peer.\n\n+k8s:deepcopy-gen=true",
+      "properties": {
+        "enabled": {
+          "description": "When set, graceful restart capability is negotiated for all AFI/SAFIs of \nthis peer.",
+          "type": "boolean"
+        },
+        "restart-time-seconds": {
+          "description": "This is the time advertised to peer for the BGP session to be re-established \nafter a restart. After this period, peer will remove stale routes. \n(RFC 4724 section 4.2)",
+          "type": "integer"
+        }
+      }
+    },
     "BgpPeer": {
       "description": "State of a BGP Peer\n\n+k8s:deepcopy-gen=true",
       "properties": {
@@ -1767,12 +1834,20 @@ func init() {
           "description": "Initial value for the BGP ConnectRetryTimer (RFC 4271, Section 8) in seconds",
           "type": "integer"
         },
+        "ebgp-multihop-ttl": {
+          "description": "Time To Live (TTL) value used in BGP packets sent to the eBGP neighbor.\n0 if eBGP multi-hop feature is disabled.\n",
+          "type": "integer"
+        },
         "families": {
           "description": "BGP peer address family state",
           "type": "array",
           "items": {
             "$ref": "#/definitions/BgpPeerFamilies"
           }
+        },
+        "graceful-restart": {
+          "description": "Graceful restart capability",
+          "$ref": "#/definitions/BgpGracefulRestart"
         },
         "local-asn": {
           "description": "Local AS Number",
@@ -4827,6 +4902,9 @@ func init() {
               "$ref": "#/definitions/Error"
             }
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "500": {
             "description": "Recompilation failed",
             "schema": {
@@ -4968,6 +5046,9 @@ func init() {
             },
             "x-go-name": "Invalid"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "409": {
             "description": "Endpoint already exists",
             "x-go-name": "Exists"
@@ -5017,6 +5098,9 @@ func init() {
             },
             "x-go-name": "Invalid"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "404": {
             "description": "Endpoint not found"
           },
@@ -5059,6 +5143,9 @@ func init() {
               "$ref": "#/definitions/Error"
             },
             "x-go-name": "Invalid"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Endpoint does not exist"
@@ -5137,6 +5224,9 @@ func init() {
           "400": {
             "description": "Invalid configuration request",
             "x-go-name": "Invalid"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Endpoint not found"
@@ -5245,6 +5335,9 @@ func init() {
         "responses": {
           "200": {
             "description": "Success"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Endpoint not found"
@@ -5368,6 +5461,9 @@ func init() {
             "schema": {
               "$ref": "#/definitions/Error"
             }
+          },
+          "403": {
+            "description": "Forbidden"
           }
         }
       }
@@ -5666,6 +5762,9 @@ func init() {
               "$ref": "#/definitions/IPAMResponse"
             }
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "502": {
             "description": "Allocation failure",
             "schema": {
@@ -5708,6 +5807,9 @@ func init() {
           "400": {
             "description": "Invalid IP address",
             "x-go-name": "Invalid"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "409": {
             "description": "IP already allocated",
@@ -5752,6 +5854,9 @@ func init() {
           "400": {
             "description": "Invalid IP address",
             "x-go-name": "Invalid"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "IP address not found"
@@ -5968,6 +6073,9 @@ func init() {
             },
             "x-go-name": "InvalidPolicy"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "460": {
             "description": "Invalid path",
             "schema": {
@@ -6011,6 +6119,9 @@ func init() {
               "$ref": "#/definitions/Error"
             },
             "x-go-name": "Invalid"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Policy not found"
@@ -6086,6 +6197,9 @@ func init() {
               "$ref": "#/definitions/Prefilter"
             }
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "461": {
             "description": "Invalid CIDR prefix",
             "schema": {
@@ -6124,6 +6238,9 @@ func init() {
             "schema": {
               "$ref": "#/definitions/Prefilter"
             }
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "461": {
             "description": "Invalid CIDR prefix",
@@ -6237,6 +6354,9 @@ func init() {
           "201": {
             "description": "Created"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "500": {
             "description": "Error while creating recorder",
             "schema": {
@@ -6263,6 +6383,9 @@ func init() {
         "responses": {
           "200": {
             "description": "Success"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Recorder not found"
@@ -6353,6 +6476,9 @@ func init() {
           "201": {
             "description": "Created"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "460": {
             "description": "Invalid frontend in service configuration",
             "schema": {
@@ -6400,6 +6526,9 @@ func init() {
         "responses": {
           "200": {
             "description": "Success"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Service not found"
@@ -6610,6 +6739,19 @@ func init() {
         }
       }
     },
+    "BgpGracefulRestart": {
+      "description": "BGP graceful restart parameters negotiated with the peer.\n\n+k8s:deepcopy-gen=true",
+      "properties": {
+        "enabled": {
+          "description": "When set, graceful restart capability is negotiated for all AFI/SAFIs of \nthis peer.",
+          "type": "boolean"
+        },
+        "restart-time-seconds": {
+          "description": "This is the time advertised to peer for the BGP session to be re-established \nafter a restart. After this period, peer will remove stale routes. \n(RFC 4724 section 4.2)",
+          "type": "integer"
+        }
+      }
+    },
     "BgpPeer": {
       "description": "State of a BGP Peer\n\n+k8s:deepcopy-gen=true",
       "properties": {
@@ -6633,12 +6775,20 @@ func init() {
           "description": "Initial value for the BGP ConnectRetryTimer (RFC 4271, Section 8) in seconds",
           "type": "integer"
         },
+        "ebgp-multihop-ttl": {
+          "description": "Time To Live (TTL) value used in BGP packets sent to the eBGP neighbor.\n0 if eBGP multi-hop feature is disabled.\n",
+          "type": "integer"
+        },
         "families": {
           "description": "BGP peer address family state",
           "type": "array",
           "items": {
             "$ref": "#/definitions/BgpPeerFamilies"
           }
+        },
+        "graceful-restart": {
+          "description": "Graceful restart capability",
+          "$ref": "#/definitions/BgpGracefulRestart"
         },
         "local-asn": {
           "description": "Local AS Number",

@@ -4,33 +4,38 @@
 package auth
 
 import (
+	"context"
 	"errors"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/exp/maps"
 
 	"github.com/cilium/cilium/pkg/auth/certs"
+	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/policy"
 )
 
 func Test_newAuthManager_clashingAuthHandlers(t *testing.T) {
 	authHandlers := []authHandler{
-		&nullAuthHandler{},
-		&nullAuthHandler{},
+		&alwaysFailAuthHandler{},
+		&alwaysFailAuthHandler{},
 	}
 
-	am, err := newAuthManager(nil, authHandlers, nil, nil)
-	assert.ErrorContains(t, err, "multiple handlers for auth type: null")
+	am, err := newAuthManager(authHandlers, nil, nil)
+	assert.ErrorContains(t, err, "multiple handlers for auth type: test-always-fail")
 	assert.Nil(t, am)
 }
 
 func Test_newAuthManager(t *testing.T) {
 	authHandlers := []authHandler{
-		&nullAuthHandler{},
+		&alwaysPassAuthHandler{},
 		&fakeAuthHandler{},
 	}
 
-	am, err := newAuthManager(make(<-chan signalAuthKey, 100), authHandlers, nil, nil)
+	am, err := newAuthManager(authHandlers, nil, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, am)
 
@@ -51,9 +56,9 @@ func Test_authManager_authenticate(t *testing.T) {
 				localIdentity:  1,
 				remoteIdentity: 2,
 				remoteNodeID:   2,
-				authType:       0,
+				authType:       1,
 			},
-			wantErr:     assertErrorString("unknown requested auth type: "),
+			wantErr:     assertErrorString("unknown requested auth type: spire"),
 			wantEntries: 0,
 		},
 		{
@@ -62,7 +67,7 @@ func Test_authManager_authenticate(t *testing.T) {
 				localIdentity:  1,
 				remoteIdentity: 2,
 				remoteNodeID:   1,
-				authType:       1,
+				authType:       2,
 			},
 			wantErr:     assertErrorString("remote node IP not available for node ID 1"),
 			wantEntries: 0,
@@ -73,7 +78,7 @@ func Test_authManager_authenticate(t *testing.T) {
 				localIdentity:  1,
 				remoteIdentity: 2,
 				remoteNodeID:   2,
-				authType:       1,
+				authType:       100,
 			},
 			wantErr:     assert.NoError,
 			wantEntries: 1,
@@ -85,8 +90,7 @@ func Test_authManager_authenticate(t *testing.T) {
 				entries: map[authKey]authInfo{},
 			}
 			am, err := newAuthManager(
-				make(<-chan signalAuthKey, 100),
-				[]authHandler{&nullAuthHandler{}},
+				[]authHandler{&alwaysFailAuthHandler{}, &alwaysPassAuthHandler{}},
 				authMap,
 				newFakeIPCache(map[uint16]string{
 					2: "172.18.0.2",
@@ -104,6 +108,71 @@ func Test_authManager_authenticate(t *testing.T) {
 	}
 }
 
+func Test_authManager_handleAuthRequest(t *testing.T) {
+	authHandlers := []authHandler{
+		&alwaysPassAuthHandler{},
+	}
+
+	am, err := newAuthManager(authHandlers, nil, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, am)
+
+	handleAuthCalled := false
+	am.handleAuthenticationFunc = func(_ *authManager, k authKey, reAuth bool) {
+		handleAuthCalled = true
+		assert.False(t, reAuth)
+		assert.Equal(t, authKey{localIdentity: 1, remoteIdentity: 2, remoteNodeID: 0, authType: 100}, k)
+	}
+
+	err = am.handleAuthRequest(context.Background(), signalAuthKey{LocalIdentity: 1, RemoteIdentity: 2, RemoteNodeID: 0, AuthType: 100, Pad: 0})
+	assert.NoError(t, err)
+	assert.True(t, handleAuthCalled)
+}
+
+func Test_authManager_handleCertificateRotationEvent_Error(t *testing.T) {
+	authHandlers := []authHandler{
+		&alwaysPassAuthHandler{},
+	}
+	aMap := &fakeAuthMap{
+		failGet: true,
+	}
+
+	am, err := newAuthManager(authHandlers, aMap, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, am)
+
+	err = am.handleCertificateRotationEvent(context.Background(), certs.CertificateRotationEvent{Identity: identity.NumericIdentity(10)})
+	assert.ErrorContains(t, err, "failed to get all auth map entries: failed to list entries")
+}
+
+func Test_authManager_handleCertificateRotationEvent(t *testing.T) {
+	authHandlers := []authHandler{
+		&alwaysPassAuthHandler{},
+	}
+	aMap := &fakeAuthMap{
+		entries: map[authKey]authInfo{
+			{localIdentity: 1, remoteIdentity: 2, remoteNodeID: 1, authType: 100}: {expiration: time.Now()},
+			{localIdentity: 2, remoteIdentity: 3, remoteNodeID: 1, authType: 100}: {expiration: time.Now()},
+			{localIdentity: 3, remoteIdentity: 4, remoteNodeID: 1, authType: 100}: {expiration: time.Now()},
+		},
+	}
+
+	am, err := newAuthManager(authHandlers, aMap, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, am)
+
+	handleAuthCalled := false
+	am.handleAuthenticationFunc = func(_ *authManager, k authKey, reAuth bool) {
+		handleAuthCalled = true
+		assert.True(t, reAuth)
+		assert.True(t, k.localIdentity == 2 || k.remoteIdentity == 2)
+	}
+
+	err = am.handleCertificateRotationEvent(context.Background(), certs.CertificateRotationEvent{Identity: identity.NumericIdentity(2)})
+	assert.NoError(t, err)
+	assert.True(t, handleAuthCalled)
+}
+
 // Fake IPCache
 type fakeIPCache struct {
 	nodeIdMappings map[uint16]string
@@ -117,6 +186,16 @@ func newFakeIPCache(mappings map[uint16]string) *fakeIPCache {
 
 func (r *fakeIPCache) GetNodeIP(id uint16) string {
 	return r.nodeIdMappings[id]
+}
+
+func (r *fakeIPCache) AllocateNodeID(hostIP net.IP) uint16 {
+	for id, ip := range r.nodeIdMappings {
+		if ip == hostIP.String() {
+			return id
+		}
+	}
+
+	return 9999
 }
 
 // Fake AuthHandler
@@ -138,19 +217,43 @@ func (r *fakeAuthHandler) subscribeToRotatedIdentities() <-chan certs.Certificat
 
 // Fake AuthMap
 type fakeAuthMap struct {
-	entries map[authKey]authInfo
+	entries    map[authKey]authInfo
+	failDelete bool
+	failGet    bool
 }
 
 func (r *fakeAuthMap) Delete(key authKey) error {
+	if r.failDelete {
+		return errors.New("failed to delete entry")
+	}
+
 	delete(r.entries, key)
 	return nil
 }
 
+func (r *fakeAuthMap) DeleteIf(predicate func(key authKey, info authInfo) bool) error {
+	if r.failDelete {
+		return errors.New("failed to delete entry")
+	}
+
+	maps.DeleteFunc(r.entries, predicate)
+
+	return nil
+}
+
 func (r *fakeAuthMap) All() (map[authKey]authInfo, error) {
+	if r.failGet {
+		return nil, errors.New("failed to list entries")
+	}
+
 	return r.entries, nil
 }
 
 func (r *fakeAuthMap) Get(key authKey) (authInfo, error) {
+	if r.failGet {
+		return authInfo{}, errors.New("failed to get entry")
+	}
+
 	v, ok := r.entries[key]
 	if !ok {
 		return authInfo{}, errors.New("authinfo not available")

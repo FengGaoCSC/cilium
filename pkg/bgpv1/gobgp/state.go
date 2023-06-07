@@ -74,6 +74,10 @@ func (g *GoBGPServer) GetPeerState(ctx context.Context) (types.GetPeerStateRespo
 			peerState.Families = append(peerState.Families, toAgentAfiSafiState(afiSafi.State))
 		}
 
+		if peer.EbgpMultihop != nil && peer.EbgpMultihop.Enabled {
+			peerState.EbgpMultihopTTL = int64(peer.EbgpMultihop.MultihopTtl)
+		}
+
 		if peer.Timers != nil {
 			tConfig := peer.Timers.Config
 			tState := peer.Timers.State
@@ -90,6 +94,12 @@ func (g *GoBGPServer) GetPeerState(ctx context.Context) (types.GetPeerStateRespo
 					peerState.AppliedKeepAliveTimeSeconds = int64(tState.KeepaliveInterval)
 				}
 			}
+		}
+
+		peerState.GracefulRestart = &models.BgpGracefulRestart{}
+		if peer.GracefulRestart != nil {
+			peerState.GracefulRestart.Enabled = peer.GracefulRestart.Enabled
+			peerState.GracefulRestart.RestartTimeSeconds = int64(peer.GracefulRestart.RestartTime)
 		}
 
 		data = append(data, peerState)
