@@ -30,8 +30,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo ${{ inputs.pr-body }} | grep -Eio "(fix|clos|resolv)(e|ed|es)?:? +(https://github.com/${GITHUB_REPOSITORY}/issues/|#)[0-9]+" | grep -Eo '[0-9]+' | while read -r issue; do
-            if [ ${{ inputs.remove-label }} != ""]]; then
+          echo "${{ inputs.pr-body }}" | grep -Eio "(fix|clos|resolv)(e|ed|es)?:? +(https://github.com/${GITHUB_REPOSITORY}/issues/|#)[0-9]+" | grep -Eo '[0-9]+' | while read -r issue; do
+            if [ "${{ inputs.remove-label }}" != ""]]; then
               echo "Removing label ${{ inputs.remove-label }} from issue #${issue}."
               gh issue edit ${issue} --repo "${GITHUB_REPOSITORY}" --remove-label "${{ inputs.remove-label }}"
             fi
