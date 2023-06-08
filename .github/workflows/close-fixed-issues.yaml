@@ -30,11 +30,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo ${{ input.pr-body }}| grep -Eio "(fix|clos|resolv)(e|ed|es)?:? +(https://github.com/${GITHUB_REPOSITORY}/issues/|#)[0-9]+" | grep -Eo '[0-9]+' | while read -r issue; do
+          echo ${{ inputs.pr-body }} | grep -Eio "(fix|clos|resolv)(e|ed|es)?:? +(https://github.com/${GITHUB_REPOSITORY}/issues/|#)[0-9]+" | grep -Eo '[0-9]+' | while read -r issue; do
             if [ ${{ inputs.remove-label }} != ""]]; then
-              echo "Removing label ${{ input.remove-label }} from issue #${issue}."
-              gh issue edit ${issue} --repo "${GITHUB_REPOSITORY}" --remove-label "${{ input.remove-label }}"
+              echo "Removing label ${{ inputs.remove-label }} from issue #${issue}."
+              gh issue edit ${issue} --repo "${GITHUB_REPOSITORY}" --remove-label "${{ inputs.remove-label }}"
             fi
-            echo "Closing issue #${issue} as completed in #${{ input.pr-number }}."
+            echo "Closing issue #${issue} as completed in #${{ inputs.pr-number }}."
             gh issue close ${issue} --repo "${GITHUB_REPOSITORY}" --reason "completed" --comment "Done in #${PR_NUMBER}"
           done || true
