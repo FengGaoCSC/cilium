@@ -85,7 +85,7 @@ _If you need help: ask in #enterprise-release._
 
         git push origin ${OSS_SYNC_TAG}
 
-- [ ] For latest minor version only:
+- [ ] (SKIP THIS ISSUE UNTIL https://github.com/isovalent/cilium-enterprise-dogfooding/issues/1200 IS FIXED) For latest minor version only:
   - [ ] Deploy the CI image from `vX.Y-ce` branch to alpo-2. If you are not sure how
         to do it, ask in #dogfooding Slack channel. There are a lot of helpful people
         in that channel. Note that only one branch can be deployed to alpo-2, so if
