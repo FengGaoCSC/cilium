@@ -1,0 +1,20 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: dns-via-proxy-for-client
+spec:
+  endpointSelector:
+    matchLabels:
+      kind: client
+  egress:
+    - toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+      toEndpoints:
+        - matchExpressions:
+            - { key: 'k8s-app', operator: In, values: [ "kube-dns", "coredns", "node-local-dns", "nodelocaldns" ] }
+            - { key: 'io.kubernetes.pod.namespace', operator: In, values: [ "kube-system" ] }
