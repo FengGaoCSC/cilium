@@ -7,6 +7,7 @@ require (
 	github.com/cilium/cilium v1.14.0-snapshot.5
 	github.com/cilium/cilium-cli v0.15.4
 	github.com/cloudflare/cfssl v1.6.4
+	github.com/stretchr/testify v1.8.4
 	k8s.io/api v0.27.2
 	k8s.io/apimachinery v0.27.2
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
