@@ -148,9 +148,7 @@ func (p *policyCorrelation) correlatePolicy(f *pb.Flow) error {
 	// obtain reference to endpoint on which the policy verdict was taken
 	epInfo, ok := p.endpointGetter.GetEndpointInfo(endpointIP)
 	if !ok {
-		p.logger.
-			WithField(logfields.IPAddr, endpointIP).
-			Debug("dropping policy verdict notification for unknown endpoint")
+		logger.WithField(logfields.IPAddr, endpointIP).Debug("dropping policy verdict notification for unknown endpoint")
 		return nil
 	}
 	ep, ok := epInfo.(endpointPolicyGetter)
@@ -166,14 +164,12 @@ func (p *policyCorrelation) correlatePolicy(f *pb.Flow) error {
 		TrafficDirection: uint8(direction),
 	})
 	if !ok {
-		p.logger.
-			WithFields(logrus.Fields{
-				logfields.Identity:         remoteIdentity,
-				logfields.Port:             dport,
-				logfields.Protocol:         proto,
-				logfields.TrafficDirection: direction,
-			}).
-			Debug("unable to find policy for policy verdict notification")
+		logger.WithFields(logrus.Fields{
+			logfields.Identity:         remoteIdentity,
+			logfields.Port:             dport,
+			logfields.Protocol:         proto,
+			logfields.TrafficDirection: direction,
+		}).Debug("unable to find policy for policy verdict notification")
 		return nil
 	}
 

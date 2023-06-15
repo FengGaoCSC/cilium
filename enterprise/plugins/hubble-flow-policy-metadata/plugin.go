@@ -18,18 +18,22 @@ import (
 	"github.com/cilium/cilium/enterprise/plugins"
 	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
 	"github.com/cilium/cilium/pkg/hubble/parser/getters"
-
-	"github.com/sirupsen/logrus"
+	"github.com/cilium/cilium/pkg/logging"
+	"github.com/cilium/cilium/pkg/logging/logfields"
 )
+
+const pluginName = "hubble-flow-policy-metadata"
 
 var (
 	// validate interface conformity
-	_ plugins.ServerOptions = (*flowPolicyMetadata)(nil)
+	_      plugins.Init          = New
+	_      plugins.ServerOptions = (*flowPolicyMetadata)(nil)
+	logger                       = logging.DefaultLogger.WithField(logfields.LogSubsys, "hubble-flow-policy-metadata")
 )
 
 type policyCorrelation struct {
 	endpointGetter getters.EndpointGetter
-	logger         logrus.FieldLogger
+	disabled       bool
 }
 
 type flowPolicyMetadata struct {
@@ -41,33 +45,29 @@ func New() (plugins.Instance, error) {
 	return &flowPolicyMetadata{}, nil
 }
 
-func (m *flowPolicyMetadata) Name() string {
-	return "policy-metadata"
-}
-
 func (m *flowPolicyMetadata) OnServerInit(srv observeroption.Server) error {
 	endpointGetter, ok := srv.GetOptions().CiliumDaemon.(getters.EndpointGetter)
 	if !ok || endpointGetter == nil {
-		return fmt.Errorf("%s: failed to obtain reference to cilium daemon", m.Name())
+		return fmt.Errorf("%s: failed to obtain reference to cilium daemon", pluginName)
 	}
 
 	m.policyCorrelation = &policyCorrelation{
 		endpointGetter: endpointGetter,
-		logger:         srv.GetLogger(),
 	}
+	logger.Debugf("%s configured", pluginName)
 
 	return nil
 }
 
 func (m *flowPolicyMetadata) OnDecodedFlow(ctx context.Context, f *pb.Flow) (bool, error) {
-	if m.policyCorrelation == nil {
+	if m.policyCorrelation.disabled {
 		return false, nil
 	}
 
 	if err := m.policyCorrelation.correlatePolicy(f); err != nil {
 		// correlatePolicy only returns an error in fatal cases, disable it
-		m.policyCorrelation = nil
-		return false, fmt.Errorf("%s: %s", m.Name(), err)
+		m.policyCorrelation.disabled = true
+		return false, fmt.Errorf("%s failed to correlate policy for flow: %s", pluginName, err)
 	}
 	return false, nil
 }
