@@ -11,7 +11,6 @@
 package aggregation
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -24,7 +23,7 @@ import (
 )
 
 // ConfigureAggregator configures a set of aggregators as a chain
-func ConfigureAggregator(ctx context.Context, aggregators []*observer.Aggregator) (types.Aggregator, error) {
+func ConfigureAggregator(aggregators []*observer.Aggregator) (types.Aggregator, error) {
 	var as []types.Aggregator
 	ttl := 30 * time.Second
 	renewTTL := true
@@ -40,9 +39,9 @@ func ConfigureAggregator(ctx context.Context, aggregators []*observer.Aggregator
 
 		switch requestedAggregator.Type {
 		case observer.AggregatorType_connection:
-			a = NewConnectionAggregator(ctx, ttl, requestedAggregator.IgnoreSourcePort, renewTTL)
+			a = NewConnectionAggregator(ttl, requestedAggregator.IgnoreSourcePort, renewTTL)
 		case observer.AggregatorType_identity:
-			a = NewIdentityAggregator(ctx, ttl, renewTTL)
+			a = NewIdentityAggregator(ttl, renewTTL)
 		default:
 			return nil, fmt.Errorf("unknown aggregator: %d", requestedAggregator.Type)
 		}

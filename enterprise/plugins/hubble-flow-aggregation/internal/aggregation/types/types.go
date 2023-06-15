@@ -11,6 +11,7 @@
 package types
 
 import (
+	"context"
 	"time"
 
 	"github.com/cilium/cilium/api/v1/flow"
@@ -62,6 +63,9 @@ type Aggregator interface {
 	// Aggregate must perform the aggregation logic implemented by the
 	// aggregator and return an aggregation result
 	Aggregate(f AggregatableFlow) *Result
+
+	// Start will start the aggregator
+	Start(context.Context)
 
 	// String must return a string representing the configuration of the
 	// aggregator

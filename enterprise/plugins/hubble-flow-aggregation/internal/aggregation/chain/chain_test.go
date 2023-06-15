@@ -11,6 +11,7 @@
 package chain
 
 import (
+	"context"
 	"testing"
 
 	"github.com/cilium/cilium/api/v1/observer"
@@ -26,6 +27,8 @@ func (a *trueAggregator) Aggregate(_ types.AggregatableFlow) *types.Result {
 	return &types.Result{StateChange: observer.StateChange_new}
 }
 
+func (a *trueAggregator) Start(context.Context) {}
+
 func (a *trueAggregator) String() string { return "trueAggreator" }
 
 type falseAggregator struct{}
@@ -33,6 +36,8 @@ type falseAggregator struct{}
 func (a *falseAggregator) Aggregate(_ types.AggregatableFlow) *types.Result {
 	return &types.Result{}
 }
+
+func (a *falseAggregator) Start(context.Context) {}
 
 func (a *falseAggregator) String() string { return "falseAggreator" }
 

@@ -15,10 +15,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cilium/cilium/api/v1/observer"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 
-	"github.com/cilium/cilium/api/v1/observer"
-	"github.com/golang/protobuf/ptypes"
+	"github.com/jonboulle/clockwork"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (c *Cache) aggregateFlow(a *types.AggregatedFlow, f types.AggregatableFlow) (r *types.Result) {
@@ -44,7 +45,7 @@ func (c *Cache) aggregateFlow(a *types.AggregatedFlow, f types.AggregatableFlow)
 		s = a.Stats.Forward
 	}
 
-	s.LastActivity = ptypes.TimestampNow()
+	s.LastActivity = timestamppb.New(c.clock.Now())
 	s.NumFlows++
 
 	if f.State().ACK {
@@ -82,7 +83,8 @@ func (c *Cache) aggregateFlow(a *types.AggregatedFlow, f types.AggregatableFlow)
 // Cache is an aggregation cache used to store historic flows for
 // identification of aggregation potential
 type Cache struct {
-	conf Configuration
+	clock clockwork.Clock
+	conf  Configuration
 
 	// mutex protects the cache
 	mutex sync.Mutex
@@ -97,64 +99,57 @@ type Configuration struct {
 	HashFunc      types.FlowHashFunc
 	AggregateFunc func(a *types.AggregatedFlow, s *observer.DirectionStatistics, f types.AggregatableFlow, r *types.Result)
 	Expiration    time.Duration
-	// Disables the goroutine that periodically evicts expired entries from the cache.
-	// For testing only.
-	DisableGC bool
-	RenewTTL  bool
+	RenewTTL      bool
 }
 
 // NewCache returns a new aggregation cache
-func NewCache(ctx context.Context, conf Configuration) *Cache {
+func NewCache(conf Configuration) *Cache {
 	if conf.Expiration == time.Duration(0) {
 		conf.Expiration = time.Minute
 	}
 
 	c := &Cache{
+		clock:    clockwork.NewRealClock(),
 		conf:     conf,
 		cache:    map[types.Hash][]*types.AggregatedFlow{},
 		shutdown: make(chan struct{}, 1),
 	}
 
-	if conf.DisableGC {
-		return c
-	}
+	return c
+}
 
-	go func() {
-		tick := time.NewTicker(c.conf.Expiration).C
-		for {
-			select {
-			case <-tick:
-				c.mutex.Lock()
-				now := time.Now()
-				for k, v := range c.cache {
-					var valid []*types.AggregatedFlow
-					for _, c := range v {
-						if c.Expires.After(now) {
-							valid = append(valid, c)
-						}
-					}
-					if len(valid) > 0 {
-						c.cache[k] = valid
-					} else {
-						delete(c.cache, k)
+func (c *Cache) StartGC(ctx context.Context) {
+	for {
+		select {
+		case <-c.clock.After(c.conf.Expiration):
+			c.mutex.Lock()
+			now := c.clock.Now()
+			for k, v := range c.cache {
+				var valid []*types.AggregatedFlow
+				for _, c := range v {
+					if c.Expires.After(now) {
+						valid = append(valid, c)
 					}
 				}
-				c.mutex.Unlock()
-			case <-ctx.Done():
-				c.shutdown <- struct{}{}
-				return
+				if len(valid) > 0 {
+					c.cache[k] = valid
+				} else {
+					delete(c.cache, k)
+				}
 			}
+			c.mutex.Unlock()
+		case <-ctx.Done():
+			c.shutdown <- struct{}{}
+			return
 		}
-	}()
-
-	return c
+	}
 }
 
 // Aggregate performs aggregation of a flow based on the existing cache content
 func (c *Cache) Aggregate(f types.AggregatableFlow) *types.Result {
 	var isNew bool
 
-	expires := time.Now().Add(c.conf.Expiration)
+	expires := c.clock.Now().Add(c.conf.Expiration)
 	hash := c.conf.HashFunc(f)
 
 	c.mutex.Lock()
@@ -193,7 +188,7 @@ func (c *Cache) Lookup(f types.AggregatableFlow) *types.AggregatedFlow {
 }
 
 func (c *Cache) lookup(hash types.Hash, f types.AggregatableFlow) *types.AggregatedFlow {
-	now := time.Now()
+	now := c.clock.Now()
 
 	if chain, ok := c.cache[hash]; ok {
 		// Iterate over the chain backward. The order is important here in case the list

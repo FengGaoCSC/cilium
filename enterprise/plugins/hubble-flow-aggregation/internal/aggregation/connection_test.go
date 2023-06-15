@@ -112,7 +112,10 @@ func TestConnectionHash(t *testing.T) {
 }
 
 func TestConnectionAggregationTCP(t *testing.T) {
-	ca := NewConnectionAggregator(context.Background(), 10*time.Second, false, true)
+	ctx, cancel := context.WithCancel(context.Background())
+	ca := NewConnectionAggregator(10*time.Second, false, true)
+	go ca.Start(ctx)
+	defer cancel()
 	r := ca.Aggregate(p1)
 	assert.True(t, r.StateChange == observer.StateChange_new)
 	assert.False(t, r.AggregatedFlow.Stats.Forward.AckSeen)
@@ -159,7 +162,10 @@ func TestConnectionAggregationTCP(t *testing.T) {
 }
 
 func TestConnectionAggregationReply(t *testing.T) {
-	ca := NewConnectionAggregator(context.Background(), 10*time.Second, false, true)
+	ctx, cancel := context.WithCancel(context.Background())
+	ca := NewConnectionAggregator(10*time.Second, false, true)
+	go ca.Start(ctx)
+	defer cancel()
 	r := ca.Aggregate(p2)
 	assert.True(t, r.StateChange == observer.StateChange_new|observer.StateChange_first_reply)
 	assert.True(t, r.Reply)
@@ -205,7 +211,10 @@ func TestConnectionAggregationReply(t *testing.T) {
 }
 
 func TestConnectionAggregationUDP(t *testing.T) {
-	ca := NewConnectionAggregator(context.Background(), 10*time.Second, false, true)
+	ctx, cancel := context.WithCancel(context.Background())
+	ca := NewConnectionAggregator(10*time.Second, false, true)
+	go ca.Start(ctx)
+	defer cancel()
 	r := ca.Aggregate(&testflow.Flow{
 		Source:      testflow.Peer{IP: net.ParseIP("1.1.1.1"), Port: 1000},
 		Destination: testflow.Peer{IP: net.ParseIP("2.2.2.2"), Port: 22},
@@ -327,7 +336,10 @@ func TestCompareKafka(t *testing.T) {
 }
 
 func TestConnectionExpiration(t *testing.T) {
-	ca := NewConnectionAggregator(context.Background(), 1*time.Second, false, false)
+	ctx, cancel := context.WithCancel(context.Background())
+	ca := NewConnectionAggregator(1*time.Second, false, false)
+	go ca.Start(ctx)
+	defer cancel()
 	flow := testflow.Flow{
 		Source:      testflow.Peer{Identity: []byte("svc1"), Port: 1000},
 		Destination: testflow.Peer{Identity: []byte("svc2"), Port: 22},

@@ -12,7 +12,6 @@ package aggregation
 
 import (
 	"bytes"
-	"context"
 	"hash/adler32"
 	"net/url"
 	"sort"
@@ -238,8 +237,8 @@ func aggregateConnection(a *types.AggregatedFlow, _ *observer.DirectionStatistic
 
 // NewConnectionAggregator returns a new connection based aggregator with the
 // specified expiration time for flows
-func NewConnectionAggregator(ctx context.Context, expiration time.Duration, ignoreSourcePort bool, renewTTL bool) *Aggregator {
-	return NewAggregator(ctx, cache.Configuration{
+func NewConnectionAggregator(expiration time.Duration, ignoreSourcePort bool, renewTTL bool) *Aggregator {
+	return NewAggregator(cache.Configuration{
 		CompareFunc: func(a, b types.AggregatableFlow) bool {
 			ca1, ca2 := newConnectionAggregation(a, ignoreSourcePort), newConnectionAggregation(b, ignoreSourcePort)
 			return ca1.Compare(ca2)

@@ -16,17 +16,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/cilium/api/v1/observer"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/testflow"
 
-	"github.com/cilium/cilium/api/v1/observer"
-	"github.com/golang/protobuf/ptypes"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestAggregationCacheWithoutExpiration(t *testing.T) {
 	// expiration may never be 0, it will default to some value
-	assert.False(t, NewCache(context.Background(), Configuration{}).conf.Expiration == time.Duration(0))
+	assert.NotEqual(t, time.Duration(0), NewCache(Configuration{}).conf.Expiration)
 }
 
 func TestAggregationStateChange(t *testing.T) {
@@ -43,34 +43,31 @@ func TestAggregationStateChange(t *testing.T) {
 		FlowState:   types.FlowState{ConnectionRequest: true, ACK: true},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	c := NewCache(ctx, Configuration{
+	c := NewCache(Configuration{
 		CompareFunc: testflow.Compare,
 		HashFunc:    testflow.Hash,
 	})
 
-	timeBeforeP1 := time.Now()
-	assert.True(t, c.Aggregate(p1).StateChange == observer.StateChange_new)
-	timeBeforeP2 := time.Now()
-	assert.True(t, c.Aggregate(p2).StateChange == observer.StateChange_unspec)
-	timeBeforeP3 := time.Now()
+	clock := clockwork.NewFakeClock()
+	c.clock = clock
 
-	af := c.Lookup(&testflow.Flow{
-		Source:      testflow.Peer{IP: net.ParseIP("1.1.1.1"), Port: 11},
-		Destination: testflow.Peer{IP: net.ParseIP("2.2.2.2"), Port: 22},
-		ProtocolStr: "TCP",
-	})
+	time1 := clock.Now().UTC()
+	res := c.Aggregate(p1)
+	assert.Equal(t, observer.StateChange_new, res.StateChange)
+	assert.Equal(t, time1, res.AggregatedFlow.Stats.Forward.LastActivity.AsTime())
+	assert.Equal(t, time1, res.AggregatedFlow.Stats.Forward.FirstActivity.AsTime())
+	assert.Equal(t, uint64(1), res.AggregatedFlow.Stats.Forward.NumFlows)
 
-	assert.True(t, af.Stats.Forward.NumFlows == 2)
+	// Advance the clock, store the time for checking it later
+	clock.Advance(30 * time.Second)
+	time2 := clock.Now().UTC()
 
-	ts, err := ptypes.Timestamp(af.Stats.Forward.FirstActivity)
-	assert.True(t, err == nil)
-	assert.True(t, timeBeforeP1.Before(ts) && timeBeforeP2.After(ts))
-	ts, err = ptypes.Timestamp(af.Stats.Forward.LastActivity)
-	assert.True(t, err == nil)
-	assert.True(t, timeBeforeP2.Before(ts) && timeBeforeP3.After(ts))
-	cancel()
-	assert.NoError(t, c.WaitForShutdown(context.Background()))
+	res = c.Aggregate(p2)
+	assert.Equal(t, observer.StateChange_unspec, res.StateChange)
+	assert.Equal(t, time2, res.AggregatedFlow.Stats.Forward.LastActivity.AsTime())
+	// First activity was time1, not time2
+	assert.Equal(t, time1, res.AggregatedFlow.Stats.Forward.FirstActivity.AsTime())
+	assert.Equal(t, uint64(2), res.AggregatedFlow.Stats.Forward.NumFlows)
 }
 
 func TestAggregationCache(t *testing.T) {
@@ -88,20 +85,17 @@ func TestAggregationCache(t *testing.T) {
 		Reply:       true,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	c := NewCache(ctx, Configuration{
+	c := NewCache(Configuration{
 		CompareFunc: testflow.Compare,
 		HashFunc:    testflow.Hash,
 	})
 
-	assert.True(t, c.Aggregate(a).StateChange == observer.StateChange_new)
-	assert.True(t, c.Lookup(a).FirstFlow == a)
-	assert.True(t, c.Aggregate(b).StateChange == observer.StateChange_new|observer.StateChange_first_reply)
-	assert.True(t, c.Lookup(b).FirstFlow == b)
+	assert.Equal(t, observer.StateChange_new, c.Aggregate(a).StateChange)
+	assert.Equal(t, a, c.Lookup(a).FirstFlow)
+	assert.Equal(t, observer.StateChange_new|observer.StateChange_first_reply, c.Aggregate(b).StateChange)
+	assert.Equal(t, b, c.Lookup(b).FirstFlow)
 	// subsequent reply flows should not trigger first_reply state change.
-	assert.True(t, c.Aggregate(b).StateChange == observer.StateChange_unspec)
-	cancel()
-	assert.NoError(t, c.WaitForShutdown(context.Background()))
+	assert.Equal(t, observer.StateChange_unspec, c.Aggregate(b).StateChange)
 }
 
 func TestAggregationCacheExpiration(t *testing.T) {
@@ -111,17 +105,24 @@ func TestAggregationCacheExpiration(t *testing.T) {
 		VerdictStr:  "10",
 		DropReason:  20,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	c := NewCache(ctx, Configuration{
+	c := NewCache(Configuration{
 		CompareFunc: testflow.Compare,
 		HashFunc:    testflow.Hash,
-		Expiration:  20 * time.Millisecond,
+		Expiration:  30 * time.Second,
 	})
 
-	assert.True(t, c.Aggregate(a).StateChange == observer.StateChange_new)
-	assert.True(t, c.Lookup(a).FirstFlow == a)
-	time.Sleep(100 * time.Millisecond)
-	assert.True(t, c.Lookup(a) == nil)
-	cancel()
-	assert.NoError(t, c.WaitForShutdown(context.Background()))
+	clock := clockwork.NewFakeClock()
+	c.clock = clock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go c.StartGC(ctx)
+	defer func() {
+		cancel()
+		assert.NoError(t, c.WaitForShutdown(context.Background()))
+	}()
+
+	assert.Equal(t, observer.StateChange_new, c.Aggregate(a).StateChange)
+	assert.Equal(t, a, c.Lookup(a).FirstFlow)
+	clock.Advance(time.Minute)
+	assert.Nil(t, c.Lookup(a))
 }

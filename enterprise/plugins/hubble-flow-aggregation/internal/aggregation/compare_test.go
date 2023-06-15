@@ -40,10 +40,13 @@ var (
 )
 
 func TestAggregatorCache(t *testing.T) {
-	ca := NewAggregator(context.Background(), cache.Configuration{
+	ctx, cancel := context.WithCancel(context.Background())
+	ca := NewAggregator(cache.Configuration{
 		CompareFunc: testflow.Compare,
 		HashFunc:    testflow.Hash,
 	})
+	go ca.Start(ctx)
+	defer cancel()
 
 	assert.True(t, ca.String() == Name)
 

@@ -11,7 +11,9 @@
 package chain
 
 import (
+	"context"
 	"strings"
+	"sync"
 
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
 )
@@ -32,6 +34,20 @@ func NewAggregationChain(f []types.Aggregator) *AggregationChain {
 // Add adds an additional aggregator to the chain
 func (ac *AggregationChain) Add(a types.Aggregator) {
 	ac.filters = append(ac.filters, a)
+}
+
+// Aggregate applies the aggregation logic of an aggregation chain
+func (ac *AggregationChain) Start(ctx context.Context) {
+	var wg sync.WaitGroup
+	for _, af := range ac.filters {
+		af := af
+		wg.Add(1)
+		go func() {
+			af.Start(ctx)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 
 // Aggregate applies the aggregation logic of an aggregation chain

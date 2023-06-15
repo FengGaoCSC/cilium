@@ -25,7 +25,10 @@ import (
 )
 
 func TestIdentityggregation(t *testing.T) {
-	ia := NewIdentityAggregator(context.Background(), 10*time.Second, true)
+	ctx, cancel := context.WithCancel(context.Background())
+	ia := NewIdentityAggregator(10*time.Second, true)
+	go ia.Start(ctx)
+	defer cancel()
 	r := ia.Aggregate(&testflow.Flow{
 		Source:      testflow.Peer{Identity: []byte("svc1"), Port: 1000},
 		Destination: testflow.Peer{Identity: []byte("svc2"), Port: 22},
@@ -140,7 +143,10 @@ func TestIdentityggregation(t *testing.T) {
 }
 
 func TestHTTPAggregation(t *testing.T) {
-	ia := NewIdentityAggregator(context.Background(), 10*time.Second, true)
+	ctx, cancel := context.WithCancel(context.Background())
+	ia := NewIdentityAggregator(10*time.Second, true)
+	go ia.Start(ctx)
+	defer cancel()
 	r := ia.Aggregate(&testflow.Flow{
 		Source:      testflow.Peer{Identity: []byte("svc1"), Port: 1000},
 		Destination: testflow.Peer{Identity: []byte("svc2"), Port: 80},
@@ -209,12 +215,12 @@ func TestHTTPAggregation(t *testing.T) {
 }
 
 func TestExpiredFlows(t *testing.T) {
-	ia := NewAggregator(context.Background(), cache.Configuration{
+	// Not starting the aggregator so no GC
+	ia := NewAggregator(cache.Configuration{
 		CompareFunc:   identityCompareFunc,
 		HashFunc:      identityHashFunc,
 		AggregateFunc: aggregateIdentity,
 		Expiration:    500 * time.Millisecond,
-		DisableGC:     true,
 	})
 	f1 := testflow.Flow{
 		Source:      testflow.Peer{Identity: []byte("svc1"), Port: 1000},
@@ -244,7 +250,10 @@ func TestExpiredFlows(t *testing.T) {
 }
 
 func TestIdentityExpiration(t *testing.T) {
-	ia := NewIdentityAggregator(context.Background(), 1*time.Second, false)
+	ctx, cancel := context.WithCancel(context.Background())
+	ia := NewIdentityAggregator(1*time.Second, false)
+	go ia.Start(ctx)
+	defer cancel()
 	f := testflow.Flow{
 		Source:      testflow.Peer{Identity: []byte("svc1"), Port: 1000},
 		Destination: testflow.Peer{Identity: []byte("svc2"), Port: 22},

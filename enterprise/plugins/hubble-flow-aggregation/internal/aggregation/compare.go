@@ -27,8 +27,13 @@ type Aggregator struct {
 }
 
 // NewAggregator returns a new compare aggregator
-func NewAggregator(ctx context.Context, conf cache.Configuration) *Aggregator {
-	return &Aggregator{cache: cache.NewCache(ctx, conf)}
+func NewAggregator(conf cache.Configuration) *Aggregator {
+	return &Aggregator{cache: cache.NewCache(conf)}
+}
+
+// Start the aggregator
+func (a *Aggregator) Start(ctx context.Context) {
+	a.cache.StartGC(ctx)
 }
 
 // Aggregate applies the aggregation logic of a compare aggregator

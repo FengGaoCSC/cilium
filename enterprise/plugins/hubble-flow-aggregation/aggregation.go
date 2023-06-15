@@ -30,11 +30,13 @@ var (
 
 func (p *flowAggregation) OnGetFlows(ctx context.Context, req *observer.GetFlowsRequest) (context.Context, error) {
 	if req.Aggregation != nil {
-		aggregator, err := aggregation.ConfigureAggregator(ctx, req.Aggregation.Aggregators)
+		aggregator, err := aggregation.ConfigureAggregator(req.Aggregation.Aggregators)
 		p.logger.Debugf("Configured flow aggregator %#v", aggregator)
 		if err != nil {
 			return ctx, err
 		}
+
+		go aggregator.Start(ctx)
 
 		ctx = context.WithValue(ctx, aggregatorKey, aggregator)
 		return context.WithValue(ctx, requestKey, req), nil
