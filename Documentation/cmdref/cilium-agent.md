@@ -160,6 +160,16 @@ cilium-agent [flags]
       --envoy-config-timeout duration                             Timeout duration for Envoy Config acknowledgements (default 2m0s)
       --envoy-log string                                          Path to a separate Envoy log file, if any
       --exclude-local-address strings                             Exclude CIDR from being recognized as local address
+      --export-file-compress                                      Compress rotated files (default true)
+      --export-file-max-backups int                               Number of rotated files to keep (default 3)
+      --export-file-max-size int                                  Maximum size of the file in megabytes (default 100)
+      --export-file-path string                                   Absolute path of the export file location. An empty string disables the flow export (default "/var/run/cilium/hubble/hubble.log")
+      --export-file-rotation-interval duration                    Interval at which to rotate JSON export files in addition to rotating them by size
+      --export-flow-allowlist string                              Allowlist filters for flows
+      --export-flow-denylist string                               Denylist filters for flows
+      --export-format-version string                              Default to v1 format. Set to '' to use the legacy format (default "v1")
+      --export-node-name string                                   Override the node_name field in exported flows
+      --export-rate-limit int                                     Rate limit (per minute) for flow exports. Set to -1 to disable (default -1)
       --external-envoy-proxy                                      whether the Envoy is deployed externally in form of a DaemonSet or not
       --fixed-identity-mapping map                                Key-value for the fixed identity mapping which allows to use reserved label for fixed identities, e.g. 128=kv-store,129=kube-dns
       --gops-port uint16                                          Port for gops server to listen on (default 9890)

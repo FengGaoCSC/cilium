@@ -18,6 +18,7 @@ import (
 	"github.com/cilium/cilium/daemon/cmd"
 	"github.com/cilium/cilium/enterprise/plugins"
 	aggregation "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation"
+	export "github.com/cilium/cilium/enterprise/plugins/hubble-flow-export"
 	"github.com/cilium/cilium/pkg/hubble/observer"
 	"github.com/cilium/cilium/pkg/option"
 
@@ -28,6 +29,7 @@ import (
 
 var pluginInits = []plugins.Init{
 	aggregation.New,
+	export.New,
 }
 
 func init() {

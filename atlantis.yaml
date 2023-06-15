@@ -12,10 +12,6 @@ plugins: []
   #  version: 88f74452beb0ea463c0172a680502a08d22929f1
   #  agent: .New
   #  edit:
-  #    proto: proto.AddPolicyFields
-  #- package: github.com/isovalent/hubble-flow-export
-  #  version: 72777408c02669910dffd4c27623690e4b78c86f
-  #  agent: .New
 goModOptions:
   tidyOptions:
     - "-compat"
