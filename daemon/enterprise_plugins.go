@@ -19,6 +19,7 @@ import (
 	"github.com/cilium/cilium/enterprise/plugins"
 	aggregation "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation"
 	export "github.com/cilium/cilium/enterprise/plugins/hubble-flow-export"
+	policymetadata "github.com/cilium/cilium/enterprise/plugins/hubble-flow-policy-metadata"
 	"github.com/cilium/cilium/pkg/hubble/observer"
 	"github.com/cilium/cilium/pkg/option"
 
@@ -28,6 +29,7 @@ import (
 )
 
 var pluginInits = []plugins.Init{
+	policymetadata.New, // must come before export
 	aggregation.New,
 	export.New,
 }

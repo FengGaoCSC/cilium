@@ -8,10 +8,6 @@ plugins: []
   #  version: v1.13.0
   #  edit:
   #    cilium: .FQDNProxy
-  #- package: github.com/isovalent/hubble-flow-policy-metadata
-  #  version: 88f74452beb0ea463c0172a680502a08d22929f1
-  #  agent: .New
-  #  edit:
 goModOptions:
   tidyOptions:
     - "-compat"

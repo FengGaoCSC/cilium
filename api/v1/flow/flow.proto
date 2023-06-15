@@ -114,6 +114,11 @@ message Flow {
     // duplicating logic from the old parser. This field will be removed once we
     // fully migrate to the new parser.
     string Summary = 100000 [deprecated=true];
+
+    // The CiliumNetworkPolicies allowing the egress of the flow.
+    repeated Policy egress_allowed_by = 21001;
+    // The CiliumNetworkPolicies allowing the ingress of the flow.
+    repeated Policy ingress_allowed_by = 21002;
 }
 
 enum FlowType {
@@ -811,4 +816,11 @@ enum DebugEventType {
     DBG_SK_LOOKUP4 = 62;
     DBG_SK_LOOKUP6 = 63;
     DBG_SK_ASSIGN = 64;
+}
+
+message Policy {
+	string name = 1;
+	string namespace = 2;
+	repeated string labels = 3;
+	uint64 revision = 4;
 }

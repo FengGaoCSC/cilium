@@ -27,6 +27,7 @@
     - [Layer7](#flow-Layer7)
     - [LostEvent](#flow-LostEvent)
     - [NetworkInterface](#flow-NetworkInterface)
+    - [Policy](#flow-Policy)
     - [PolicyUpdateNotification](#flow-PolicyUpdateNotification)
     - [SCTP](#flow-SCTP)
     - [Service](#flow-Service)
@@ -296,6 +297,8 @@ EventTypeFilter is a filter describing a particular event type
 | socket_cookie | [uint64](#uint64) |  | socket_cookie is the Linux kernel socket cookie for this flow. Only applicable to TraceSock notifications, zero for other types |
 | cgroup_id | [uint64](#uint64) |  | cgroup_id of the process which emitted this event. Only applicable to TraceSock notifications, zero for other types |
 | Summary | [string](#string) |  | **Deprecated.** This is a temporary workaround to support summary field for pb.Flow without duplicating logic from the old parser. This field will be removed once we fully migrate to the new parser. |
+| egress_allowed_by | [Policy](#flow-Policy) | repeated | The CiliumNetworkPolicies allowing the egress of the flow. |
+| ingress_allowed_by | [Policy](#flow-Policy) | repeated | The CiliumNetworkPolicies allowing the ingress of the flow. |
 
 
 
@@ -542,6 +545,24 @@ that happened before the events were captured by Hubble.
 | ----- | ---- | ----- | ----------- |
 | index | [uint32](#uint32) |  |  |
 | name | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="flow-Policy"></a>
+
+### Policy
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| name | [string](#string) |  |  |
+| namespace | [string](#string) |  |  |
+| labels | [string](#string) | repeated |  |
+| revision | [uint64](#uint64) |  |  |
 
 
 

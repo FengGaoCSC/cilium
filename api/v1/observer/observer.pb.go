@@ -368,6 +368,7 @@ type ServiceUpsertNotification = flow.ServiceUpsertNotification
 type ServiceDeleteNotification = flow.ServiceDeleteNotification
 type NetworkInterface = flow.NetworkInterface
 type DebugEvent = flow.DebugEvent
+type Policy = flow.Policy
 
 type StateChange int32
 
