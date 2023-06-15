@@ -144,19 +144,11 @@ release manager if something remains unclear or you need a review._
     released version. Target the PR at the `X.Y` branch. If there is no such
     branch, and you are releasing the latest minor, target `master`. 
 - [ ] Prepare artifacts for Azure Marketplace build
-  - Only one release is currently supported on Azure Marketplace. The release
-    series is listed in the `CILIUM_VERSION` file in [Azure Marketplace CNAB].
-    Ignore these steps if the X.Y versions do not match.
-  - [ ] Create a PR for the [Azure Marketplace CNAB] repository to update the
-        `CILIUM_VERSION` to match this new patch release version.
-  - [ ] Notify CNAB owners to review & approve the build. Merge the PR.
-  - [ ] Create a new tag on this repository with a new CNAB version.
-    - Currently the version scheme for CNABs is `0.0.X`. The new tag would be
-      `0.0.Y`, with `Y` being calculated as `X + 1`.
-    - [ ] Create a release for the new tag
-  - [ ] Create a Slack message in [#azure-partnership-internal] that the new
-        version is being published. Reference the Cilium version and the newly
-	created git tag. CC Christian Kuun.
+  - [ ] Only one release is currently supported on Azure Marketplace. The
+        release series is listed in the `CILIUM_VERSION` file in [Azure Marketplace CNAB].
+        Ignore these steps if the X.Y versions do not match. Follow the instructions
+        in the [README.md](https://github.com/isovalent/external-azure-marketplace-cnab/blob/main/README.md)
+        to create artifacts for the new release.
 - [ ] [only for the latest minor!] Using the cilium GH release notes, prepare
     release notes in the [cilium-enterprise-docs] against the main branch.
   - You'll need to look through the generated release notes in
