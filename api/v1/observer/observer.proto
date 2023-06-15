@@ -3,6 +3,7 @@
 
 syntax = "proto3";
 
+import "google/protobuf/duration.proto";
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/field_mask.proto";
@@ -122,6 +123,10 @@ message GetFlowsRequest {
         google.protobuf.FieldMask field_mask = 1;
     }
     Experimental experimental = 999;
+
+    // Aggregation defines flow aggregation settings, determining how flows get
+    // aggregated when queried.
+    Aggregation aggregation = 10001;
 }
 
 // GetFlowsResponse contains either a flow or a protocol message.
@@ -287,4 +292,119 @@ message ExportEvent {
     string node_name = 1000;
     // Timestamp at which this event was observed.
     google.protobuf.Timestamp time = 1001;
+}
+
+// Enterprise specific protobuf messages
+
+// DirectionStatistics are flow statistics in a particular direction
+message DirectionStatistics {
+	// first_activity is the timestamp of first activity on the flow
+	google.protobuf.Timestamp first_activity = 1;
+
+	// last_activity is the timestamp when activity was last observed
+	google.protobuf.Timestamp last_activity  = 2;
+
+	// num_flows is the number of flows aggregated together
+	uint64 num_flows = 3;
+
+	// bytes is the number of bytes observed on the flow
+	uint64 bytes = 4;
+
+	// errors is the number of errors observed on the flow, e.g. RSTs or
+	// HTTP 4xx 5xx status returns
+	uint64 errors = 5;
+
+	// ack_seen is true once a TCP ACK has been seen in this direction
+	bool ack_seen = 6;
+
+	// connect_requests is the number of requests for new connections, i.e.
+	// the number of SYNs seen
+	uint64 connection_attempts = 7;
+
+	// close_requests is the number of connection closure requests
+	// received, i.e. the number of FINs seen
+	uint64 close_requests = 8;
+}
+
+// FlowStatistics includes the statistics for a flow in both directions
+message FlowStatistics {
+	// forward represents flow statistics in the forward direction
+	DirectionStatistics forward = 1;
+
+	// reply represents flow statistics in the reply direction
+	DirectionStatistics reply = 2;
+
+	// established is set to true once the connection/flow is established
+	bool established = 3;
+}
+
+enum StateChange {
+	// unspec represents no change in state
+	unspec = 0;
+
+	// new indicates that the flow has been observed for the first time,
+	// e.g. for connection aggregation, the first time a 5-tuple + verdict
+	// + drop-reason has been observed.
+	new = 1;
+
+	// established indicates that the connection handshake has been
+	// successful, i.e. for TCP this means that the 3-way handshake has
+	// been successful. For any non-TCP protocol, the first flow in any
+	// direction triggers established state.
+	established = 2;
+
+	// first_error indicates that an error has been observed on the flow
+	// for the first time
+	first_error = 4;
+
+	// error indicates that the latest flow reported an error condition.
+	// For TCP, this indicates that an RST has been observed.  For HTTP,
+	// this indicates that a 4xx or 5xx status code has been observed.
+	error = 8;
+
+	// closed indicates closure of the connection, e.g. a TCP FIN has been
+	// seen in both direction. For non-TCP, this state is never triggered.
+	// This state is never reached for non-connection aggregation.
+	closed = 16;
+
+	// first_reply indicates that a flow with is_reply set to true has been
+	// observed on the flow for the first time.
+	first_reply = 32;
+}
+
+// AggregatorType are all aggregator types
+enum AggregatorType {
+	unknown = 0;
+	connection = 1;
+	identity = 2;
+}
+
+// Aggregator is an aggregator configuration
+message Aggregator {
+    AggregatorType type = 1;
+    // Ignore source port during aggregation.
+    bool ignore_source_port = 2;
+
+    // Specify the flow TTL for this aggregator. Defaults to 30 seconds.
+    google.protobuf.Duration ttl = 3;
+
+    // By default, the flow TTL gets renewed when there is an activity on a
+    // given aggregation target (connection or identity). This means that flows
+    // do not expire unless they remain inactive for the duration specified in
+    // the ttl field. Set this flag to false to expire flows after their initial
+    // TTLs regardless of whether there have been subsequent flows on their
+    // aggregation targets.
+    google.protobuf.BoolValue renew_ttl = 4;
+}
+
+// Aggregation is a filter to define flow aggregation behavior
+message Aggregation {
+	// aggregators is a list of aggregators to apply on flows before
+	// returning them. If multiple aggregator are defined, all of them are
+	// applied in a row.
+	repeated Aggregator aggregators = 1;
+
+	// state_change_filter lists the state changes to consider when
+	// determing to return an updated flow while aggregating
+	StateChange state_change_filter = 2;
 }
