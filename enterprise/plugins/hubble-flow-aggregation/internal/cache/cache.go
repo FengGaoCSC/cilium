@@ -12,11 +12,11 @@ package cache
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/cilium/cilium/api/v1/observer"
 	"github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation/internal/aggregation/types"
+	"github.com/cilium/cilium/pkg/lock"
 
 	"github.com/jonboulle/clockwork"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -87,7 +87,7 @@ type Cache struct {
 	conf  Configuration
 
 	// mutex protects the cache
-	mutex sync.Mutex
+	mutex lock.Mutex
 	cache map[types.Hash][]*types.AggregatedFlow
 	// shutdown channel is used to communicate that the GC goroutine stopped.
 	shutdown chan struct{}
