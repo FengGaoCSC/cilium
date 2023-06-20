@@ -55,7 +55,6 @@ require (
 	github.com/hashicorp/go-memdb v1.3.4
 	github.com/hashicorp/golang-lru/v2 v2.0.4
 	github.com/jeremywohl/flatten v1.0.1
-	github.com/jonboulle/clockwork v0.4.0
 	github.com/kevinburke/ssh_config v1.2.0
 	github.com/kr/pretty v0.3.1
 	github.com/mattn/go-shellwords v1.0.12
@@ -126,6 +125,9 @@ require (
 	sigs.k8s.io/gateway-api v0.7.0
 	sigs.k8s.io/yaml v1.3.0
 )
+
+// Enterprise specific deps.
+require github.com/jonboulle/clockwork v0.4.0
 
 require (
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
