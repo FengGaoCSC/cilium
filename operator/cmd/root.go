@@ -74,8 +74,6 @@ var (
 	leaderElectionCtx       context.Context
 	leaderElectionCtxCancel context.CancelFunc
 
-	operatorAddr string
-
 	// isLeader is an atomic boolean value that is true when the Operator is
 	// elected leader. Otherwise, it is false.
 	isLeader atomic.Bool
@@ -397,7 +395,8 @@ func (legacy *legacyOnLeader) onStart(_ hive.HookContext) error {
 	isLeader.Store(true)
 
 	// If CiliumEndpointSlice feature is enabled, create CESController, start CEP watcher and run controller.
-	if legacy.clientset.IsEnabled() && !option.Config.DisableCiliumEndpointCRD && option.Config.EnableCiliumEndpointSlice {
+	// Knowing CES are enabled only if CiliumEndpoint CRD are enabled too.
+	if legacy.clientset.IsEnabled() && option.Config.EnableCiliumEndpointSlice {
 		log.Info("Create and run CES controller, start CEP watcher")
 		// Initialize  the CES controller
 		cesController := ces.NewCESController(
@@ -406,8 +405,8 @@ func (legacy *legacyOnLeader) onStart(_ hive.HookContext) error {
 			legacy.clientset,
 			operatorOption.Config.CESMaxCEPsInCES,
 			operatorOption.Config.CESSlicingMode,
-			float64(legacy.clientset.Config().K8sClientQPS),
-			legacy.clientset.Config().K8sClientBurst)
+			operatorOption.Config.CESWriteQPSLimit,
+			operatorOption.Config.CESWriteQPSBurst)
 		// Start CEP watcher
 		operatorWatchers.CiliumEndpointsSliceInit(legacy.ctx, &legacy.wg, legacy.clientset, cesController)
 		// Start the CES controller, after current CEPs are synced locally in cache.
@@ -526,14 +525,24 @@ func (legacy *legacyOnLeader) onStart(_ hive.HookContext) error {
 							// k8s service for etcd. As soon the k8s caches are
 							// synced, this hijack will stop happening.
 							sc := k8s.NewServiceCache(nil)
-							slimSvcObj := k8s.ConvertToK8sService(k8sSvc)
-							slimSvc := k8s.ObjToV1Services(slimSvcObj)
-							if slimSvc == nil {
-								// This will never happen but still log it
-								scopedLog.Warnf("BUG: invalid k8s service: %s", slimSvcObj)
+							slimSvcObj, err := k8s.TransformToK8sService(k8sSvc)
+							if err != nil {
+								scopedLog.WithFields(logrus.Fields{
+									logfields.ServiceName:      k8sSvc.Name,
+									logfields.ServiceNamespace: k8sSvc.Namespace,
+								}).Error("Failed to transform k8s service")
+							} else {
+								slimSvc := k8s.ObjToV1Services(slimSvcObj)
+								if slimSvc == nil {
+									// This will never happen but still log it
+									scopedLog.WithFields(logrus.Fields{
+										logfields.ServiceName:      k8sSvc.Name,
+										logfields.ServiceNamespace: k8sSvc.Namespace,
+									}).Warn("BUG: invalid k8s service")
+								}
+								sc.UpdateService(slimSvc, nil)
+								svcGetter = operatorWatchers.NewServiceGetter(sc)
 							}
-							sc.UpdateService(slimSvc, nil)
-							svcGetter = operatorWatchers.NewServiceGetter(sc)
 						case k8sErrors.IsNotFound(err):
 							scopedLog.Error("Service not found in k8s")
 						default:
@@ -669,6 +678,8 @@ func (legacy *legacyOnLeader) onStart(_ hive.HookContext) error {
 			ingress.WithCiliumNamespace(operatorOption.Config.CiliumK8sNamespace),
 			ingress.WithSharedLBServiceName(operatorOption.Config.IngressSharedLBServiceName),
 			ingress.WithDefaultLoadbalancerMode(operatorOption.Config.IngressDefaultLoadbalancerMode),
+			ingress.WithDefaultSecretNamespace(operatorOption.Config.IngressDefaultSecretNamespace),
+			ingress.WithDefaultSecretName(operatorOption.Config.IngressDefaultSecretName),
 			ingress.WithIdleTimeoutSeconds(operatorOption.Config.ProxyIdleTimeoutSeconds),
 		)
 		if err != nil {

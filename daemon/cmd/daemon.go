@@ -57,6 +57,7 @@ import (
 	ipamMetadata "github.com/cilium/cilium/pkg/ipam/metadata"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/ipcache"
+	ipcachetypes "github.com/cilium/cilium/pkg/ipcache/types"
 	"github.com/cilium/cilium/pkg/k8s"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
@@ -83,6 +84,7 @@ import (
 	policyAPI "github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/rate"
+	ratemetrics "github.com/cilium/cilium/pkg/rate/metrics"
 	"github.com/cilium/cilium/pkg/recorder"
 	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/service"
@@ -416,7 +418,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		log.WithField("mtu", configuredMTU).Info("Overwriting MTU based on CNI configuration")
 	}
 
-	apiLimiterSet, err := rate.NewAPILimiterSet(option.Config.APIRateLimit, apiRateLimitDefaults, &apiRateLimitingMetrics{})
+	apiLimiterSet, err := rate.NewAPILimiterSet(option.Config.APIRateLimit, apiRateLimitDefaults, ratemetrics.APILimiterObserver())
 	if err != nil {
 		log.WithError(err).Error("unable to configure API rate limiting")
 		return nil, nil, fmt.Errorf("unable to configure API rate limiting: %w", err)
@@ -545,6 +547,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		clustermesh:          params.ClusterMesh,
 		monitorAgent:         params.MonitorAgent,
 		l2announcer:          params.L2Announcer,
+		l7Proxy:              params.L7Proxy,
 	}
 
 	d.configModifyQueue = eventqueue.NewEventQueueBuffered("config-modify-queue", ConfigModifyQueueSize)
@@ -558,7 +561,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	// Collect old CIDR identities
 	var oldNIDs []identity.NumericIdentity
-	var oldIngressIPs []*net.IPNet
+	var oldIngressIPs []netip.Prefix
 	if option.Config.RestoreState && !option.Config.DryMode {
 		if err := ipcachemap.IPCacheMap().DumpWithCallback(func(key bpf.MapKey, value bpf.MapValue) {
 			k := key.(*ipcachemap.Key)
@@ -568,12 +571,13 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 				d.restoredCIDRs = append(d.restoredCIDRs, k.Prefix())
 				oldNIDs = append(oldNIDs, nid)
 			} else if nid == identity.ReservedIdentityIngress && v.TunnelEndpoint.IsZero() {
-				oldIngressIPs = append(oldIngressIPs, k.IPNet())
-				ip := k.IPNet().IP
-				if ip.To4() != nil {
-					node.SetIngressIPv4(ip)
+				prefix := k.Prefix()
+				oldIngressIPs = append(oldIngressIPs, prefix)
+				addr := prefix.Addr()
+				if addr.Is4() {
+					node.SetIngressIPv4(addr.AsSlice())
 				} else {
-					node.SetIngressIPv6(ip)
+					node.SetIngressIPv6(addr.AsSlice())
 				}
 			}
 		}); err != nil && !os.IsNotExist(err) {
@@ -616,28 +620,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		}
 	}
 
-	proxy.Allocator = d.identityAllocator
-
 	d.endpointManager = params.EndpointManager
 
-	// Start the proxy before we start K8s watcher or restore endpoints so that we can inject
-	// the daemon's proxy into the k8s watcher and each endpoint.
-	// Note: d.endpointManager needs to be set before this
-	bootstrapStats.proxyStart.Start()
-	// FIXME: Make the port range configurable.
-	if option.Config.EnableL7Proxy {
-		d.l7Proxy = proxy.StartProxySupport(10000, 20000, option.Config.RunDir,
-			&d, option.Config.AgentLabels, d.datapath, d.endpointManager, d.ipcache)
-	} else {
-		log.Info("L7 proxies are disabled")
-		if option.Config.EnableEnvoyConfig {
-			log.Warningf("%s is not functional when L7 proxies are disabled",
-				option.EnableEnvoyConfig)
-		}
-	}
-	bootstrapStats.proxyStart.End(true)
-
-	// Start service support after proxy support so that we can inject 'd.l7Proxy`.
 	d.svc = service.NewService(&d, d.l7Proxy, d.datapath.LBMap())
 
 	d.redirectPolicyManager = redirectpolicy.NewRedirectPolicyManager(d.svc)
@@ -739,20 +723,16 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.ipcache.UpsertGeneratedIdentities(restoredCIDRidentities, nil)
 	}
 	// Upsert restored local Ingress IPs
-	restoredIngressIPs := []string{}
 	for _, ingressIP := range oldIngressIPs {
-		_, err := d.ipcache.Upsert(ingressIP.String(), nil, 0, nil, ipcache.Identity{
-			ID:     identity.ReservedIdentityIngress,
-			Source: source.Restored,
-		})
-		if err == nil {
-			restoredIngressIPs = append(restoredIngressIPs, ingressIP.String())
-		} else {
-			log.WithError(err).Warning("could not restore Ingress IP, a new one will be allocated")
-		}
+		d.ipcache.UpsertLabels(
+			ingressIP,
+			labels.LabelIngress,
+			source.Restored,
+			ipcachetypes.NewResourceID(ipcachetypes.ResourceKindDaemon, "", ""),
+		)
 	}
-	if len(restoredIngressIPs) > 0 {
-		log.WithField(logfields.Ingress, restoredIngressIPs).Info("Restored ingress IPs")
+	if len(oldIngressIPs) > 0 {
+		log.WithField(logfields.Ingress, oldIngressIPs).Info("Restored ingress IPs")
 	}
 
 	// Read the service IDs of existing services from the BPF map and
@@ -952,7 +932,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// BPF masquerade depends on BPF NodePort and require socket-LB to
 	// be enabled in the tunneling mode, so the following checks should
 	// happen after invoking initKubeProxyReplacementOptions().
-	if option.Config.EnableIPv4Masquerade && option.Config.EnableBPFMasquerade {
+	if option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
 
 		var err error
 		switch {
@@ -999,29 +979,22 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 					"if the same endpoint is selected both by an egress gateway and a L7 policy, endpoint traffic will not go through egress gateway.", option.EnableL7Proxy)
 		}
 	}
-	if option.Config.EnableIPv4Masquerade && option.Config.EnableBPFMasquerade {
+	if option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
 		// TODO(brb) nodeport constraints will be lifted once the SNAT BPF code has been refactored
 		if err := node.InitBPFMasqueradeAddrs(option.Config.GetDevices()); err != nil {
-			log.WithError(err).Error("failed to determine BPF masquerade IPv4 addrs")
-			return nil, nil, fmt.Errorf("failed to determine BPF masquerade IPv4 addrs: %w", err)
+			log.WithError(err).Error("failed to determine BPF masquerade addrs")
+			return nil, nil, fmt.Errorf("failed to determine BPF masquerade addrs: %w", err)
 		}
 	} else if option.Config.EnableIPMasqAgent {
-		log.WithError(err).Errorf("BPF ip-masq-agent requires --%s=\"true\" and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableBPFMasquerade)
-		return nil, nil, fmt.Errorf("BPF ip-masq-agent requires --%s=\"true\" and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableBPFMasquerade)
+		log.WithError(err).Errorf("BPF ip-masq-agent requires (--%s=\"true\" or --%s=\"true\") and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade, option.EnableBPFMasquerade)
+		return nil, nil, fmt.Errorf("BPF ip-masq-agent requires (--%s=\"true\" or --%s=\"true\") and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade, option.EnableBPFMasquerade)
 	} else if option.Config.EnableIPv4EgressGateway {
 		log.WithError(err).Errorf("egress gateway requires --%s=\"true\" and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableBPFMasquerade)
 		return nil, nil, fmt.Errorf("egress gateway requires --%s=\"true\" and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableBPFMasquerade)
-	} else if !option.Config.EnableIPv4Masquerade && option.Config.EnableBPFMasquerade {
-		// There is not yet support for option.Config.EnableIPv6Masquerade
-		log.Infof("Auto-disabling %q feature since IPv4 masquerading was generally disabled",
+	} else if !option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
+		log.Infof("Auto-disabling %q feature since IPv4 and IPv6 masquerading are disabled",
 			option.EnableBPFMasquerade)
 		option.Config.EnableBPFMasquerade = false
-	}
-	if option.Config.EnableIPMasqAgent {
-		if !option.Config.EnableIPv4 {
-			log.WithError(err).Errorf("BPF ip-masq-agent requires IPv4 support (--%s=\"true\")", option.EnableIPv4Name)
-			return nil, nil, fmt.Errorf("BPF ip-masq-agent requires IPv4 support (--%s=\"true\")", option.EnableIPv4Name)
-		}
 	}
 	if len(option.Config.GetDevices()) == 0 {
 		if option.Config.EnableHostFirewall {
@@ -1274,7 +1247,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 func (d *Daemon) ReloadOnDeviceChange(devices []string) {
 	option.Config.SetDevices(devices)
 
-	if option.Config.EnableIPv4Masquerade && option.Config.EnableBPFMasquerade {
+	if option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
 		if err := node.InitBPFMasqueradeAddrs(devices); err != nil {
 			log.Warnf("InitBPFMasqueradeAddrs failed: %s", err)
 		}

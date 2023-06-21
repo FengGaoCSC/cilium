@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
-	"time"
 
 	gobgp "github.com/osrg/gobgp/v3/api"
 	"github.com/osrg/gobgp/v3/pkg/server"
@@ -21,6 +20,9 @@ import (
 const (
 	wildcardIPv4Addr = "0.0.0.0"
 	wildcardIPv6Addr = "::"
+
+	// idleHoldTimeAfterResetSeconds defines time BGP session will stay idle after neighbor reset.
+	idleHoldTimeAfterResetSeconds = 5
 )
 
 var (
@@ -110,7 +112,7 @@ func (g *GoBGPServer) AddNeighbor(ctx context.Context, n types.NeighborRequest) 
 		Peer: peer,
 	}
 	if err = g.server.AddPeer(ctx, peerReq); err != nil {
-		return fmt.Errorf("failed while adding peer %v %v: %w", n.Neighbor.PeerAddress, n.Neighbor.PeerASN, err)
+		return fmt.Errorf("failed while adding peer %v:%v with ASN %v: %w", n.Neighbor.PeerAddress, *n.Neighbor.PeerPort, n.Neighbor.PeerASN, err)
 	}
 	return nil
 }
@@ -128,12 +130,12 @@ func (g *GoBGPServer) UpdateNeighbor(ctx context.Context, n types.NeighborReques
 	}
 	updateRes, err := g.server.UpdatePeer(ctx, peerReq)
 	if err != nil {
-		return fmt.Errorf("failed while updating peer %v %v: %w", n.Neighbor.PeerAddress, n.Neighbor.PeerASN, err)
+		return fmt.Errorf("failed while updating peer %v:%v with ASN %v: %w", n.Neighbor.PeerAddress, *n.Neighbor.PeerPort, n.Neighbor.PeerASN, err)
 	}
 
 	// perform full / soft peer reset if necessary
 	if needsHardReset || updateRes.NeedsSoftResetIn {
-		g.logger.Infof("Resetting peer %s (ASN %d) due to a config change", peer.Conf.NeighborAddress, peer.Conf.PeerAsn)
+		g.logger.Infof("Resetting peer %s:%v (ASN %d) due to a config change", peer.Conf.NeighborAddress, *n.Neighbor.PeerPort, peer.Conf.PeerAsn)
 		resetReq := &gobgp.ResetPeerRequest{
 			Address:       peer.Conf.NeighborAddress,
 			Communication: "Peer configuration changed",
@@ -143,7 +145,7 @@ func (g *GoBGPServer) UpdateNeighbor(ctx context.Context, n types.NeighborReques
 			resetReq.Direction = gobgp.ResetPeerRequest_IN
 		}
 		if err = g.server.ResetPeer(ctx, resetReq); err != nil {
-			return fmt.Errorf("failed while resetting peer %v %v: %w", n.Neighbor.PeerAddress, n.Neighbor.PeerASN, err)
+			return fmt.Errorf("failed while resetting peer %v:%v in ASN %v: %w", n.Neighbor.PeerAddress, *n.Neighbor.PeerPort, n.Neighbor.PeerASN, err)
 		}
 	}
 
@@ -159,6 +161,7 @@ func (g *GoBGPServer) getPeerConfig(ctx context.Context, n *v2alpha1api.CiliumBG
 		return peer, needsReset, fmt.Errorf("failed to parse PeerAddress: %w", err)
 	}
 	peerAddr := prefix.Addr()
+	peerPort := uint32(*n.PeerPort)
 
 	var existingPeer *gobgp.Peer
 	if isUpdate {
@@ -172,8 +175,13 @@ func (g *GoBGPServer) getPeerConfig(ctx context.Context, n *v2alpha1api.CiliumBG
 		}
 		// use only necessary parts of the existing peer struct
 		peer = &gobgp.Peer{
-			Conf:     existingPeer.Conf,
-			AfiSafis: existingPeer.AfiSafis,
+			Conf:      existingPeer.Conf,
+			Transport: existingPeer.Transport,
+			AfiSafis:  existingPeer.AfiSafis,
+		}
+		// Update the peer port if needed.
+		if existingPeer.Transport.RemotePort != peerPort {
+			peer.Transport.RemotePort = peerPort
 		}
 	} else {
 		// Create a new peer
@@ -181,6 +189,9 @@ func (g *GoBGPServer) getPeerConfig(ctx context.Context, n *v2alpha1api.CiliumBG
 			Conf: &gobgp.PeerConf{
 				NeighborAddress: peerAddr.String(),
 				PeerAsn:         uint32(n.PeerASN),
+			},
+			Transport: &gobgp.Transport{
+				RemotePort: peerPort,
 			},
 			// tells the peer we are capable of unicast IPv4 and IPv6
 			// advertisements.
@@ -203,16 +214,16 @@ func (g *GoBGPServer) getPeerConfig(ctx context.Context, n *v2alpha1api.CiliumBG
 	// when calling AddPeer / UpdatePeer / ListPeer, we set it explicitly to a wildcard address
 	// based on peer's address family, to not cause unnecessary connection resets upon update.
 	if peerAddr.Is4() {
-		peer.Transport = &gobgp.Transport{LocalAddress: wildcardIPv4Addr}
+		peer.Transport.LocalAddress = wildcardIPv4Addr
 	} else {
-		peer.Transport = &gobgp.Transport{LocalAddress: wildcardIPv6Addr}
+		peer.Transport.LocalAddress = wildcardIPv6Addr
 	}
 
 	// Enable multi-hop for eBGP if non-zero TTL is provided
-	if g.asn != uint32(n.PeerASN) && n.EBGPMultihopTTL > 0 {
+	if g.asn != uint32(n.PeerASN) && *n.EBGPMultihopTTL > 1 {
 		peer.EbgpMultihop = &gobgp.EbgpMultihop{
 			Enabled:     true,
-			MultihopTtl: uint32(n.EBGPMultihopTTL),
+			MultihopTtl: uint32(*n.EBGPMultihopTTL),
 		}
 	}
 
@@ -220,26 +231,27 @@ func (g *GoBGPServer) getPeerConfig(ctx context.Context, n *v2alpha1api.CiliumBG
 		peer.Timers = &gobgp.Timers{}
 	}
 	peer.Timers.Config = &gobgp.TimersConfig{
-		// If any of the timers is not set (zero), it will be defaulted at the gobgp level.
-		// However, they should be already defaulted at this point.
-		ConnectRetry:      uint64(n.ConnectRetryTime.Round(time.Second).Seconds()),
-		HoldTime:          uint64(n.HoldTime.Round(time.Second).Seconds()),
-		KeepaliveInterval: uint64(n.KeepAliveTime.Round(time.Second).Seconds()),
+		ConnectRetry:           uint64(*n.ConnectRetryTimeSeconds),
+		HoldTime:               uint64(*n.HoldTimeSeconds),
+		KeepaliveInterval:      uint64(*n.KeepAliveTimeSeconds),
+		IdleHoldTimeAfterReset: idleHoldTimeAfterResetSeconds,
 	}
 
 	// populate graceful restart config
 	if peer.GracefulRestart == nil {
 		peer.GracefulRestart = &gobgp.GracefulRestart{}
 	}
-	peer.GracefulRestart.Enabled = n.GracefulRestart.Enabled
-	peer.GracefulRestart.RestartTime = uint32(n.GracefulRestart.RestartTime.Round(time.Second).Seconds())
-
+	if n.GracefulRestart != nil && n.GracefulRestart.Enabled {
+		peer.GracefulRestart.Enabled = true
+		peer.GracefulRestart.RestartTime = uint32(*n.GracefulRestart.RestartTimeSeconds)
+		peer.GracefulRestart.NotificationEnabled = true
+	}
 	for _, afiConf := range peer.AfiSafis {
 		if afiConf.MpGracefulRestart == nil {
 			afiConf.MpGracefulRestart = &gobgp.MpGracefulRestart{}
 		}
 		afiConf.MpGracefulRestart.Config = &gobgp.MpGracefulRestartConfig{
-			Enabled: n.GracefulRestart.Enabled,
+			Enabled: peer.GracefulRestart.Enabled,
 		}
 	}
 

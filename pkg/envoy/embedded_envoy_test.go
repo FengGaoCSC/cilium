@@ -62,9 +62,13 @@ func (s *EnvoySuite) TestEnvoy(c *C) {
 
 	log.Debugf("run directory: %s", testRunDir)
 
-	xdsServer := StartXDSServer(testipcache.NewMockIPCache(), testRunDir)
-	defer xdsServer.stop()
-	StartAccessLogServer(testRunDir, xdsServer)
+	xdsServer, err := StartXDSServer(testipcache.NewMockIPCache(), testRunDir)
+	c.Assert(err, IsNil)
+	defer xdsServer.Stop()
+
+	accessLogServer, err := StartAccessLogServer(testRunDir, xdsServer)
+	c.Assert(err, IsNil)
+	defer accessLogServer.Stop()
 
 	// launch debug variant of the Envoy proxy
 	envoyProxy := StartEmbeddedEnvoy(testRunDir, filepath.Join(testRunDir, "cilium-envoy.log"), 0)
@@ -142,9 +146,13 @@ func (s *EnvoySuite) TestEnvoyNACK(c *C) {
 
 	log.Debugf("run directory: %s", testRunDir)
 
-	xdsServer := StartXDSServer(testipcache.NewMockIPCache(), testRunDir)
-	defer xdsServer.stop()
-	StartAccessLogServer(testRunDir, xdsServer)
+	xdsServer, err := StartXDSServer(testipcache.NewMockIPCache(), testRunDir)
+	c.Assert(err, IsNil)
+	defer xdsServer.Stop()
+
+	accessLogServer, err := StartAccessLogServer(testRunDir, xdsServer)
+	c.Assert(err, IsNil)
+	defer accessLogServer.Stop()
 
 	// launch debug variant of the Envoy proxy
 	envoyProxy := StartEmbeddedEnvoy(testRunDir, filepath.Join(testRunDir, "cilium-envoy.log"), 42)

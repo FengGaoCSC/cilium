@@ -89,10 +89,10 @@ DEFINE_IPV6(HOST_IP, 0xbe, 0xef, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0xa, 0x
 #define IPV4_GATEWAY 0xfffff50a
 #define IPV4_LOOPBACK 0x1ffff50a
 #define IPV4_ENCRYPT_IFACE 0xfffff50a
-# ifdef ENABLE_MASQUERADE
+# ifdef ENABLE_MASQUERADE_IPV4
 #  define IPV4_SNAT_EXCLUSION_DST_CIDR 0xffff0000
 #  define IPV4_SNAT_EXCLUSION_DST_CIDR_LEN 16
-# endif /* ENABLE_MASQUERADE */
+# endif /* ENABLE_MASQUERADE_IPV4 */
 #ifdef ENABLE_NODEPORT
 #define SNAT_MAPPING_IPV4 test_cilium_snat_v4_external
 #define PER_CLUSTER_SNAT_MAPPING_IPV4 test_cilium_per_cluster_snat_v4_external
@@ -111,6 +111,10 @@ DEFINE_IPV6(HOST_IP, 0xbe, 0xef, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0xa, 0x
 #endif /* ENABLE_IPV4 */
 
 #ifdef ENABLE_IPV6
+# ifdef ENABLE_MASQUERADE_IPV6
+#  define IPV6_SNAT_EXCLUSION_DST_CIDR      { .addr = { 0xfa, 0xce, 0xff, 0xff, 0xff, 0x0 } }
+#  define IPV6_SNAT_EXCLUSION_DST_CIDR_MASK { .addr = { 0xff, 0xff, 0xff, 0xff, 0xff, 0x0 } }
+# endif /* ENABLE_MASQUERADE_IPV6 */
 #ifdef ENABLE_NODEPORT
 #define SNAT_MAPPING_IPV6 test_cilium_snat_v6_external
 #define PER_CLUSTER_SNAT_MAPPING_IPV6 test_cilium_per_cluster_snat_v6_external

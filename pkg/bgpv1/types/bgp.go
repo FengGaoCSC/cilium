@@ -6,20 +6,9 @@ package types
 import (
 	"context"
 	"net/netip"
-	"time"
 
 	"github.com/cilium/cilium/api/v1/models"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
-)
-
-const (
-	// DefaultBGPConnectRetryTime defines the default initial value for the BGP ConnectRetryTimer (RFC 4271, Section 8).
-	DefaultBGPConnectRetryTime = 120 * time.Second
-	// DefaultBGPHoldTime defines the default initial value for the BGP HoldTimer (RFC 4271, Section 4.2).
-	DefaultBGPHoldTime = 90 * time.Second
-
-	// DefaultGRRestartTime defines default Restart Time for graceful restart (RFC 4724, section 4.2)
-	DefaultGRRestartTime = 120 * time.Second
 )
 
 // BGPGlobal contains high level BGP configuration for given instance.

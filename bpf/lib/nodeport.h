@@ -98,7 +98,6 @@ static __always_inline bool nodeport_uses_dsr6(const struct ipv6_ct_tuple *tuple
 }
 
 static __always_inline int nodeport_snat_fwd_ipv6(struct __ctx_buff *ctx,
-						  const union v6addr *addr,
 						  __s8 *ext_err)
 {
 	struct ipv6_nat_target target = {
@@ -107,9 +106,7 @@ static __always_inline int nodeport_snat_fwd_ipv6(struct __ctx_buff *ctx,
 	};
 	int ret;
 
-	ipv6_addr_copy(&target.addr, addr);
-
-	ret = snat_v6_needed(ctx, addr) ?
+	ret = snat_v6_needed(ctx, &target.addr) ?
 	      snat_v6_nat(ctx, &target, ext_err) : CTX_ACT_OK;
 	if (ret == NAT_PUNT_TO_STACK)
 		ret = CTX_ACT_OK;
@@ -250,8 +247,8 @@ static __always_inline int encap_geneve_dsr_opt6(struct __ctx_buff *ctx,
 						 __be16 svc_port,
 						 int *ifindex, int *ohead)
 {
-	__be16 src_port = tunnel_gen_src_port_v6();
 	struct remote_endpoint_info *info;
+	struct ipv6_ct_tuple tuple = {};
 	struct geneve_dsr_opt6 gopt;
 	union v6addr *dst;
 	bool need_opt = true;
@@ -261,8 +258,8 @@ static __always_inline int encap_geneve_dsr_opt6(struct __ctx_buff *ctx,
 	__u32 dst_sec_identity;
 	__be32 tunnel_endpoint;
 	__u16 total_len = 0;
-	__u8 nexthdr = ip6->nexthdr;
-	int hdrlen;
+	__be16 src_port;
+	int l4_off, ret;
 
 	dst = (union v6addr *)&ip6->daddr;
 	info = ipcache_lookup6(&IPCACHE_MAP, dst, V6_CACHE_KEY_LEN, 0);
@@ -272,15 +269,17 @@ static __always_inline int encap_geneve_dsr_opt6(struct __ctx_buff *ctx,
 	tunnel_endpoint = info->tunnel_endpoint;
 	dst_sec_identity = info->sec_identity;
 
-	hdrlen = ipv6_hdrlen(ctx, &nexthdr);
-	if (hdrlen < 0)
-		return hdrlen;
+	ret = lb6_extract_tuple(ctx, ip6, ETH_HLEN, &l4_off, &tuple);
+	if (IS_ERR(ret))
+		return ret;
+
+	src_port = tunnel_gen_src_port_v6(&tuple);
 
 	/* See encap_geneve_dsr_opt4(): */
-	if (nexthdr == IPPROTO_TCP) {
+	if (tuple.nexthdr == IPPROTO_TCP) {
 		union tcp_flags tcp_flags = { .value = 0 };
 
-		if (l4_load_tcp_flags(ctx, ETH_HLEN + hdrlen, &tcp_flags) < 0)
+		if (l4_load_tcp_flags(ctx, l4_off, &tcp_flags) < 0)
 			return DROP_CT_INVALID_HDR;
 
 		if (!(tcp_flags.value & (TCP_FLAG_SYN)))
@@ -696,7 +695,7 @@ create_ct:
 		ret = ct_create6(get_ct_map6(&tuple), NULL, &tuple, ctx,
 				 CT_EGRESS, &ct_state_new, false, false, &ext_err);
 		if (!IS_ERR(ret))
-			ret = snat_v6_create_dsr(&tuple, &addr, port);
+			ret = snat_v6_create_dsr(&tuple, &addr, port, &ext_err);
 
 		if (IS_ERR(ret))
 			goto drop_err;
@@ -886,7 +885,20 @@ int tail_nodeport_nat_egress_ipv6(struct __ctx_buff *ctx)
 	ctx_snat_done_set(ctx);
 #ifdef TUNNEL_MODE
 	if (tunnel_endpoint) {
-		__be16 src_port = tunnel_gen_src_port_v6();
+		struct ipv6_ct_tuple tuple = {};
+		__be16 src_port;
+		int l4_off;
+
+		if (!revalidate_data(ctx, &data, &data_end, &ip6)) {
+			ret = DROP_INVALID;
+			goto drop_err;
+		}
+
+		ret = lb6_extract_tuple(ctx, ip6, ETH_HLEN, &l4_off, &tuple);
+		if (IS_ERR(ret))
+			goto drop_err;
+
+		src_port = tunnel_gen_src_port_v6(&tuple);
 
 		ret = __encap_with_nodeid(ctx,
 					  IPV4_DIRECT_ROUTING,
@@ -947,13 +959,12 @@ drop_err:
 
 /* See nodeport_lb4(). */
 static __always_inline int nodeport_lb6(struct __ctx_buff *ctx,
+					struct ipv6hdr *ip6,
 					__u32 src_sec_identity,
 					__s8 *ext_err)
 {
 	int ret, l3_off = ETH_HLEN, l4_off;
 	struct ipv6_ct_tuple tuple = {};
-	void *data, *data_end;
-	struct ipv6hdr *ip6;
 	struct lb6_service *svc;
 	struct lb6_key key = {};
 	struct ct_state ct_state_new = {};
@@ -961,9 +972,6 @@ static __always_inline int nodeport_lb6(struct __ctx_buff *ctx,
 	__u32 monitor = 0;
 
 	cilium_capture_in(ctx);
-
-	if (!revalidate_data(ctx, &data, &data_end, &ip6))
-		return DROP_INVALID;
 
 	ret = lb6_extract_tuple(ctx, ip6, ETH_HLEN, &l4_off, &tuple);
 	if (IS_ERR(ret)) {
@@ -987,9 +995,9 @@ static __always_inline int nodeport_lb6(struct __ctx_buff *ctx,
 
 #if defined(ENABLE_L7_LB)
 		if (lb6_svc_is_l7loadbalancer(svc) && svc->l7_lb_proxy_port > 0) {
-#if __ctx_is == __ctx_xdp
-			return CTX_ACT_OK;
-#endif
+			if (ctx_is_xdp())
+				return CTX_ACT_OK;
+
 			send_trace_notify(ctx, TRACE_TO_PROXY, src_sec_identity, 0,
 					  bpf_ntohs((__u16)svc->l7_lb_proxy_port), 0,
 					  TRACE_REASON_POLICY, monitor);
@@ -1041,7 +1049,10 @@ skip_service_lookup:
 			if (IS_ERR(ret))
 				return ret;
 #endif
+
+#ifndef ENABLE_MASQUERADE_IPV6
 			return CTX_ACT_OK;
+#endif /* ENABLE_MASQUERADE_IPV6 */
 		}
 #endif /* ENABLE_DSR */
 
@@ -1246,7 +1257,7 @@ out:
 	return DROP_MISSED_TAIL_CALL;
 #ifdef TUNNEL_MODE
 encap_redirect:
-	src_port = tunnel_gen_src_port_v6();
+	src_port = tunnel_gen_src_port_v6(&tuple);
 
 	ret = __encap_with_nodeid(ctx, IPV4_DIRECT_ROUTING, src_port,
 				  tunnel_endpoint, SECLABEL, dst_sec_identity,
@@ -1329,13 +1340,6 @@ int tail_handle_snat_fwd_ipv6(struct __ctx_buff *ctx)
 	enum trace_point obs_point;
 	int ret;
 	__s8 ext_err = 0;
-#if defined(TUNNEL_MODE) && defined(IS_BPF_OVERLAY)
-	union v6addr addr = { .p1 = 0 };
-
-	BPF_V6(addr, ROUTER_IP);
-#else
-	union v6addr addr = IPV6_DIRECT_ROUTING;
-#endif
 
 #ifdef IS_BPF_OVERLAY
 	obs_point = TRACE_TO_OVERLAY;
@@ -1343,7 +1347,7 @@ int tail_handle_snat_fwd_ipv6(struct __ctx_buff *ctx)
 	obs_point = TRACE_TO_NETWORK;
 #endif
 
-	ret = nodeport_snat_fwd_ipv6(ctx, &addr, &ext_err);
+	ret = nodeport_snat_fwd_ipv6(ctx, &ext_err);
 	if (IS_ERR(ret))
 		return send_drop_notify_error_ext(ctx, 0, ret, ext_err,
 						  CTX_ACT_DROP, METRIC_EGRESS);
@@ -1363,7 +1367,8 @@ __handle_nat_fwd_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace)
 		return ret;
 
 #if !defined(ENABLE_DSR) ||						\
-    (defined(ENABLE_DSR) && defined(ENABLE_DSR_HYBRID))
+    (defined(ENABLE_DSR) && defined(ENABLE_DSR_HYBRID)) ||		\
+     defined(ENABLE_MASQUERADE_IPV6)
 	if (!ctx_snat_done(ctx)) {
 		ep_tail_call(ctx, CILIUM_CALL_IPV6_NODEPORT_SNAT_FWD);
 		ret = DROP_MISSED_TAIL_CALL;
@@ -1400,7 +1405,7 @@ int tail_handle_nat_fwd_ipv6(struct __ctx_buff *ctx)
 	obs_point = TRACE_TO_NETWORK;
 #endif
 
-	ret = handle_nat_fwd_ipv6(ctx);
+	ret = __handle_nat_fwd_ipv6(ctx, &trace);
 	if (IS_ERR(ret))
 		return send_drop_notify_error(ctx, 0, ret, CTX_ACT_DROP, METRIC_EGRESS);
 
@@ -1582,7 +1587,6 @@ static __always_inline int encap_geneve_dsr_opt4(struct __ctx_buff *ctx, int l3_
 						 __be16 svc_port, int *ifindex, __be16 *ohead)
 {
 	struct remote_endpoint_info *info __maybe_unused;
-	__be16 src_port = tunnel_gen_src_port_v4();
 	struct geneve_dsr_opt4 gopt;
 	bool need_opt = true;
 	__u16 encap_len = sizeof(struct iphdr) + sizeof(struct udphdr) +
@@ -1591,6 +1595,7 @@ static __always_inline int encap_geneve_dsr_opt4(struct __ctx_buff *ctx, int l3_
 	__u32 src_sec_identity = WORLD_ID;
 	__u32 dst_sec_identity;
 	__be32 tunnel_endpoint;
+	__be16 src_port = 0;
 #if __ctx_is == __ctx_xdp
 	bool has_encap = l3_off > ETH_HLEN;
 	struct iphdr *outer_ip4 = ip4;
@@ -1602,6 +1607,15 @@ static __always_inline int encap_geneve_dsr_opt4(struct __ctx_buff *ctx, int l3_
 			return DROP_INVALID;
 
 		encap_len = 0;
+	} else {
+		struct ipv4_ct_tuple tuple = {};
+		int l4_off, ret;
+
+		ret = lb4_extract_tuple(ctx, ip4, l3_off, &l4_off, &tuple);
+		if (IS_ERR(ret))
+			return ret;
+
+		src_port = tunnel_gen_src_port_v4(&tuple);
 	}
 #endif
 
@@ -2067,7 +2081,7 @@ create_ct:
 		ret = ct_create4(get_ct_map4(&tuple), NULL, &tuple, ctx,
 				 CT_EGRESS, &ct_state_new, false, false, &ext_err);
 		if (!IS_ERR(ret))
-			ret = snat_v4_create_dsr(&tuple, addr, port);
+			ret = snat_v4_create_dsr(&tuple, addr, port, &ext_err);
 
 		if (IS_ERR(ret))
 			goto drop_err;
@@ -2201,7 +2215,20 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 	ctx_snat_done_set(ctx);
 #ifdef TUNNEL_MODE
 	if (tunnel_endpoint) {
-		__be16 src_port = tunnel_gen_src_port_v4();
+		struct ipv4_ct_tuple tuple = {};
+		__be16 src_port;
+		int l4_off;
+
+		if (!revalidate_data(ctx, &data, &data_end, &ip4)) {
+			ret = DROP_INVALID;
+			goto drop_err;
+		}
+
+		ret = lb4_extract_tuple(ctx, ip4, ETH_HLEN, &l4_off, &tuple);
+		if (IS_ERR(ret))
+			goto drop_err;
+
+		src_port = tunnel_gen_src_port_v4(&tuple);
 
 		/* The request came from outside, so we need to
 		 * set the security id in the tunnel header to WORLD_ID.
@@ -2291,13 +2318,13 @@ static __always_inline int nodeport_lb4(struct __ctx_buff *ctx,
 			return DROP_NOT_IN_SRC_RANGE;
 #if defined(ENABLE_L7_LB)
 		if (lb4_svc_is_l7loadbalancer(svc) && svc->l7_lb_proxy_port > 0) {
-#if __ctx_is == __ctx_xdp
 			/* We cannot redirect from the XDP layer to cilium_host.
 			 * Therefore, let the bpf_host to handle the L7 ingress
 			 * request.
 			 */
-			return CTX_ACT_OK;
-#endif
+			if (ctx_is_xdp())
+				return CTX_ACT_OK;
+
 			send_trace_notify(ctx, TRACE_TO_PROXY, src_sec_identity, 0,
 					  bpf_ntohs((__u16)svc->l7_lb_proxy_port), 0,
 					  TRACE_REASON_POLICY, monitor);
@@ -2355,14 +2382,14 @@ skip_service_lookup:
 			if (IS_ERR(ret))
 				return ret;
 #endif
-#ifndef ENABLE_MASQUERADE
+#ifndef ENABLE_MASQUERADE_IPV4
 			/* The packet is DSR-eligible, so we know for sure that it is
 			 * not reply traffic by a remote backend which would require
 			 * forwarding / revDNAT. If BPF-Masquerading is off, there is no
 			 * other reason to tail-call CILIUM_CALL_IPV4_NODEPORT_NAT_INGRESS.
 			 */
 			return CTX_ACT_OK;
-#endif
+#endif /* ENABLE_MASQUERADE_IPV4 */
 		}
 #endif /* ENABLE_DSR */
 
@@ -2557,10 +2584,23 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, __s8 *ext_er
 	__u32 tunnel_endpoint __maybe_unused = 0;
 	__u32 dst_sec_identity __maybe_unused = 0;
 	__be16 src_port __maybe_unused = 0;
+	bool check_revdnat = true;
 	bool has_l4_header;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
+
+	has_l4_header = ipv4_has_l4_header(ip4);
+
+	ret = lb4_extract_tuple(ctx, ip4, ETH_HLEN, &l4_off, &tuple);
+	if (ret < 0) {
+		/* If it's not a SVC protocol, we don't need to check for RevDNAT: */
+		if (ret == DROP_NO_SERVICE || ret == DROP_UNKNOWN_L4)
+			check_revdnat = false;
+		else
+			return ret;
+	}
+
 #if defined(ENABLE_EGRESS_GATEWAY) && !defined(TUNNEL_MODE)
 	/* If we are not using TUNNEL_MODE, the gateway node needs to manually steer
 	 * any reply traffic for a remote pod into the tunnel (to avoid iptables
@@ -2570,15 +2610,8 @@ static __always_inline int rev_nodeport_lb4(struct __ctx_buff *ctx, __s8 *ext_er
 		goto encap_redirect;
 #endif /* ENABLE_EGRESS_GATEWAY */
 
-	has_l4_header = ipv4_has_l4_header(ip4);
-
-	ret = lb4_extract_tuple(ctx, ip4, ETH_HLEN, &l4_off, &tuple);
-	if (ret < 0) {
-		/* If it's not a SVC protocol, we don't need to check for RevDNAT: */
-		if (ret == DROP_NO_SERVICE || ret == DROP_UNKNOWN_L4)
-			goto out;
-		return ret;
-	}
+	if (!check_revdnat)
+		goto out;
 
 	if (!ct_has_nodeport_egress_entry4(get_ct_map4(&tuple), &tuple, false))
 		goto out;
@@ -2619,7 +2652,7 @@ out:
 	return DROP_MISSED_TAIL_CALL;
 #if defined(ENABLE_EGRESS_GATEWAY) || defined(TUNNEL_MODE)
 encap_redirect:
-	src_port = tunnel_gen_src_port_v4();
+	src_port = tunnel_gen_src_port_v4(&tuple);
 
 	ret = __encap_with_nodeid(ctx, IPV4_DIRECT_ROUTING, src_port,
 				  tunnel_endpoint, SECLABEL, dst_sec_identity,
@@ -2713,7 +2746,7 @@ __handle_nat_fwd_ipv4(struct __ctx_buff *ctx, __u32 cluster_id __maybe_unused,
 
 #if !defined(ENABLE_DSR) ||						\
     (defined(ENABLE_DSR) && defined(ENABLE_DSR_HYBRID)) ||		\
-     defined(ENABLE_MASQUERADE) ||					\
+     defined(ENABLE_MASQUERADE_IPV4) ||					\
     (defined(ENABLE_CLUSTER_AWARE_ADDRESSING) && defined(ENABLE_INTER_CLUSTER_SNAT))
 	if (!ctx_snat_done(ctx)) {
 		ctx_store_meta(ctx, CB_CLUSTER_ID_EGRESS, cluster_id);
@@ -2876,25 +2909,25 @@ static __always_inline int handle_nat_fwd(struct __ctx_buff *ctx, __u32 cluster_
 	switch (proto) {
 #ifdef ENABLE_IPV4
 	case bpf_htons(ETH_P_IP):
-		invoke_tailcall_if(__or4(__and(is_defined(ENABLE_IPV4),
-					       is_defined(ENABLE_IPV6)),
-					 __and(is_defined(ENABLE_HOST_FIREWALL),
-					       is_defined(IS_BPF_HOST)),
-					 __and(is_defined(ENABLE_CLUSTER_AWARE_ADDRESSING),
-					       is_defined(ENABLE_INTER_CLUSTER_SNAT)),
-					 is_defined(ENABLE_EGRESS_GATEWAY)),
-				   CILIUM_CALL_IPV4_NODEPORT_NAT_FWD,
-				   handle_nat_fwd_ipv4);
+		ret = invoke_tailcall_if(__or4(__and(is_defined(ENABLE_IPV4),
+						     is_defined(ENABLE_IPV6)),
+					       __and(is_defined(ENABLE_HOST_FIREWALL),
+						     is_defined(IS_BPF_HOST)),
+					       __and(is_defined(ENABLE_CLUSTER_AWARE_ADDRESSING),
+						     is_defined(ENABLE_INTER_CLUSTER_SNAT)),
+					       is_defined(ENABLE_EGRESS_GATEWAY)),
+					 CILIUM_CALL_IPV4_NODEPORT_NAT_FWD,
+					 handle_nat_fwd_ipv4);
 		break;
 #endif /* ENABLE_IPV4 */
 #ifdef ENABLE_IPV6
 	case bpf_htons(ETH_P_IPV6):
-		invoke_tailcall_if(__or(__and(is_defined(ENABLE_IPV4),
-					      is_defined(ENABLE_IPV6)),
-					__and(is_defined(ENABLE_HOST_FIREWALL),
-					      is_defined(IS_BPF_HOST))),
-				   CILIUM_CALL_IPV6_NODEPORT_NAT_FWD,
-				   handle_nat_fwd_ipv6);
+		ret = invoke_tailcall_if(__or(__and(is_defined(ENABLE_IPV4),
+						    is_defined(ENABLE_IPV6)),
+					      __and(is_defined(ENABLE_HOST_FIREWALL),
+						    is_defined(IS_BPF_HOST))),
+					 CILIUM_CALL_IPV6_NODEPORT_NAT_FWD,
+					 handle_nat_fwd_ipv6);
 		break;
 #endif /* ENABLE_IPV6 */
 	default:

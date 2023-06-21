@@ -11,17 +11,22 @@ cilium-operator-generic [flags]
 ### Options
 
 ```
+      --auto-create-cilium-pod-ip-pools map                  Automatically create CiliumPodIPPool resources on startup. Specify pools in the form of <pool>=ipv4-cidrs:<cidr>,[<cidr>...];ipv4-mask-size:<size> (multiple pools can also be passed by repeating the CLI flag)
       --bgp-announce-lb-ip                                   Announces service IPs of type LoadBalancer via BGP
       --bgp-config-path string                               Path to file containing the BGP configuration (default "/var/lib/cilium/bgp/config.yaml")
+      --ces-max-ciliumendpoints-per-ces int                  Maximum number of CiliumEndpoints allowed in a CES (default 100)
+      --ces-slice-mode string                                Slicing mode define how ceps are grouped into a CES (default "cesSliceModeIdentity")
+      --ces-write-qps-burst int                              CES work queue burst rate (default 20)
+      --ces-write-qps-limit float                            CES work queue rate limit (default 10)
       --cilium-endpoint-gc-interval duration                 GC interval for cilium endpoints (default 5m0s)
       --cilium-pod-labels string                             Cilium Pod's labels. Used to detect if a Cilium pod is running to remove the node taints where its running and set NetworkUnavailable to false (default "k8s-app=cilium")
       --cilium-pod-namespace string                          Name of the Kubernetes namespace in which Cilium is deployed in. Defaults to the same namespace defined in k8s-namespace
       --cluster-id uint32                                    Unique identifier of the cluster
       --cluster-name string                                  Name of the cluster (default "default")
-      --cluster-pool-ipv4-cidr strings                       IPv4 CIDR Range for Pods in cluster. Requires 'ipam=cluster-pool|cluster-pool-v2beta' and 'enable-ipv4=true'
-      --cluster-pool-ipv4-mask-size int                      Mask size for each IPv4 podCIDR per node. Requires 'ipam=cluster-pool|cluster-pool-v2beta' and 'enable-ipv4=true' (default 24)
-      --cluster-pool-ipv6-cidr strings                       IPv6 CIDR Range for Pods in cluster. Requires 'ipam=cluster-pool|cluster-pool-v2beta' and 'enable-ipv6=true'
-      --cluster-pool-ipv6-mask-size int                      Mask size for each IPv6 podCIDR per node. Requires 'ipam=cluster-pool|cluster-pool-v2beta' and 'enable-ipv6=true' (default 112)
+      --cluster-pool-ipv4-cidr strings                       IPv4 CIDR Range for Pods in cluster. Requires 'ipam=cluster-pool' and 'enable-ipv4=true'
+      --cluster-pool-ipv4-mask-size int                      Mask size for each IPv4 podCIDR per node. Requires 'ipam=cluster-pool' and 'enable-ipv4=true' (default 24)
+      --cluster-pool-ipv6-cidr strings                       IPv6 CIDR Range for Pods in cluster. Requires 'ipam=cluster-pool' and 'enable-ipv6=true'
+      --cluster-pool-ipv6-mask-size int                      Mask size for each IPv6 podCIDR per node. Requires 'ipam=cluster-pool' and 'enable-ipv6=true' (default 112)
       --cnp-status-cleanup-burst int                         Maximum burst of requests to clean up status nodes updates in CNPs (default 20)
       --cnp-status-cleanup-qps float                         Rate used for limiting the clean up of the status nodes updates in CNP, expressed as qps (default 10)
       --cnp-status-update-interval duration                  Interval between CNP status updates sent to the k8s-apiserver per-CNP (default 1s)
@@ -65,8 +70,8 @@ cilium-operator-generic [flags]
       --mesh-auth-mutual-enabled                             The flag to enable mutual authentication for the SPIRE server.
       --mesh-auth-spiffe-trust-domain string                 The trust domain for the SPIFFE identity. (default "spiffe.cilium")
       --mesh-auth-spire-agent-socket string                  The path for the SPIRE admin agent Unix socket. (default "/run/spire/sockets/agent/agent.sock")
-      --mesh-auth-spire-server-address string                SPIRE server endpoint. (default "spire-server.spire.svc.cluster.local:8081")
-      --mesh-auth-spire-server-connection-timeout duration   SPIRE server endpoint. (default 10s)
+      --mesh-auth-spire-server-address string                SPIRE server endpoint. (default "spire-server.spire.svc:8081")
+      --mesh-auth-spire-server-connection-timeout duration   SPIRE server connection timeout. (default 10s)
       --nodes-gc-interval duration                           GC interval for CiliumNodes (default 5m0s)
       --operator-api-serve-addr string                       Address to serve API requests (default "localhost:9234")
       --operator-pprof                                       Enable serving pprof debugging API

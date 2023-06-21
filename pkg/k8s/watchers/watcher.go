@@ -595,10 +595,11 @@ func (k *K8sWatcher) k8sServiceHandler() {
 		})
 
 		scopedLog.WithFields(logrus.Fields{
-			"action":      event.Action.String(),
-			"service":     event.Service.String(),
-			"old-service": event.OldService.String(),
-			"endpoints":   event.Endpoints.String(),
+			"action":        event.Action.String(),
+			"service":       event.Service.String(),
+			"old-service":   event.OldService.String(),
+			"endpoints":     event.Endpoints.String(),
+			"old-endpoints": event.OldEndpoints.String(),
 		}).Debug("Kubernetes service definition changed")
 
 		switch event.Action {
@@ -607,11 +608,22 @@ func (k *K8sWatcher) k8sServiceHandler() {
 				scopedLog.WithError(err).Error("Unable to add/update service to implement k8s event")
 			}
 
-			if !svc.IsExternal() {
+			// Normally, only services without a label selector (i.e. "bottomless" or empty services)
+			// are allowed as targets of a toServices rule.
+			// This is to minimize the chances of a pod IP being selected by this rule, which might
+			// cause conflicting entries in the ipcache.
+			//
+			// This requirement, however, is dropped for HighScale IPCache mode, because pod IPs are
+			// normally excluded from the ipcache regardless.
+			if !option.Config.EnableHighScaleIPcache && !svc.IsExternal() {
 				return
 			}
 
-			translator := k8s.NewK8sTranslator(event.ID, *event.Endpoints, false, svc.Labels, true)
+			var oldEP k8s.Endpoints
+			if event.OldEndpoints != nil {
+				oldEP = *event.OldEndpoints
+			}
+			translator := k8s.NewK8sTranslator(event.ID, oldEP, *event.Endpoints, false, svc.Labels)
 			result, err := k.policyRepository.TranslateRules(translator)
 			if err != nil {
 				log.WithError(err).Error("Unable to repopulate egress policies from ToService rules")
@@ -633,11 +645,13 @@ func (k *K8sWatcher) k8sServiceHandler() {
 				scopedLog.WithError(err).Error("Unable to delete service to implement k8s event")
 			}
 
-			if !svc.IsExternal() {
+			if !option.Config.EnableHighScaleIPcache && !svc.IsExternal() {
 				return
 			}
 
-			translator := k8s.NewK8sTranslator(event.ID, *event.Endpoints, true, svc.Labels, true)
+			// Use the current Endpoints object as the "old" object and "new"
+			// object due to deletion.
+			translator := k8s.NewK8sTranslator(event.ID, *event.Endpoints, *event.Endpoints, true, svc.Labels)
 			result, err := k.policyRepository.TranslateRules(translator)
 			if err != nil {
 				log.WithError(err).Error("Unable to depopulate egress policies from ToService rules")

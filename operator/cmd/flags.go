@@ -39,10 +39,11 @@ func init() {
 		"EC2 Instance tags in the form of k1=v1,k2=v2 (multiple k/v pairs can also be passed by repeating the CLI flag")
 	option.BindEnv(Vp, operatorOption.IPAMInstanceTags)
 
-	flags.Var(option.NewNamedMapOptions(operatorOption.IPAMMultiPoolMap, &operatorOption.Config.IPAMMultiPoolMap, nil), operatorOption.IPAMMultiPoolMap,
-		"IP pool definitions in the form <pool>=ipv4-cidrs:<cidr>,[<cidr>...];ipv4-mask-size:<size> (multiple pools can also be passed by repeating the CLI flag)")
-	flags.MarkHidden(operatorOption.IPAMMultiPoolMap)
-	option.BindEnv(Vp, operatorOption.IPAMMultiPoolMap)
+	flags.Var(option.NewNamedMapOptions(operatorOption.IPAMAutoCreateCiliumPodIPPools, &operatorOption.Config.IPAMAutoCreateCiliumPodIPPools, nil),
+		operatorOption.IPAMAutoCreateCiliumPodIPPools,
+		"Automatically create CiliumPodIPPool resources on startup. "+
+			"Specify pools in the form of <pool>=ipv4-cidrs:<cidr>,[<cidr>...];ipv4-mask-size:<size> (multiple pools can also be passed by repeating the CLI flag)")
+	option.BindEnv(Vp, operatorOption.IPAMAutoCreateCiliumPodIPPools)
 
 	flags.Int64(operatorOption.ParallelAllocWorkers, defaults.ParallelAllocWorkers, "Maximum number of parallel IPAM workers")
 	option.BindEnv(Vp, operatorOption.ParallelAllocWorkers)
@@ -202,14 +203,14 @@ func init() {
 	option.BindEnv(Vp, option.EnableIPv4Name)
 
 	flags.StringSlice(operatorOption.ClusterPoolIPv4CIDR, []string{},
-		fmt.Sprintf("IPv4 CIDR Range for Pods in cluster. Requires '%s=%s|%s' and '%s=%s'",
-			option.IPAM, ipamOption.IPAMClusterPool, ipamOption.IPAMClusterPoolV2,
+		fmt.Sprintf("IPv4 CIDR Range for Pods in cluster. Requires '%s=%s' and '%s=%s'",
+			option.IPAM, ipamOption.IPAMClusterPool,
 			option.EnableIPv4Name, "true"))
 	option.BindEnv(Vp, operatorOption.ClusterPoolIPv4CIDR)
 
 	flags.Int(operatorOption.NodeCIDRMaskSizeIPv4, 24,
-		fmt.Sprintf("Mask size for each IPv4 podCIDR per node. Requires '%s=%s|%s' and '%s=%s'",
-			option.IPAM, ipamOption.IPAMClusterPool, ipamOption.IPAMClusterPoolV2,
+		fmt.Sprintf("Mask size for each IPv4 podCIDR per node. Requires '%s=%s' and '%s=%s'",
+			option.IPAM, ipamOption.IPAMClusterPool,
 			option.EnableIPv4Name, "true"))
 	option.BindEnv(Vp, operatorOption.NodeCIDRMaskSizeIPv4)
 
@@ -217,14 +218,14 @@ func init() {
 	option.BindEnv(Vp, option.EnableIPv6Name)
 
 	flags.StringSlice(operatorOption.ClusterPoolIPv6CIDR, []string{},
-		fmt.Sprintf("IPv6 CIDR Range for Pods in cluster. Requires '%s=%s|%s' and '%s=%s'",
-			option.IPAM, ipamOption.IPAMClusterPool, ipamOption.IPAMClusterPoolV2,
+		fmt.Sprintf("IPv6 CIDR Range for Pods in cluster. Requires '%s=%s' and '%s=%s'",
+			option.IPAM, ipamOption.IPAMClusterPool,
 			option.EnableIPv6Name, "true"))
 	option.BindEnv(Vp, operatorOption.ClusterPoolIPv6CIDR)
 
 	flags.Int(operatorOption.NodeCIDRMaskSizeIPv6, 112,
-		fmt.Sprintf("Mask size for each IPv6 podCIDR per node. Requires '%s=%s|%s' and '%s=%s'",
-			option.IPAM, ipamOption.IPAMClusterPool, ipamOption.IPAMClusterPoolV2,
+		fmt.Sprintf("Mask size for each IPv6 podCIDR per node. Requires '%s=%s' and '%s=%s'",
+			option.IPAM, ipamOption.IPAMClusterPool,
 			option.EnableIPv6Name, "true"))
 	option.BindEnv(Vp, operatorOption.NodeCIDRMaskSizeIPv6)
 
@@ -287,16 +288,32 @@ func init() {
 	flags.String(option.BGPConfigPath, "/var/lib/cilium/bgp/config.yaml", "Path to file containing the BGP configuration")
 	option.BindEnv(Vp, option.BGPConfigPath)
 
-	flags.Bool(option.EnableCiliumEndpointSlice, false, "If set to true, the CiliumEndpointSlice feature is enabled. If any CiliumEndpoints resources are created, updated, or deleted in the cluster, all those changes are broadcast as CiliumEndpointSlice updates to all of the Cilium agents.")
+	enableCES := flags.Bool(option.EnableCiliumEndpointSlice, false, "If set to true, the CiliumEndpointSlice feature is enabled. If any CiliumEndpoints resources are created, updated, or deleted in the cluster, all those changes are broadcast as CiliumEndpointSlice updates to all of the Cilium agents.")
 	option.BindEnv(Vp, option.EnableCiliumEndpointSlice)
 
 	flags.Int(operatorOption.CESMaxCEPsInCES, operatorOption.CESMaxCEPsInCESDefault, "Maximum number of CiliumEndpoints allowed in a CES")
-	flags.MarkHidden(operatorOption.CESMaxCEPsInCES)
+	if *enableCES {
+		flags.MarkHidden(operatorOption.CESMaxCEPsInCES)
+	}
 	option.BindEnv(Vp, operatorOption.CESMaxCEPsInCES)
 
 	flags.String(operatorOption.CESSlicingMode, operatorOption.CESSlicingModeDefault, "Slicing mode define how ceps are grouped into a CES")
-	flags.MarkHidden(operatorOption.CESSlicingMode)
+	if *enableCES {
+		flags.MarkHidden(operatorOption.CESSlicingMode)
+	}
 	option.BindEnv(Vp, operatorOption.CESSlicingMode)
+
+	flags.Float64(operatorOption.CESWriteQPSLimit, operatorOption.CESWriteQPSLimitDefault, "CES work queue rate limit")
+	if *enableCES {
+		flags.MarkHidden(operatorOption.CESWriteQPSLimit)
+	}
+	option.BindEnv(Vp, operatorOption.CESWriteQPSLimit)
+
+	flags.Int(operatorOption.CESWriteQPSBurst, operatorOption.CESWriteQPSBurstDefault, "CES work queue burst rate")
+	if *enableCES {
+		flags.MarkHidden(operatorOption.CESWriteQPSBurst)
+	}
+	option.BindEnv(Vp, operatorOption.CESWriteQPSBurst)
 
 	flags.String(operatorOption.CiliumK8sNamespace, "", fmt.Sprintf("Name of the Kubernetes namespace in which Cilium is deployed in. Defaults to the same namespace defined in %s", option.K8sNamespaceName))
 	option.BindEnv(Vp, operatorOption.CiliumK8sNamespace)

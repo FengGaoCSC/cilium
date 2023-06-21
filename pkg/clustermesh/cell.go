@@ -4,8 +4,7 @@
 package clustermesh
 
 import (
-	"github.com/spf13/pflag"
-
+	"github.com/cilium/cilium/pkg/clustermesh/internal"
 	"github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -24,7 +23,7 @@ var Cell = cell.Module(
 	cell.Provide(NewClusterMesh),
 
 	// Convert concrete objects into more restricted interfaces used by clustermesh.
-	cell.ProvidePrivate(func(sc *k8s.ServiceCache) ServiceMerger { return sc }),
+	cell.ProvidePrivate(func(sc *k8s.ServiceCache) (ServiceMerger, k8s.ServiceIPGetter) { return sc, sc }),
 	cell.ProvidePrivate(func(ipcache *ipcache.IPCache) ipcache.IPCacher { return ipcache }),
 	cell.ProvidePrivate(func(mgr nodemanager.NodeManager) (store.Observer, kvstore.ClusterSizeDependantIntervalFunc) {
 		return nodeStore.NewNodeObserver(mgr), mgr.ClusterSizeDependantInterval
@@ -34,14 +33,8 @@ var Cell = cell.Module(
 		return types.ClusterIDName{ClusterID: cfg.ClusterID, ClusterName: cfg.ClusterName}
 	}),
 
-	cell.Config(Config{}),
+	cell.Config(internal.Config{}),
+
+	cell.Metric(newMetrics),
+	cell.Metric(internal.MetricsProvider(subsystem)),
 )
-
-type Config struct {
-	// ClusterMeshConfig is the path to the clustermesh configuration directory.
-	ClusterMeshConfig string
-}
-
-func (def Config) Flags(flags *pflag.FlagSet) {
-	flags.String("clustermesh-config", def.ClusterMeshConfig, "Path to the ClusterMesh configuration directory")
-}

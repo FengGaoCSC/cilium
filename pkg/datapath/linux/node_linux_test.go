@@ -77,6 +77,11 @@ const (
 
 	baseIPv4Time = "net.ipv4.neigh.default.base_reachable_time_ms"
 	baseIPv6Time = "net.ipv6.neigh.default.base_reachable_time_ms"
+	baseTime     = 2500
+
+	mcastNumIPv4 = "net.ipv4.neigh.default.mcast_solicit"
+	mcastNumIPv6 = "net.ipv6.neigh.default.mcast_solicit"
+	mcastNum     = 6
 )
 
 func (s *linuxPrivilegedBaseTestSuite) SetUpTest(c *check.C, addressing datapath.NodeAddressing, enableIPv6, enableIPv4 bool) {
@@ -1074,7 +1079,6 @@ func neighStateOk(n netlink.Neigh) (bool, bool) {
 }
 
 func (s *linuxPrivilegedIPv6OnlyTestSuite) TestArpPingHandling(c *check.C) {
-	c.Skip("Skipping due flakiness. See https://github.com/cilium/cilium/issues/22373 for more info")
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -1091,9 +1095,15 @@ func (s *linuxPrivilegedIPv6OnlyTestSuite) TestArpPingHandling(c *check.C) {
 
 	baseTimeOld, err := sysctl.Read(baseIPv6Time)
 	c.Assert(err, check.IsNil)
-	err = sysctl.Write(baseIPv6Time, fmt.Sprintf("%d", 2500))
+	err = sysctl.Write(baseIPv6Time, fmt.Sprintf("%d", baseTime))
 	c.Assert(err, check.IsNil)
 	defer func() { sysctl.Write(baseIPv6Time, baseTimeOld) }()
+
+	mcastNumOld, err := sysctl.Read(mcastNumIPv6)
+	c.Assert(err, check.IsNil)
+	err = sysctl.Write(mcastNumIPv6, fmt.Sprintf("%d", mcastNum))
+	c.Assert(err, check.IsNil)
+	defer func() { sysctl.Write(mcastNumIPv6, mcastNumOld) }()
 
 	// 1. Test whether another node in the same L2 subnet can be arpinged.
 	//    The other node is in the different netns reachable via the veth pair.
@@ -1356,7 +1366,7 @@ refetch2:
 				}
 			}
 			return false
-		}, 25*time.Second, 200*time.Millisecond)
+		}, 60*time.Second, 200*time.Millisecond)
 		c.Assert(err, check.IsNil)
 		c.Assert(found, check.Equals, true)
 	}
@@ -1887,7 +1897,6 @@ refetch11:
 }
 
 func (s *linuxPrivilegedIPv6OnlyTestSuite) TestArpPingHandlingForMultiDevice(c *check.C) {
-	c.Skip("Skipping due flakiness. See https://github.com/cilium/cilium/issues/22373 for more info")
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -1904,9 +1913,15 @@ func (s *linuxPrivilegedIPv6OnlyTestSuite) TestArpPingHandlingForMultiDevice(c *
 
 	baseTimeOld, err := sysctl.Read(baseIPv6Time)
 	c.Assert(err, check.IsNil)
-	err = sysctl.Write(baseIPv6Time, fmt.Sprintf("%d", 2500))
+	err = sysctl.Write(baseIPv6Time, fmt.Sprintf("%d", baseTime))
 	c.Assert(err, check.IsNil)
 	defer func() { sysctl.Write(baseIPv6Time, baseTimeOld) }()
+
+	mcastNumOld, err := sysctl.Read(mcastNumIPv6)
+	c.Assert(err, check.IsNil)
+	err = sysctl.Write(mcastNumIPv6, fmt.Sprintf("%d", mcastNum))
+	c.Assert(err, check.IsNil)
+	defer func() { sysctl.Write(mcastNumIPv6, mcastNumOld) }()
 
 	// 1. Test whether another node in the same L2 subnet can be arpinged.
 	//    Each node has two devices and the other node in the different netns
@@ -2262,9 +2277,15 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) TestArpPingHandling(c *check.C) {
 
 	baseTimeOld, err := sysctl.Read(baseIPv4Time)
 	c.Assert(err, check.IsNil)
-	err = sysctl.Write(baseIPv4Time, fmt.Sprintf("%d", 2500))
+	err = sysctl.Write(baseIPv4Time, fmt.Sprintf("%d", baseTime))
 	c.Assert(err, check.IsNil)
 	defer func() { sysctl.Write(baseIPv4Time, baseTimeOld) }()
+
+	mcastNumOld, err := sysctl.Read(mcastNumIPv4)
+	c.Assert(err, check.IsNil)
+	err = sysctl.Write(mcastNumIPv4, fmt.Sprintf("%d", mcastNum))
+	c.Assert(err, check.IsNil)
+	defer func() { sysctl.Write(mcastNumIPv4, mcastNumOld) }()
 
 	// 1. Test whether another node in the same L2 subnet can be arpinged.
 	//    The other node is in the different netns reachable via the veth pair.
@@ -2527,7 +2548,7 @@ refetch2:
 				}
 			}
 			return false
-		}, 25*time.Second, 200*time.Millisecond)
+		}, 60*time.Second, 200*time.Millisecond)
 		c.Assert(err, check.IsNil)
 		c.Assert(found, check.Equals, true)
 	}
@@ -3075,9 +3096,15 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) TestArpPingHandlingForMultiDevice(c *
 
 	baseTimeOld, err := sysctl.Read(baseIPv4Time)
 	c.Assert(err, check.IsNil)
-	err = sysctl.Write(baseIPv4Time, fmt.Sprintf("%d", 2500))
+	err = sysctl.Write(baseIPv4Time, fmt.Sprintf("%d", baseTime))
 	c.Assert(err, check.IsNil)
 	defer func() { sysctl.Write(baseIPv4Time, baseTimeOld) }()
+
+	mcastNumOld, err := sysctl.Read(mcastNumIPv4)
+	c.Assert(err, check.IsNil)
+	err = sysctl.Write(mcastNumIPv4, fmt.Sprintf("%d", mcastNum))
+	c.Assert(err, check.IsNil)
+	defer func() { sysctl.Write(mcastNumIPv4, mcastNumOld) }()
 
 	// 1. Test whether another node in the same L2 subnet can be arpinged.
 	//    Each node has two devices and the other node in the different netns

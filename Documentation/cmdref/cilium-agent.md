@@ -113,11 +113,12 @@ cilium-agent [flags]
       --enable-ipsec                                            Enable IPSec support
       --enable-ipsec-key-watcher                                Enable watcher for IPsec key. If disabled, a restart of the agent will be necessary on key rotations. (default true)
       --enable-ipv4                                             Enable IPv4 support (default true)
+      --enable-ipv4-big-tcp                                     Enable IPv4 BIG TCP option which increases device's maximum GRO/GSO limits for IPv4
       --enable-ipv4-egress-gateway                              Enable egress gateway for IPv4
       --enable-ipv4-fragment-tracking                           Enable IPv4 fragments tracking for L4-based lookups (default true)
       --enable-ipv4-masquerade                                  Masquerade IPv4 traffic from endpoints leaving the host (default true)
       --enable-ipv6                                             Enable IPv6 support (default true)
-      --enable-ipv6-big-tcp                                     Enable IPv6 BIG TCP option which increases device's maximum GRO/GSO limits
+      --enable-ipv6-big-tcp                                     Enable IPv6 BIG TCP option which increases device's maximum GRO/GSO limits for IPv6
       --enable-ipv6-masquerade                                  Masquerade IPv6 traffic from endpoints leaving the host (default true)
       --enable-ipv6-ndp                                         Enable IPv6 NDP support
       --enable-k8s                                              Enable the k8s clientset (default true)
@@ -127,6 +128,7 @@ cilium-agent [flags]
       --enable-k8s-terminating-endpoint                         Enable auto-detect of terminating endpoint condition (default true)
       --enable-l2-announcements                                 Enable L2 announcements
       --enable-l2-neigh-discovery                               Enables L2 neighbor discovery used by kube-proxy-replacement and IPsec (default true)
+      --enable-l2-pod-announcements                             Enable announcing Pod IPs with Gratuitous ARP
       --enable-l7-proxy                                         Enable L7 proxy for L7 policy enforcement (default true)
       --enable-local-node-route                                 Enable installation of the route which points the allocation prefix of the local node (default true)
       --enable-local-redirect-policy                            Enable Local Redirect Policy
@@ -181,6 +183,7 @@ cilium-agent [flags]
       --hubble-prefer-ipv6                                      Prefer IPv6 addresses for announcing nodes when both address types are available.
       --hubble-recorder-sink-queue-size int                     Queue size of each Hubble recorder sink (default 1024)
       --hubble-recorder-storage-path string                     Directory in which pcap files created via the Hubble Recorder API are stored (default "/var/run/cilium/pcaps")
+      --hubble-redact strings                                   List of Hubble redact options
       --hubble-skip-unknown-cgroup-ids                          Skip Hubble events with unknown cgroup ids (default true)
       --hubble-socket-path string                               Set hubble's socket path to listen for connections (default "/var/run/cilium/hubble.sock")
       --hubble-tls-cert-file string                             Path to the public key file for the Hubble server. The file must contain PEM encoded data.
@@ -235,6 +238,7 @@ cilium-agent [flags]
       --l2-announcements-lease-duration duration                Duration of inactivity after which a new leader is selected (default 15s)
       --l2-announcements-renew-deadline duration                Interval at which the leader renews a lease (default 5s)
       --l2-announcements-retry-period duration                  Timeout after a renew failure, before the next retry (default 2s)
+      --l2-pod-announcements-interface string                   Interface used for sending gratuitous arp messages
       --label-prefix-file string                                Valid label prefixes file path
       --labels strings                                          List of label prefixes used to determine identity of an endpoint
       --lib-dir string                                          Directory path to store runtime build environment (default "/var/lib/cilium")
@@ -243,6 +247,7 @@ cilium-agent [flags]
       --log-driver strings                                      Logging endpoints to use for example syslog
       --log-opt map                                             Log driver options for cilium-agent, configmap example for syslog driver: {"syslog.level":"info","syslog.facility":"local5","syslog.tag":"cilium-agent"}
       --log-system-load                                         Enable periodic logging of system load
+      --mesh-auth-enabled                                       Enable authentication processing & garbage collection (default true)
       --mesh-auth-expired-gc-interval duration                  Interval in which expired auth entries are attempted to be garbage collected (default 15m0s)
       --mesh-auth-mutual-listener-port int                      Port on which the Cilium Agent will perform mutual authentication handshakes between other Agents
       --mesh-auth-queue-size int                                Queue size for the auth manager (default 1024)

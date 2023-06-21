@@ -57,8 +57,6 @@ type DaemonSuite struct {
 	// as returned by policy.GetPolicyEnabled().
 	oldPolicyEnabled string
 
-	kvstoreInit bool
-
 	// Owners interface mock
 	OnGetPolicyRepository  func() *policy.Repository
 	OnGetNamedPorts        func() (npm types.NamedPortMultiMap)
@@ -136,7 +134,7 @@ func (epSync *dummyEpSyncher) DeleteK8sCiliumEndpointSync(e *endpoint.Endpoint) 
 }
 
 func (ds *DaemonSuite) SetUpSuite(c *C) {
-	testutils.IntegrationCheck(c)
+	testutils.IntegrationTest(c)
 }
 
 func (ds *DaemonSuite) SetUpTest(c *C) {
@@ -208,11 +206,6 @@ func (ds *DaemonSuite) TearDownTest(c *C) {
 		os.RemoveAll(option.Config.RunDir)
 	}
 
-	if ds.kvstoreInit {
-		kvstore.Client().DeletePrefix(ctx, kvstore.OperationalPath)
-		kvstore.Client().DeletePrefix(ctx, kvstore.BaseKeyPrefix)
-	}
-
 	// Restore the policy enforcement mode.
 	policy.SetPolicyEnabled(ds.oldPolicyEnabled)
 
@@ -229,13 +222,11 @@ type DaemonEtcdSuite struct {
 var _ = Suite(&DaemonEtcdSuite{})
 
 func (e *DaemonEtcdSuite) SetUpSuite(c *C) {
-	testutils.IntegrationCheck(c)
-
-	kvstore.SetupDummy("etcd")
-	e.DaemonSuite.kvstoreInit = true
+	testutils.IntegrationTest(c)
 }
 
 func (e *DaemonEtcdSuite) SetUpTest(c *C) {
+	kvstore.SetupDummy(c, "etcd")
 	e.DaemonSuite.SetUpTest(c)
 }
 
@@ -250,13 +241,11 @@ type DaemonConsulSuite struct {
 var _ = Suite(&DaemonConsulSuite{})
 
 func (e *DaemonConsulSuite) SetUpSuite(c *C) {
-	testutils.IntegrationCheck(c)
-
-	kvstore.SetupDummy("consul")
-	e.DaemonSuite.kvstoreInit = true
+	testutils.IntegrationTest(c)
 }
 
 func (e *DaemonConsulSuite) SetUpTest(c *C) {
+	kvstore.SetupDummy(c, "consul")
 	e.DaemonSuite.SetUpTest(c)
 }
 

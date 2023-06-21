@@ -4,7 +4,6 @@
 package auth
 
 import (
-	"context"
 	"fmt"
 	"runtime/pprof"
 	"time"
@@ -21,6 +20,7 @@ import (
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/maps/authmap"
+	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/signal"
 	"github.com/cilium/cilium/pkg/stream"
 )
@@ -31,7 +31,7 @@ import (
 // Actual authentication gets performed by an auth handler which is
 // responsible for the configured auth type on the corresponding policy.
 var Cell = cell.Module(
-	"auth-manager",
+	"auth",
 	"Authenticates requests as demanded by policy",
 
 	spire.Cell,
@@ -54,6 +54,7 @@ var Cell = cell.Module(
 		k8s.CiliumIdentityResource,
 	),
 	cell.Config(config{
+		MeshAuthEnabled:           true,
 		MeshAuthQueueSize:         1024,
 		MeshAuthExpiredGCInterval: 15 * time.Minute,
 	}),
@@ -61,11 +62,13 @@ var Cell = cell.Module(
 )
 
 type config struct {
+	MeshAuthEnabled           bool
 	MeshAuthQueueSize         int
 	MeshAuthExpiredGCInterval time.Duration
 }
 
 func (r config) Flags(flags *pflag.FlagSet) {
+	flags.Bool("mesh-auth-enabled", r.MeshAuthEnabled, "Enable authentication processing & garbage collection")
 	flags.Int("mesh-auth-queue-size", r.MeshAuthQueueSize, "Queue size for the auth manager")
 	flags.Duration("mesh-auth-expired-gc-interval", r.MeshAuthExpiredGCInterval, "Interval in which expired auth entries are attempted to be garbage collected")
 }
@@ -73,7 +76,9 @@ func (r config) Flags(flags *pflag.FlagSet) {
 type authManagerParams struct {
 	cell.In
 
+	Logger           logrus.FieldLogger
 	Lifecycle        hive.Lifecycle
+	JobRegistry      job.Registry
 	Config           config
 	IPCache          *ipcache.IPCache
 	AuthHandlers     []authHandler `group:"authHandlers"`
@@ -81,13 +86,17 @@ type authManagerParams struct {
 	SignalManager    signal.SignalManager
 	CiliumIdentities resource.Resource[*ciliumv2.CiliumIdentity]
 	CiliumNodes      resource.Resource[*ciliumv2.CiliumNode]
-	Logger           logrus.FieldLogger
-	JobRegistry      job.Registry
+	PolicyRepo       *policy.Repository
 }
 
 func newManager(params authManagerParams) error {
-	mapWriter := newAuthMapWriter(params.AuthMap)
-	mapCache := newAuthMapCache(mapWriter)
+	if !params.Config.MeshAuthEnabled {
+		params.Logger.Info("Authentication processing is disabled")
+		return nil
+	}
+
+	mapWriter := newAuthMapWriter(params.Logger, params.AuthMap)
+	mapCache := newAuthMapCache(params.Logger, mapWriter)
 
 	params.Lifecycle.Append(hive.Hook{
 		OnStart: func(hookContext hive.HookContext) error {
@@ -104,7 +113,7 @@ func newManager(params authManagerParams) error {
 		job.WithPprofLabels(pprof.Labels("cell", "auth")),
 	)
 
-	mgr, err := newAuthManager(params.AuthHandlers, mapCache, params.IPCache)
+	mgr, err := newAuthManager(params.Logger, params.AuthHandlers, mapCache, params.IPCache)
 	if err != nil {
 		return fmt.Errorf("failed to create auth manager: %w", err)
 	}
@@ -115,7 +124,7 @@ func newManager(params authManagerParams) error {
 
 	registerReAuthenticationJob(jobGroup, mgr, params.AuthHandlers)
 
-	mapGC := newAuthMapGC(mapCache, params.IPCache)
+	mapGC := newAuthMapGC(params.Logger, mapCache, params.IPCache, params.PolicyRepo)
 
 	registerGCJobs(jobGroup, mapGC, params)
 
@@ -149,24 +158,17 @@ func registerSignalAuthenticationJob(jobGroup job.Group, mgr *authManager, sm si
 func registerGCJobs(jobGroup job.Group, mapGC *authMapGarbageCollector, params authManagerParams) {
 	// Add identities based auth gc if k8s client is enabled
 	if params.CiliumIdentities != nil {
-		jobGroup.Add(job.Observer("auth identities gc",
-			mapGC.handleCiliumIdentityEvent,
-			stream.FromChannel(params.CiliumIdentities.Events(context.Background())),
-		))
+		jobGroup.Add(job.Observer[resource.Event[*ciliumv2.CiliumIdentity]]("auth identities gc", mapGC.handleCiliumIdentityEvent, params.CiliumIdentities))
 	}
 
 	// Add node based auth gc if k8s client is enabled
 	if params.CiliumNodes != nil {
-		jobGroup.Add(job.Observer("auth nodes gc",
-			mapGC.handleCiliumNodeEvent,
-			stream.FromChannel(params.CiliumNodes.Events(context.Background())),
-		))
+		jobGroup.Add(job.Observer[resource.Event[*ciliumv2.CiliumNode]]("auth nodes gc", mapGC.handleCiliumNodeEvent, params.CiliumNodes))
 	}
 
-	jobGroup.Add(job.Timer("auth expiration gc",
-		mapGC.CleanupExpiredEntries,
-		params.Config.MeshAuthExpiredGCInterval,
-	))
+	jobGroup.Add(job.Timer("auth policies gc", mapGC.cleanupEntriesWithoutAuthPolicy, params.Config.MeshAuthExpiredGCInterval))
+
+	jobGroup.Add(job.Timer("auth expiration gc", mapGC.cleanupExpiredEntries, params.Config.MeshAuthExpiredGCInterval))
 }
 
 type authHandlerResult struct {

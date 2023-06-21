@@ -64,10 +64,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # renovate: datasource=github-releases depName=kubernetes-sigs/kind
   kind_version: v0.17.0
   k8s_version: v1.23.17
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.14.5
+  cilium_cli_version: v0.14.7
   cilium_cli_ci_version:
   clusterName1: cluster1-${{ github.run_id }}
   clusterName2: cluster2-${{ github.run_id }}
@@ -92,7 +93,7 @@ jobs:
       # paths-filter to work.
       - name: Checkout code
         if: ${{ github.event.issue.pull_request }}
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           persist-credentials: false
       - name: Retrieve pull request's base and head
@@ -258,7 +259,7 @@ jobs:
 
     steps:
     - name: Checkout GitHub main
-      uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
       with:
         ref: ${{ github.event.repository.default_branch }}
         persist-credentials: false
@@ -357,7 +358,7 @@ jobs:
         echo kind_svc_cidr_2=${KIND_SVC_CIDR_2} >> $GITHUB_OUTPUT
 
     - name: Install Cilium CLI
-      uses: cilium/cilium-cli@d610d6e2774e29aef9565bad935e3b4943d541af # v0.14.5
+      uses: cilium/cilium-cli@9fcfef089e5b7dd3212f2eac21ba8cfae6f05cca # v0.14.7
       with:
         release-version: ${{ env.cilium_cli_version }}
         ci-version: ${{ env.cilium_cli_ci_version }}
@@ -430,7 +431,7 @@ jobs:
     # in a Kubernetes cluster, so it won't have access to the privileged
     # environment from there.
     - name: Checkout SHA
-      uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
       with:
         ref: ${{ needs.setup-report.outputs.sha }}
         persist-credentials: false

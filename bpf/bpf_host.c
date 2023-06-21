@@ -170,7 +170,7 @@ handle_ipv6(struct __ctx_buff *ctx, __u32 secctx __maybe_unused,
 #ifdef ENABLE_NODEPORT
 	if (!from_host) {
 		if (!ctx_skip_nodeport(ctx)) {
-			ret = nodeport_lb6(ctx, secctx, ext_err);
+			ret = nodeport_lb6(ctx, ip6, secctx, ext_err);
 			/* nodeport_lb6() returns with TC_ACT_REDIRECT for
 			 * traffic to L7 LB. Policy enforcement needs to take
 			 * place after L7 LB has processed the packet, so we
@@ -407,13 +407,13 @@ tail_handle_ipv6(struct __ctx_buff *ctx, const bool from_host)
 	if (ret == CTX_ACT_OK) {
 		ctx_store_meta(ctx, CB_SRC_LABEL, proxy_identity);
 		if (from_host)
-			invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
-					   CILIUM_CALL_IPV6_CONT_FROM_HOST,
-					   tail_handle_ipv6_cont_from_host);
+			ret = invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
+						 CILIUM_CALL_IPV6_CONT_FROM_HOST,
+						 tail_handle_ipv6_cont_from_host);
 		else
-			invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
-					   CILIUM_CALL_IPV6_CONT_FROM_NETDEV,
-					   tail_handle_ipv6_cont_from_netdev);
+			ret = invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
+						 CILIUM_CALL_IPV6_CONT_FROM_NETDEV,
+						 tail_handle_ipv6_cont_from_netdev);
 	}
 
 	/* Catch errors from both handle_ipv6 and invoke_tailcall_if here. */
@@ -822,13 +822,13 @@ tail_handle_ipv4(struct __ctx_buff *ctx, __u32 ipcache_srcid, const bool from_ho
 	if (ret == CTX_ACT_OK) {
 		ctx_store_meta(ctx, CB_SRC_LABEL, proxy_identity);
 		if (from_host)
-			invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
-					   CILIUM_CALL_IPV4_CONT_FROM_HOST,
-					   tail_handle_ipv4_cont_from_host);
+			ret = invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
+						 CILIUM_CALL_IPV4_CONT_FROM_HOST,
+						 tail_handle_ipv4_cont_from_host);
 		else
-			invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
-					   CILIUM_CALL_IPV4_CONT_FROM_NETDEV,
-					   tail_handle_ipv4_cont_from_netdev);
+			ret = invoke_tailcall_if(is_defined(ENABLE_HOST_FIREWALL),
+						 CILIUM_CALL_IPV4_CONT_FROM_NETDEV,
+						 tail_handle_ipv4_cont_from_netdev);
 	}
 
 	/* Catch errors from both handle_ipv4 and invoke_tailcall_if here. */
@@ -844,10 +844,10 @@ int tail_handle_ipv4_from_host(struct __ctx_buff *ctx)
 {
 	__u32 ipcache_srcid = 0;
 
-#if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_MASQUERADE)
+#if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_MASQUERADE_IPV4)
 	ipcache_srcid = ctx_load_meta(ctx, CB_IPCACHE_SRC_LABEL);
 	ctx_store_meta(ctx, CB_IPCACHE_SRC_LABEL, 0);
-#endif
+#endif /* defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_MASQUERADE_IPV4) */
 
 	return tail_handle_ipv4(ctx, ipcache_srcid, true);
 }
@@ -1148,13 +1148,13 @@ do_netdev(struct __ctx_buff *ctx, __u16 proto, const bool from_host)
 					      from_host);
 		ctx_store_meta(ctx, CB_SRC_LABEL, identity);
 		if (from_host) {
-# if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_MASQUERADE)
+# if defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_MASQUERADE_IPV4)
 			/* If we don't rely on BPF-based masquerading, we need
 			 * to pass the srcid from ipcache to host firewall. See
 			 * comment in ipv4_host_policy_egress() for details.
 			 */
 			ctx_store_meta(ctx, CB_IPCACHE_SRC_LABEL, ipcache_srcid);
-# endif
+# endif /* defined(ENABLE_HOST_FIREWALL) && !defined(ENABLE_MASQUERADE_IPV4) */
 			ep_tail_call(ctx, CILIUM_CALL_IPV4_FROM_HOST);
 		} else {
 			ep_tail_call(ctx, CILIUM_CALL_IPV4_FROM_NETDEV);
@@ -1167,7 +1167,7 @@ do_netdev(struct __ctx_buff *ctx, __u16 proto, const bool from_host)
 		 */
 		return send_drop_notify_error(ctx, identity, DROP_MISSED_TAIL_CALL,
 					      CTX_ACT_OK, METRIC_INGRESS);
-#endif
+#endif /* ENABLE_IPV4 */
 	default:
 #ifdef ENABLE_HOST_FIREWALL
 		ret = send_drop_notify_error(ctx, identity, DROP_UNKNOWN_L3,
@@ -1308,7 +1308,7 @@ handle_srv6(struct __ctx_buff *ctx)
  * - L2 announcements are enabled, or
  * - WireGuard's host-to-host encryption and BPF NodePort are enabled
  */
-__section("from-netdev")
+__section_entry
 int cil_from_netdev(struct __ctx_buff *ctx)
 {
 	__u32 __maybe_unused src_id = 0;
@@ -1364,7 +1364,7 @@ drop_err:
  * from-host is attached as a tc egress filter to the node's 'cilium_host'
  * interface if present.
  */
-__section("from-host")
+__section_entry
 int cil_from_host(struct __ctx_buff *ctx)
 {
 	/* Traffic from the host ns going through cilium_host device must
@@ -1380,7 +1380,7 @@ int cil_from_host(struct __ctx_buff *ctx)
  * - the host firewall is enabled, or
  * - BPF NodePort is enabled
  */
-__section("to-netdev")
+__section_entry
 int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 {
 	struct trace_ctx trace = {
@@ -1522,7 +1522,7 @@ out:
  * to-host is attached as a tc ingress filter to both the 'cilium_host' and
  * 'cilium_net' devices if present.
  */
-__section("to-host")
+__section_entry
 int cil_to_host(struct __ctx_buff *ctx)
 {
 	__u32 magic = ctx_load_meta(ctx, CB_PROXY_MAGIC);
@@ -1667,20 +1667,20 @@ to_host_from_lxc(struct __ctx_buff *ctx __maybe_unused)
 # endif
 # ifdef ENABLE_IPV6
 	case bpf_htons(ETH_P_IPV6):
-		invoke_tailcall_if(__or(__and(is_defined(ENABLE_IPV4),
-					      is_defined(ENABLE_IPV6)),
-					is_defined(DEBUG)),
-				   CILIUM_CALL_IPV6_TO_HOST_POLICY_ONLY,
-				   tail_ipv6_host_policy_ingress);
+		ret = invoke_tailcall_if(__or(__and(is_defined(ENABLE_IPV4),
+						    is_defined(ENABLE_IPV6)),
+					      is_defined(DEBUG)),
+					 CILIUM_CALL_IPV6_TO_HOST_POLICY_ONLY,
+					 tail_ipv6_host_policy_ingress);
 		break;
 # endif
 # ifdef ENABLE_IPV4
 	case bpf_htons(ETH_P_IP):
-		invoke_tailcall_if(__or(__and(is_defined(ENABLE_IPV4),
-					      is_defined(ENABLE_IPV6)),
-					is_defined(DEBUG)),
-				   CILIUM_CALL_IPV4_TO_HOST_POLICY_ONLY,
-				   tail_ipv4_host_policy_ingress);
+		ret = invoke_tailcall_if(__or(__and(is_defined(ENABLE_IPV4),
+						    is_defined(ENABLE_IPV6)),
+					      is_defined(DEBUG)),
+					 CILIUM_CALL_IPV4_TO_HOST_POLICY_ONLY,
+					 tail_ipv4_host_policy_ingress);
 		break;
 # endif
 	default:

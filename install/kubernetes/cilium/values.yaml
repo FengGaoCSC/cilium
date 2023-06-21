@@ -370,6 +370,13 @@ l2announcements:
   # -- The timeout between retries if renewal fails
   # leaseRetryPeriod: 2s
 
+# -- Configure L2 pod announcements
+l2podAnnouncements:
+  # -- Enable L2 pod announcements
+  enabled: false
+  # -- Interface used for sending Gratuitous ARP pod announcements
+  interface: "eth0"
+
 # -- Configure BGP
 bgp:
   # -- Enable BGP support inside Cilium; embeds a new ConfigMap for BGP inside
@@ -653,6 +660,19 @@ enableK8sEventHandover: false
 # -- Enable CiliumEndpointSlice feature.
 enableCiliumEndpointSlice: false
 
+envoyConfig:
+  # -- Enable CiliumEnvoyConfig CRD
+  # CiliumEnvoyConfig CRD can also be implicitly enabled by other options.
+  enabled: false
+
+  # -- SecretsNamespace is the namespace in which envoy SDS will retrieve secrets from.
+  secretsNamespace:
+    # -- Create secrets namespace for CiliumEnvoyConfig CRDs.
+    create: true
+
+    # -- The name of the secret namespace to which Cilium agents are given read access.
+    name: cilium-secrets
+
 ingressController:
   # -- Enable cilium ingress controller
   # This will automatically set enable-envoy-config as well.
@@ -675,6 +695,12 @@ ingressController:
   # -- IngressLBAnnotations are the annotation prefixes, which are used to filter annotations to propagate
   # from Ingress to the Load Balancer service
   ingressLBAnnotationPrefixes: ['service.beta.kubernetes.io', 'service.kubernetes.io', 'cloud.google.com']
+
+  # -- Default secret namespace for ingresses without .spec.tls[].secretName set.
+  defaultSecretNamespace:
+
+  # -- Default secret name for ingresses without .spec.tls[].secretName set.
+  defaultSecretName:
 
   # -- SecretsNamespace is the namespace in which envoy SDS will retrieve TLS secrets from.
   secretsNamespace:
@@ -941,7 +967,7 @@ hubble:
     #
     # You can specify the list of metrics from the helm CLI:
     #
-    #   --set metrics.enabled="{dns:query;ignoreAAAA,drop,tcp,flow,icmp,http}"
+    #   --set hubble.metrics.enabled="{dns:query;ignoreAAAA,drop,tcp,flow,icmp,http}"
     #
     enabled: ~
     # -- Enables exporting hubble metrics in OpenMetrics format.
@@ -981,6 +1007,18 @@ hubble:
 
   # -- Unix domain socket path to listen to when Hubble is enabled.
   socketPath: /var/run/cilium/hubble.sock
+
+  # -- Configures the list of redact options for Hubble.
+  # Example:
+  #
+  #   redact:
+  #   - http-url-query
+  #
+  # You can specify the list of options from the helm CLI:
+  #
+  #   --set hubble.redact="{http-url-query}"
+  #
+  redact: ~
 
   # -- An additional address for Hubble to listen to.
   # Set this field ":4244" if you are enabling Hubble Relay, as it assumes that
@@ -1452,8 +1490,18 @@ ipam:
     clusterPoolIPv6PodCIDRList: ["fd00::/104"]
     # -- IPv6 CIDR mask size to delegate to individual nodes for IPAM.
     clusterPoolIPv6MaskSize: 120
-    # -- IP pools defined for the multi-pool IPAM mode.
-    multiPoolMap: {}
+    # -- IP pools to auto-create in multi-pool IPAM mode.
+    autoCreateCiliumPodIPPools: {}
+      # default:
+      #   ipv4:
+      #     cidrs:
+      #       - 10.10.0.0/8
+      #     maskSize: 24
+      # other:
+      #   ipv6:
+      #     cidrs:
+      #       - fd00:100::/80
+      #     maskSize: 96
     # -- The maximum burst size when rate limiting access to external APIs.
     # Also known as the token bucket capacity.
     # @default -- `20`
@@ -1471,6 +1519,7 @@ ipMasqAgent:
 # config:
   # nonMasqueradeCIDRs: []
   # masqLinkLocal: false
+  # masqLinkLocalIPv6: false
 
 # iptablesLockTimeout defines the iptables "--wait" option when invoked from Cilium.
 # iptablesLockTimeout: "5s"
@@ -1561,8 +1610,11 @@ maglev: {}
 # -- Enables masquerading of IPv4 traffic leaving the node from endpoints.
 enableIPv4Masquerade: true
 
-# -- Enables IPv6 BIG TCP support which increases maximum GSO/GRO limits for nodes and pods
+# -- Enables IPv6 BIG TCP support which increases maximum IPv6 GSO/GRO limits for nodes and pods
 enableIPv6BIGTCP: false
+
+# -- Enables IPv4 BIG TCP support which increases maximum IPv4 GSO/GRO limits for nodes and pods
+enableIPv4BIGTCP: false
 
 # -- Enables masquerading of IPv6 traffic leaving the node from endpoints.
 enableIPv6Masquerade: true
@@ -1655,7 +1707,7 @@ loadBalancer:
     #
     # Applicable values:
     #   - envoy: Enable L7 load balancing via envoy proxy. This will automatically set enable-envoy-config as well.
-    #   - disabled: Disable L7 load balancing.
+    #   - disabled: Disable L7 load balancing by way of service annotation.
     backend: disabled
     # -- List of ports from service to be automatically redirected to above backend.
     # Any service exposing one of these ports will be automatically redirected.
@@ -1725,6 +1777,9 @@ prometheus:
         replacement: ${1}
     # -- Metrics relabeling configs for the ServiceMonitor cilium-agent
     metricRelabelings: ~
+    # -- Set to `true` and helm will not check for monitoring.coreos.com/v1 CRDs before deploying
+    trustCRDsExist: false
+
   # -- Metrics that should be enabled or disabled from the default metric list.
   # The list is expected to be separated by a space. (+metric_foo to enable
   # metric_foo , -metric_bar to disable metric_bar).
@@ -1753,24 +1808,24 @@ proxy:
   # container image names
   sidecarImageRegex: "cilium/istio_proxy"
 
-# -- Configure Cilium Envoy options.
+# Configure Cilium Envoy options.
 envoy:
-  # Enable Envoy Proxy in standalone DaemonSet.
+  # -- Enable Envoy Proxy in standalone DaemonSet.
   enabled: false
 
   log:
-    # The format string to use for laying out the log message metadata of Envoy.
+    # -- The format string to use for laying out the log message metadata of Envoy.
     format: "[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v"
-    # Path to a separate Envoy log file, if any. Defaults to /dev/stdout.
+    # -- Path to a separate Envoy log file, if any. Defaults to /dev/stdout.
     path: ""
 
-  # Time in seconds after which a TCP connection attempt times out
+  # -- Time in seconds after which a TCP connection attempt times out
   connectTimeoutSeconds: 2
-  # ProxyMaxRequestsPerConnection specifies the max_requests_per_connection setting for Envoy
+  # -- ProxyMaxRequestsPerConnection specifies the max_requests_per_connection setting for Envoy
   maxRequestsPerConnection: 0
-  # Set Envoy HTTP option max_connection_duration seconds. Default 0 (disable)
+  # -- Set Envoy HTTP option max_connection_duration seconds. Default 0 (disable)
   maxConnectionDurationSeconds: 0
-  # Set Envoy upstream HTTP idle connection timeout seconds.
+  # -- Set Envoy upstream HTTP idle connection timeout seconds.
   # Does not apply to connections with pending requests. Default 60s
   idleTimeoutDurationSeconds: 60
 
@@ -1813,6 +1868,8 @@ envoy:
   # -- TCP port for the health API.
   healthPort: 9878
 
+  # -- cilium-envoy update strategy
+  # ref: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/#updating-a-daemonset
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
@@ -1913,6 +1970,7 @@ envoy:
   dnsPolicy: ~
 
   prometheus:
+    # -- Enable prometheus metrics for cilium-envoy
     enabled: true
     serviceMonitor:
       # -- Enable service monitors.
@@ -1935,6 +1993,7 @@ envoy:
           replacement: ${1}
       # -- Metrics relabeling configs for the ServiceMonitor cilium-envoy
       metricRelabelings: ~
+    # -- Serve prometheus metrics for cilium-envoy on the configured port
     port: "9964"
 
 # -- Enable use of the remote node identity.
@@ -2039,7 +2098,7 @@ tunnelPort: 0
 MTU: 0
 
 # -- Disable the usage of CiliumEndpoint CRD.
-disableEndpointCRD: "false"
+disableEndpointCRD: false
 
 wellKnownIdentities:
   # -- Enable the use of well-known identities.
@@ -2633,6 +2692,46 @@ clustermesh:
         #     cpu: 100m
         #     memory: 100Mi
 
+    kvstoremesh:
+      # -- Enable KVStoreMesh. KVStoreMesh caches the information retrieved
+      # from the remote clusters in the local etcd instance.
+      enabled: false
+
+      # -- KVStoreMesh image.
+      image:
+        override: ~
+        repository: "quay.io/isovalent-dev/kvstoremesh-ci"
+        tag: "latest"
+        # kvstoremesh-digest
+        digest: ""
+        useDigest: false
+        pullPolicy: "Always"
+
+      # -- Additional KVStoreMesh arguments.
+      extraArgs: []
+
+      # -- Additional KVStoreMesh environment variables.
+      extraEnv: []
+
+      # -- Resource requests and limits for the KVStoreMesh container
+      resources: {}
+        # requests:
+        #   cpu: 100m
+        #   memory: 64Mi
+        # limits:
+        #   cpu: 1000m
+        #   memory: 1024M
+
+      # -- Additional KVStoreMesh volumeMounts.
+      extraVolumeMounts: []
+
+      # -- KVStoreMesh Security context
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+
     service:
       # -- The type of service used for apiserver access.
       type: NodePort
@@ -2844,9 +2943,15 @@ clustermesh:
     # clustermesh-apiserver Prometheus metrics configuration
     metrics:
       # -- Enables exporting apiserver metrics in OpenMetrics format.
-      enabled: false
+      enabled: true
       # -- Configure the port the apiserver metric server listens on.
       port: 9962
+
+      kvstoremesh:
+        # -- Enables exporting KVStoreMesh metrics in OpenMetrics format.
+        enabled: true
+         # -- Configure the port the KVStoreMesh metric server listens on.
+        port: 9964
 
       etcd:
         # -- Enables exporting etcd metrics in OpenMetrics format.
@@ -2874,6 +2979,14 @@ clustermesh:
         relabelings: ~
         # -- Metrics relabeling configs for the ServiceMonitor clustermesh-apiserver (apiserver metrics)
         metricRelabelings: ~
+
+        kvstoremesh:
+          # -- Interval for scrape metrics (KVStoreMesh metrics)
+          interval: "10s"
+          # -- Relabeling configs for the ServiceMonitor clustermesh-apiserver (KVStoreMesh metrics)
+          relabelings: ~
+          # -- Metrics relabeling configs for the ServiceMonitor clustermesh-apiserver (KVStoreMesh metrics)
+          metricRelabelings: ~
 
         etcd:
           # -- Interval for scrape metrics (etcd metrics)
@@ -2950,6 +3063,16 @@ sctp:
 
 # Configuration for types of authentication for Cilium
 authentication:
+  # -- Enable authentication processing and garbage collection.
+  # Note that if disabled, policy enforcement will still block requests that require authentication.
+  # But the resulting authentication requests for these requests will not be processed, therefore the requests not be allowed.
+  enabled: true
+  # -- Buffer size of the channel Cilium uses to receive authentication events from the signal map.
+  queueSize: 1024
+  # -- Buffer size of the channel Cilium uses to receive certificate expiration events from auth handlers.
+  rotatedIdentitiesQueueSize: 1024
+    # -- Interval for garbage collection of expired auth map entries.
+  expiredGCInterval: "15m0s"
   # Configuration for Cilium's service-to-service mutual authentication using TLS handshakes.
   # Note that this is not full mTLS support without also enabling encryption of some form.
   # Current encryption options are Wireguard or IPSec, configured in encryption block above.
@@ -2960,14 +3083,14 @@ authentication:
     spire:
       # -- Enable SPIRE integration
       enabled: false
-      # -- Settings to control the SPIRE installation and configuration
+      # Settings to control the SPIRE installation and configuration
       install:
         # -- Enable SPIRE installation.
         # This will only take effect only if authentication.mutual.spire.enabled is true
         enabled: false
         # -- SPIRE namespace to install into
         namespace: cilium-spire
-        # -- SPIRE agent configuration
+        # SPIRE agent configuration
         agent:
           # -- SPIRE agent image
           image: ghcr.io/spiffe/spire-agent:1.6.3@sha256:8eef9857bf223181ecef10d9bbcd2f7838f3689e9bd2445bede35066a732e823
@@ -2994,18 +3117,25 @@ authentication:
           annotations: {}
           # -- SPIRE server labels
           labels: {}
-          # -- SPIRE server service configuration
+          # SPIRE server service configuration
           service:
+            # -- Service type for the SPIRE server service
             type: ClusterIP
+            # -- Annotations to be added to the SPIRE server service
             annotations: {}
+            # -- Labels to be added to the SPIRE server service
             labels: {}
-          # -- SPIRE server datastorage configuration
+          # SPIRE server datastorage configuration
           dataStorage:
+            # -- Enable SPIRE server data storage
             enabled: true
+            # -- Size of the SPIRE server data storage
             size: 1Gi
+            # -- Access mode of the SPIRE server data storage
             accessMode: ReadWriteOnce
+            # -- StorageClass of the SPIRE server data storage
             storageClass: null
-          # -- SPIRE CA configuration
+          # SPIRE CA configuration
           ca:
             # -- SPIRE CA key type
             # AWS requires the use of RSA. EC cryptography is not supported
@@ -3015,8 +3145,13 @@ authentication:
               country: "US"
               organization: "SPIRE"
               commonName: "Cilium SPIRE CA"
-      # -- SPIRE server address
-      serverAddress: spire-server.cilium-spire.svc:8081
+      # -- SPIRE server address used by Cilium Operator
+      #
+      # If k8s Service DNS along with port number is used (e.g. <service-name>.<namespace>.svc(.*):<port-number> format),
+      # Cilium Operator will resolve its address by looking up the clusterIP from Service resource.
+      #
+      # Example values: 10.0.0.1:8081, spire-server.cilium-spire.svc:8081
+      serverAddress: ~
       # -- SPIFFE trust domain to use for fetching certificates
       trustDomain: spiffe.cilium
       # -- SPIRE socket path where the SPIRE delegated api agent is listening

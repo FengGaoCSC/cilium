@@ -319,6 +319,23 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 	}
 	args[initArgMode] = string(mode)
 
+	var nodeIPv4, nodeIPv6 net.IP
+	args[initArgIPv4NodeIP] = "<nil>"
+	args[initArgIPv6NodeIP] = "<nil>"
+	if option.Config.EnableIPv4 {
+		nodeIPv4 = node.GetInternalIPv4Router()
+		args[initArgIPv4NodeIP] = nodeIPv4.String()
+	}
+	if option.Config.EnableIPv6 {
+		nodeIPv6 = node.GetIPv6Router()
+		args[initArgIPv6NodeIP] = nodeIPv6.String()
+		// Docker <17.05 has an issue which causes IPv6 to be disabled in the initns for all
+		// interface (https://github.com/docker/libnetwork/issues/1720)
+		// Enable IPv6 for now
+		sysSettings = append(sysSettings,
+			sysctl.Setting{Name: "net.ipv6.conf.all.disable_ipv6", Val: "0", IgnoreErr: false})
+	}
+
 	// Datapath initialization
 	hostDev1, hostDev2, err := SetupBaseDevice(deviceMTU)
 	if err != nil {
@@ -326,6 +343,21 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 	}
 	args[initArgHostDev1] = hostDev1.Attrs().Name
 	args[initArgHostDev2] = hostDev2.Attrs().Name
+
+	if option.Config.IPAM == ipamOption.IPAMENI {
+		var err error
+		if sysSettings, err = addENIRules(sysSettings, o.Datapath().LocalNodeAddressing()); err != nil {
+			return fmt.Errorf("unable to install ip rule for ENI multi-node NodePort: %w", err)
+		}
+	}
+
+	// Any code that relies on sysctl settings being applied needs to be called after this.
+	sysctl.ApplySettings(sysSettings)
+
+	// add internal ipv4 and ipv6 addresses to cilium_host
+	if err := addHostDeviceAddr(hostDev1, nodeIPv4, nodeIPv6); err != nil {
+		return fmt.Errorf("failed to add internal IP address to %s: %w", hostDev1.Attrs().Name, err)
+	}
 
 	if err := l.writeNodeConfigHeader(o); err != nil {
 		log.WithError(err).Error("Unable to write node config header")
@@ -358,23 +390,6 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 
 	args[initArgLib] = "<nil>"
 	args[initArgRundir] = option.Config.StateDir
-
-	if option.Config.EnableIPv4 {
-		args[initArgIPv4NodeIP] = node.GetInternalIPv4Router().String()
-	} else {
-		args[initArgIPv4NodeIP] = "<nil>"
-	}
-
-	if option.Config.EnableIPv6 {
-		args[initArgIPv6NodeIP] = node.GetIPv6Router().String()
-		// Docker <17.05 has an issue which causes IPv6 to be disabled in the initns for all
-		// interface (https://github.com/docker/libnetwork/issues/1720)
-		// Enable IPv6 for now
-		sysSettings = append(sysSettings,
-			sysctl.Setting{Name: "net.ipv6.conf.all.disable_ipv6", Val: "0", IgnoreErr: false})
-	} else {
-		args[initArgIPv6NodeIP] = "<nil>"
-	}
 
 	args[initArgMTU] = fmt.Sprintf("%d", deviceMTU)
 
@@ -433,15 +448,6 @@ func (l *Loader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwner, 
 		logfields.BPFInsnSet:     args[initBPFCPU],
 		logfields.BPFClockSource: clockSource[option.Config.ClockSource],
 	}).Info("Setting up BPF datapath")
-
-	if option.Config.IPAM == ipamOption.IPAMENI {
-		var err error
-		if sysSettings, err = addENIRules(sysSettings, o.Datapath().LocalNodeAddressing()); err != nil {
-			return fmt.Errorf("unable to install ip rule for ENI multi-node NodePort: %w", err)
-		}
-	}
-
-	sysctl.ApplySettings(sysSettings)
 
 	if option.Config.InstallIptRules && option.Config.EnableL7Proxy {
 		args[initArgProxyRule] = "true"

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cilium/ebpf"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/maps"
 
@@ -24,18 +26,18 @@ func Test_newAuthManager_clashingAuthHandlers(t *testing.T) {
 		&alwaysFailAuthHandler{},
 	}
 
-	am, err := newAuthManager(authHandlers, nil, nil)
+	am, err := newAuthManager(logrus.New(), authHandlers, nil, nil)
 	assert.ErrorContains(t, err, "multiple handlers for auth type: test-always-fail")
 	assert.Nil(t, am)
 }
 
 func Test_newAuthManager(t *testing.T) {
 	authHandlers := []authHandler{
-		&alwaysPassAuthHandler{},
+		newAlwaysPassAuthHandler(logrus.New()),
 		&fakeAuthHandler{},
 	}
 
-	am, err := newAuthManager(authHandlers, nil, nil)
+	am, err := newAuthManager(logrus.New(), authHandlers, nil, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, am)
 
@@ -90,7 +92,8 @@ func Test_authManager_authenticate(t *testing.T) {
 				entries: map[authKey]authInfo{},
 			}
 			am, err := newAuthManager(
-				[]authHandler{&alwaysFailAuthHandler{}, &alwaysPassAuthHandler{}},
+				logrus.New(),
+				[]authHandler{&alwaysFailAuthHandler{}, newAlwaysPassAuthHandler(logrus.New())},
 				authMap,
 				newFakeIPCache(map[uint16]string{
 					2: "172.18.0.2",
@@ -109,11 +112,9 @@ func Test_authManager_authenticate(t *testing.T) {
 }
 
 func Test_authManager_handleAuthRequest(t *testing.T) {
-	authHandlers := []authHandler{
-		&alwaysPassAuthHandler{},
-	}
+	authHandlers := []authHandler{newAlwaysPassAuthHandler(logrus.New())}
 
-	am, err := newAuthManager(authHandlers, nil, nil)
+	am, err := newAuthManager(logrus.New(), authHandlers, nil, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, am)
 
@@ -130,14 +131,12 @@ func Test_authManager_handleAuthRequest(t *testing.T) {
 }
 
 func Test_authManager_handleCertificateRotationEvent_Error(t *testing.T) {
-	authHandlers := []authHandler{
-		&alwaysPassAuthHandler{},
-	}
+	authHandlers := []authHandler{newAlwaysPassAuthHandler(logrus.New())}
 	aMap := &fakeAuthMap{
 		failGet: true,
 	}
 
-	am, err := newAuthManager(authHandlers, aMap, nil)
+	am, err := newAuthManager(logrus.New(), authHandlers, aMap, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, am)
 
@@ -146,9 +145,7 @@ func Test_authManager_handleCertificateRotationEvent_Error(t *testing.T) {
 }
 
 func Test_authManager_handleCertificateRotationEvent(t *testing.T) {
-	authHandlers := []authHandler{
-		&alwaysPassAuthHandler{},
-	}
+	authHandlers := []authHandler{newAlwaysPassAuthHandler(logrus.New())}
 	aMap := &fakeAuthMap{
 		entries: map[authKey]authInfo{
 			{localIdentity: 1, remoteIdentity: 2, remoteNodeID: 1, authType: 100}: {expiration: time.Now()},
@@ -157,7 +154,7 @@ func Test_authManager_handleCertificateRotationEvent(t *testing.T) {
 		},
 	}
 
-	am, err := newAuthManager(authHandlers, aMap, nil)
+	am, err := newAuthManager(logrus.New(), authHandlers, aMap, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, am)
 
@@ -188,14 +185,14 @@ func (r *fakeIPCache) GetNodeIP(id uint16) string {
 	return r.nodeIdMappings[id]
 }
 
-func (r *fakeIPCache) AllocateNodeID(hostIP net.IP) uint16 {
+func (r *fakeIPCache) GetNodeID(nodeIP net.IP) (uint16, bool) {
 	for id, ip := range r.nodeIdMappings {
-		if ip == hostIP.String() {
-			return id
+		if ip == nodeIP.String() {
+			return id, true
 		}
 	}
 
-	return 9999
+	return 0, false
 }
 
 // Fake AuthHandler
@@ -225,6 +222,10 @@ type fakeAuthMap struct {
 func (r *fakeAuthMap) Delete(key authKey) error {
 	if r.failDelete {
 		return errors.New("failed to delete entry")
+	}
+
+	if _, ok := r.entries[key]; !ok {
+		return ebpf.ErrKeyNotExist
 	}
 
 	delete(r.entries, key)

@@ -121,6 +121,9 @@ const (
 	// NextHop is an IPV4 or IPv6 address for the next hop
 	NextHop = "nextHop"
 
+	// Address is an IPV4, IPv6 or FQDN address
+	Address = "address"
+
 	// IPAddr is an IPV4 or IPv6 address
 	IPAddr = "ipAddr"
 
@@ -726,4 +729,7 @@ const (
 
 	// Value identifies a generic value (e.g., of a key/value pair).
 	Value = "value"
+
+	// State is the state of an individual component (apiserver, kvstore etc)
+	State = "state"
 )

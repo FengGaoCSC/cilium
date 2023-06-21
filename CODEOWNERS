@@ -110,7 +110,6 @@
 # - @cilium/ebpf-lib-maintainers
 # - @cilium/hubble-maintainers
 # - @cilium/image-tools-maintainers
-# - @cilium/iproute2-maintainers
 # - @cilium/metallb-maintainers
 # - @cilium/openshift-terraform-maintainers
 # - @cilium/proxy-maintainers
@@ -270,7 +269,6 @@ Makefile* @cilium/build
 /daemon/cmd/metrics.go @cilium/metrics
 /daemon/cmd/policy* @cilium/sig-policy
 /daemon/cmd/prefilter.go @cilium/sig-datapath
-/daemon/cmd/proxy.go @cilium/proxy
 /daemon/cmd/state.go @cilium/endpoint
 /daemon/cmd/cells*.go @cilium/sig-foundations
 /Documentation/ @cilium/docs-structure
@@ -292,6 +290,7 @@ Makefile* @cilium/build
 /Documentation/conf.py @cilium/docs-structure
 /Documentation/configuration/index.rst @cilium/docs-structure
 /Documentation/contributing/ @cilium/contributing @cilium/docs-structure
+/Documentation/crdlist.rst
 /Documentation/Dockerfile @cilium/docs-structure
 /Documentation/gettingstarted/demo.rst @cilium/docs-structure
 /Documentation/gettingstarted/gettinghelp.rst @cilium/contributing @cilium/docs-structure
@@ -361,6 +360,7 @@ Makefile* @cilium/build
 /install/kubernetes/ @cilium/sig-k8s @cilium/helm
 /install/kubernetes/cilium/templates/hubble* @cilium/sig-k8s @cilium/helm @cilium/sig-hubble
 jenkinsfiles @cilium/ci-structure
+/kvstoremesh @cilium/sig-clustermesh
 /LICENSE @cilium/tophat
 /MAINTAINERS.md @cilium/contributing
 /netlify.toml @cilium/ci-structure
@@ -469,6 +469,7 @@ jenkinsfiles @cilium/ci-structure
 /pkg/promise @cilium/sig-foundations
 /pkg/proxy/ @cilium/proxy
 /pkg/proxy/accesslog @cilium/api
+/pkg/rate/metrics @cilium/metrics
 /pkg/recorder @cilium/sig-datapath
 /pkg/redirectpolicy @cilium/sig-lb
 /pkg/safeio @cilium/sig-agent

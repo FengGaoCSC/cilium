@@ -1079,7 +1079,7 @@ func (e *Endpoint) updatePolicyMapPressureMetric() {
 		return
 	}
 
-	value := float64(len(e.realizedPolicy.PolicyMapState)) / float64(e.policyMap.MapInfo.MaxEntries)
+	value := float64(len(e.realizedPolicy.PolicyMapState)) / float64(e.policyMap.MaxEntries())
 	e.policyMapPressureGauge.Set(value)
 }
 
@@ -1337,6 +1337,7 @@ func (e *Endpoint) dumpPolicyMapToMapState() (policy.MapState, error) {
 		policyEntry := policy.MapStateEntry{
 			ProxyPort: policymapEntry.GetProxyPort(),
 			IsDeny:    policymapEntry.IsDeny(),
+			AuthType:  policy.AuthType(policymapEntry.AuthType),
 		}
 		currentMap[policyKey] = policyEntry
 	}
@@ -1452,12 +1453,6 @@ func (e *Endpoint) RequireRouting() (required bool) {
 // RequireEndpointRoute returns if the endpoint wants a per endpoint route
 func (e *Endpoint) RequireEndpointRoute() bool {
 	return e.DatapathConfiguration.InstallEndpointRoute
-}
-
-// DisableSIPVerification returns true if the endpoint wants to skip
-// srcIP verification
-func (e *Endpoint) DisableSIPVerification() bool {
-	return e.DatapathConfiguration.DisableSipVerification
 }
 
 // GetPolicyVerdictLogFilter returns the PolicyVerdictLogFilter that would control
