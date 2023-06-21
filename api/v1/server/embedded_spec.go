@@ -1835,7 +1835,7 @@ func init() {
           "type": "integer"
         },
         "ebgp-multihop-ttl": {
-          "description": "Time To Live (TTL) value used in BGP packets sent to the eBGP neighbor.\n0 if eBGP multi-hop feature is disabled.\n",
+          "description": "Time To Live (TTL) value used in BGP packets sent to the eBGP neighbor.\n1 implies that eBGP multi-hop feature is disabled (only a single hop is allowed).\n",
           "type": "integer"
         },
         "families": {
@@ -1860,6 +1860,12 @@ func init() {
         "peer-asn": {
           "description": "Peer AS Number",
           "type": "integer"
+        },
+        "peer-port": {
+          "description": "TCP port number of peer",
+          "type": "integer",
+          "maximum": 65535,
+          "minimum": 1
         },
         "session-state": {
           "description": "BGP peer operational state as described here\nhttps://www.rfc-editor.org/rfc/rfc4271#section-8.2.2\n",
@@ -2248,12 +2254,20 @@ func init() {
       "description": "Response to a daemon configuration request. Contains the addressing\ninformation, k8s, node monitor and immutable and mutable configuration\nsettings.\n",
       "type": "object",
       "properties": {
+        "GROIPv4MaxSize": {
+          "description": "Maximum IPv4 GRO size on workload facing devices",
+          "type": "integer"
+        },
         "GROMaxSize": {
-          "description": "Maximum GRO size on workload facing devices",
+          "description": "Maximum IPv6 GRO size on workload facing devices",
+          "type": "integer"
+        },
+        "GSOIPv4MaxSize": {
+          "description": "Maximum IPv4 GSO size on workload facing devices",
           "type": "integer"
         },
         "GSOMaxSize": {
-          "description": "Maximum GSO size on workload facing devices",
+          "description": "Maximum IPv6 GSO size on workload facing devices",
           "type": "integer"
         },
         "addressing": {
@@ -3130,6 +3144,16 @@ func init() {
           "description": "Source of the IP entry and its metadata",
           "type": "string",
           "example": "k8s"
+        }
+      }
+    },
+    "IPV4BigTCP": {
+      "description": "Status of IPv4 BIG TCP\n\n+k8s:deepcopy-gen=true",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Is IPv4 BIG TCP enabled",
+          "type": "boolean"
         }
       }
     },
@@ -4450,6 +4474,10 @@ func init() {
         "ipam": {
           "description": "Status of IP address management",
           "$ref": "#/definitions/IPAMStatus"
+        },
+        "ipv4-big-tcp": {
+          "description": "Status of IPv4 BIG TCP",
+          "$ref": "#/definitions/IPV4BigTCP"
         },
         "ipv6-big-tcp": {
           "description": "Status of IPv6 BIG TCP",
@@ -6776,7 +6804,7 @@ func init() {
           "type": "integer"
         },
         "ebgp-multihop-ttl": {
-          "description": "Time To Live (TTL) value used in BGP packets sent to the eBGP neighbor.\n0 if eBGP multi-hop feature is disabled.\n",
+          "description": "Time To Live (TTL) value used in BGP packets sent to the eBGP neighbor.\n1 implies that eBGP multi-hop feature is disabled (only a single hop is allowed).\n",
           "type": "integer"
         },
         "families": {
@@ -6801,6 +6829,12 @@ func init() {
         "peer-asn": {
           "description": "Peer AS Number",
           "type": "integer"
+        },
+        "peer-port": {
+          "description": "TCP port number of peer",
+          "type": "integer",
+          "maximum": 65535,
+          "minimum": 1
         },
         "session-state": {
           "description": "BGP peer operational state as described here\nhttps://www.rfc-editor.org/rfc/rfc4271#section-8.2.2\n",
@@ -7241,12 +7275,20 @@ func init() {
       "description": "Response to a daemon configuration request. Contains the addressing\ninformation, k8s, node monitor and immutable and mutable configuration\nsettings.\n",
       "type": "object",
       "properties": {
+        "GROIPv4MaxSize": {
+          "description": "Maximum IPv4 GRO size on workload facing devices",
+          "type": "integer"
+        },
         "GROMaxSize": {
-          "description": "Maximum GRO size on workload facing devices",
+          "description": "Maximum IPv6 GRO size on workload facing devices",
+          "type": "integer"
+        },
+        "GSOIPv4MaxSize": {
+          "description": "Maximum IPv4 GSO size on workload facing devices",
           "type": "integer"
         },
         "GSOMaxSize": {
-          "description": "Maximum GSO size on workload facing devices",
+          "description": "Maximum IPv6 GSO size on workload facing devices",
           "type": "integer"
         },
         "addressing": {
@@ -8185,6 +8227,16 @@ func init() {
           "description": "Source of the IP entry and its metadata",
           "type": "string",
           "example": "k8s"
+        }
+      }
+    },
+    "IPV4BigTCP": {
+      "description": "Status of IPv4 BIG TCP\n\n+k8s:deepcopy-gen=true",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Is IPv4 BIG TCP enabled",
+          "type": "boolean"
         }
       }
     },
@@ -9910,6 +9962,10 @@ func init() {
         "ipam": {
           "description": "Status of IP address management",
           "$ref": "#/definitions/IPAMStatus"
+        },
+        "ipv4-big-tcp": {
+          "description": "Status of IPv4 BIG TCP",
+          "$ref": "#/definitions/IPV4BigTCP"
         },
         "ipv6-big-tcp": {
           "description": "Status of IPv6 BIG TCP",

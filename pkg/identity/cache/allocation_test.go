@@ -80,7 +80,7 @@ func (s *IdentityCacheTestSuite) TestAllocateIdentityReserved(c *C) {
 type IdentityAllocatorSuite struct{}
 
 func (ias *IdentityAllocatorSuite) SetUpSuite(c *C) {
-	testutils.IntegrationCheck(c)
+	testutils.IntegrationTest(c)
 }
 
 type IdentityAllocatorEtcdSuite struct {
@@ -90,15 +90,11 @@ type IdentityAllocatorEtcdSuite struct {
 var _ = Suite(&IdentityAllocatorEtcdSuite{})
 
 func (e *IdentityAllocatorEtcdSuite) SetUpSuite(c *C) {
-	testutils.IntegrationCheck(c)
+	testutils.IntegrationTest(c)
 }
 
 func (e *IdentityAllocatorEtcdSuite) SetUpTest(c *C) {
-	kvstore.SetupDummy("etcd")
-}
-
-func (e *IdentityAllocatorEtcdSuite) TearDownTest(c *C) {
-	kvstore.Client().Close(context.TODO())
+	kvstore.SetupDummy(c, "etcd")
 }
 
 type IdentityAllocatorConsulSuite struct {
@@ -108,15 +104,11 @@ type IdentityAllocatorConsulSuite struct {
 var _ = Suite(&IdentityAllocatorConsulSuite{})
 
 func (e *IdentityAllocatorConsulSuite) SetUpSuite(c *C) {
-	testutils.IntegrationCheck(c)
+	testutils.IntegrationTest(c)
 }
 
 func (e *IdentityAllocatorConsulSuite) SetUpTest(c *C) {
-	kvstore.SetupDummy("consul")
-}
-
-func (e *IdentityAllocatorConsulSuite) TearDownTest(c *C) {
-	kvstore.Client().Close(context.TODO())
+	kvstore.SetupDummy(c, "consul")
 }
 
 type dummyOwner struct {

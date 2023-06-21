@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strconv"
 	"sync"
 	"unsafe"
 
 	"github.com/cilium/cilium/pkg/bpf"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
+	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/types"
 )
@@ -28,8 +30,6 @@ const (
 // Key implements the bpf.MapKey interface.
 //
 // Must be in sync with struct ipcache_key in <bpf/lib/maps.h>
-// +k8s:deepcopy-gen=true
-// +k8s:deepcopy-gen:interfaces=github.com/cilium/cilium/pkg/bpf.MapKey
 type Key struct {
 	Prefixlen uint32 `align:"lpm_key"`
 	Pad1      uint16 `align:"pad1"`
@@ -38,13 +38,6 @@ type Key struct {
 	// represents both IPv6 and IPv4 (in the lowest four bytes)
 	IP types.IPv6 `align:"$union0"`
 }
-
-// GetKeyPtr returns the unsafe pointer to the BPF key
-func (k *Key) GetKeyPtr() unsafe.Pointer { return unsafe.Pointer(k) }
-
-// NewValue returns a new empty instance of the structure representing the BPF
-// map value
-func (k Key) NewValue() bpf.MapValue { return &RemoteEndpointInfo{} }
 
 func getStaticPrefixBits() uint32 {
 	staticMatchSize := unsafe.Sizeof(Key{})
@@ -77,19 +70,7 @@ func (k Key) String() string {
 	return cmtypes.PrefixClusterFrom(addr, prefixLen, clusterID).String()
 }
 
-func (k Key) IPNet() *net.IPNet {
-	cidr := &net.IPNet{}
-	prefixLen := k.Prefixlen - getStaticPrefixBits()
-	switch k.Family {
-	case bpf.EndpointKeyIPv4:
-		cidr.IP = net.IP(k.IP[:net.IPv4len])
-		cidr.Mask = net.CIDRMask(int(prefixLen), 32)
-	case bpf.EndpointKeyIPv6:
-		cidr.IP = net.IP(k.IP[:net.IPv6len])
-		cidr.Mask = net.CIDRMask(int(prefixLen), 128)
-	}
-	return cidr
-}
+func (k *Key) New() bpf.MapKey { return &Key{} }
 
 func (k Key) Prefix() netip.Prefix {
 	var addr netip.Addr
@@ -140,22 +121,20 @@ func NewKey(ip net.IP, mask net.IPMask, clusterID uint8) Key {
 
 // RemoteEndpointInfo implements the bpf.MapValue interface. It contains the
 // security identity of a remote endpoint.
-// +k8s:deepcopy-gen=true
-// +k8s:deepcopy-gen:interfaces=github.com/cilium/cilium/pkg/bpf.MapValue
 type RemoteEndpointInfo struct {
 	SecurityIdentity uint32     `align:"sec_identity"`
 	TunnelEndpoint   types.IPv4 `align:"tunnel_endpoint"`
 	NodeID           uint16     `align:"node_id"`
 	Key              uint8      `align:"key"`
+	_                uint8
 }
 
 func (v *RemoteEndpointInfo) String() string {
-	return fmt.Sprintf("identity=%d encryptkey=%d tunnelendpoint=%s nodeid=%d",
-		v.SecurityIdentity, v.Key, v.TunnelEndpoint, v.NodeID)
+	return fmt.Sprintf("identity=%d encryptkey=%d tunnelendpoint=%s nodeid=0x%s",
+		v.SecurityIdentity, v.Key, v.TunnelEndpoint, strconv.FormatUint(uint64(v.NodeID), 16))
 }
 
-// GetValuePtr returns the unsafe pointer to the BPF value.
-func (v *RemoteEndpointInfo) GetValuePtr() unsafe.Pointer { return unsafe.Pointer(v) }
+func (v *RemoteEndpointInfo) New() bpf.MapValue { return &RemoteEndpointInfo{} }
 
 // Map represents an IPCache BPF map.
 type Map struct {
@@ -165,14 +144,11 @@ type Map struct {
 func newIPCacheMap(name string) *bpf.Map {
 	return bpf.NewMap(
 		name,
-		bpf.MapTypeLPMTrie,
+		ebpf.LPMTrie,
 		&Key{},
-		int(unsafe.Sizeof(Key{})),
 		&RemoteEndpointInfo{},
-		int(unsafe.Sizeof(RemoteEndpointInfo{})),
 		MaxEntries,
-		bpf.BPF_F_NO_PREALLOC,
-		bpf.ConvertKeyValue)
+		bpf.BPF_F_NO_PREALLOC)
 }
 
 // NewMap instantiates a Map.

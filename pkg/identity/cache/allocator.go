@@ -450,23 +450,31 @@ func (m *CachingIdentityAllocator) ReleaseSlice(ctx context.Context, identities 
 	return err
 }
 
-// WatchRemoteIdentities starts watching for identities in another kvstore and
-// syncs all identities to the local identity cache. remoteName must be unique,
-// unless replacing the kvstore for an existing remote.
-func (m *CachingIdentityAllocator) WatchRemoteIdentities(remoteName string, backend kvstore.BackendOperations) (*allocator.RemoteCache, error) {
+// WatchRemoteIdentities returns a RemoteCache instance which can be later
+// started to watch identities in another kvstore and sync them to the local
+// identity cache. remoteName should be unique unless replacing an existing
+// remote's backend. When cachedPrefix is set, identities are assumed to be
+// stored under the "cilium/cache" prefix, and the watcher is adapted accordingly.
+func (m *CachingIdentityAllocator) WatchRemoteIdentities(remoteName string, backend kvstore.BackendOperations, cachedPrefix bool) (*allocator.RemoteCache, error) {
 	<-m.globalIdentityAllocatorInitialized
 
-	remoteAllocatorBackend, err := kvstoreallocator.NewKVStoreBackend(m.identitiesPath, m.owner.GetNodeSuffix(), &key.GlobalIdentity{}, backend)
+	prefix := m.identitiesPath
+	if cachedPrefix {
+		prefix = path.Join(kvstore.StateToCachePrefix(prefix), remoteName)
+	}
+
+	remoteAllocatorBackend, err := kvstoreallocator.NewKVStoreBackend(prefix, m.owner.GetNodeSuffix(), &key.GlobalIdentity{}, backend)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up remote allocator backend: %s", err)
 	}
 
-	remoteAlloc, err := allocator.NewAllocator(&key.GlobalIdentity{}, remoteAllocatorBackend, allocator.WithEvents(m.IdentityAllocator.GetEvents()), allocator.WithoutGC())
+	remoteAlloc, err := allocator.NewAllocator(&key.GlobalIdentity{}, remoteAllocatorBackend,
+		allocator.WithEvents(m.IdentityAllocator.GetEvents()), allocator.WithoutGC(), allocator.WithoutAutostart())
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize remote Identity Allocator: %s", err)
 	}
 
-	return m.IdentityAllocator.WatchRemoteKVStore(remoteName, remoteAlloc), nil
+	return m.IdentityAllocator.NewRemoteCache(remoteName, remoteAlloc), nil
 }
 
 func (m *CachingIdentityAllocator) RemoveRemoteIdentities(name string) {

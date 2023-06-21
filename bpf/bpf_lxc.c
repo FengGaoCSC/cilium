@@ -263,7 +263,10 @@ int NAME(struct __ctx_buff *ctx)						\
 	if (map_update_elem(&CT_TAIL_CALL_BUFFER4, &zero, &ct_buffer, 0) < 0)	\
 		return drop_for_direction(ctx, DIR, DROP_INVALID_TC_BUFFER);	\
 										\
-	invoke_tailcall_if(CONDITION, TARGET_ID, TARGET_NAME);			\
+	ret = invoke_tailcall_if(CONDITION, TARGET_ID, TARGET_NAME);		\
+	if (IS_ERR(ret))							\
+		return drop_for_direction(ctx, DIR, ret);			\
+										\
 	return ret;								\
 }
 
@@ -291,7 +294,7 @@ int NAME(struct __ctx_buff *ctx)						\
 										\
 	hdrlen = ipv6_hdrlen(ctx, &tuple->nexthdr);				\
 	if (hdrlen < 0)								\
-		return hdrlen;							\
+		return drop_for_direction(ctx, DIR, hdrlen);			\
 										\
 	l4_off = ETH_HLEN + hdrlen;						\
 										\
@@ -304,7 +307,10 @@ int NAME(struct __ctx_buff *ctx)						\
 		return drop_for_direction(ctx, DIR,				\
 			DROP_INVALID_TC_BUFFER);				\
 										\
-	invoke_tailcall_if(CONDITION, TARGET_ID, TARGET_NAME);			\
+	ret = invoke_tailcall_if(CONDITION, TARGET_ID, TARGET_NAME);		\
+	if (IS_ERR(ret))							\
+		return drop_for_direction(ctx, DIR, ret);			\
+										\
 	return ret;								\
 }
 
@@ -737,7 +743,6 @@ static __always_inline int __tail_handle_ipv6(struct __ctx_buff *ctx,
 {
 	void *data, *data_end;
 	struct ipv6hdr *ip6;
-	int ret;
 
 	if (!revalidate_data_pull(ctx, &data, &data_end, &ip6))
 		return DROP_INVALID;
@@ -745,11 +750,8 @@ static __always_inline int __tail_handle_ipv6(struct __ctx_buff *ctx,
 	/* Handle special ICMPv6 NDP messages, and all remaining packets
 	 * are subjected to forwarding into the container.
 	 */
-	if (unlikely(is_icmp6_ndp(ctx, ip6, ETH_HLEN))) {
-		ret = icmp6_ndp_handle(ctx, ETH_HLEN, METRIC_EGRESS);
-		if (IS_ERR(ret))
-			return ret;
-	}
+	if (unlikely(is_icmp6_ndp(ctx, ip6, ETH_HLEN)))
+		return icmp6_ndp_handle(ctx, ETH_HLEN, METRIC_EGRESS);
 
 	if (unlikely(!is_valid_lxc_src_ip(ip6)))
 		return DROP_INVALID_SIP;
@@ -1350,7 +1352,7 @@ int tail_handle_arp(struct __ctx_buff *ctx)
 /* Attachment/entry point is ingress for veth.
  * It corresponds to packets leaving the container.
  */
-__section("from-container")
+__section_entry
 int cil_from_container(struct __ctx_buff *ctx)
 {
 	__u16 proto;
@@ -1544,12 +1546,7 @@ skip_policy_enforcement:
 				 &ct_state_new, *proxy_port > 0, false, ext_err);
 		if (IS_ERR(ret))
 			return ret;
-
-		/* NOTE: tuple has been invalidated after this */
 	}
-
-	if (!revalidate_data(ctx, &data, &data_end, &ip6))
-		return DROP_INVALID;
 
 	reason = (enum trace_reason)*ct_status;
 	if (*proxy_port > 0) {
@@ -1635,6 +1632,11 @@ int tail_ipv6_to_endpoint(struct __ctx_buff *ctx)
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip6)) {
 		ret = DROP_INVALID;
+		goto out;
+	}
+
+	if (unlikely(is_icmp6_ndp(ctx, ip6, ETH_HLEN))) {
+		ret = CTX_ACT_OK;
 		goto out;
 	}
 
@@ -1872,12 +1874,7 @@ skip_policy_enforcement:
 				 &ct_state_new, *proxy_port > 0, false, ext_err);
 		if (IS_ERR(ret))
 			return ret;
-
-		/* NOTE: tuple has been invalidated after this */
 	}
-
-	if (!revalidate_data(ctx, &data, &data_end, &ip4))
-		return DROP_INVALID;
 
 	reason = (enum trace_reason)*ct_status;
 	if (*proxy_port > 0) {
@@ -2072,16 +2069,16 @@ int handle_policy(struct __ctx_buff *ctx)
 	switch (proto) {
 #ifdef ENABLE_IPV6
 	case bpf_htons(ETH_P_IPV6):
-		invoke_tailcall_if(__and(is_defined(ENABLE_IPV4), is_defined(ENABLE_IPV6)),
-				   CILIUM_CALL_IPV6_CT_INGRESS_POLICY_ONLY,
-				   tail_ipv6_ct_ingress_policy_only);
+		ret = invoke_tailcall_if(__and(is_defined(ENABLE_IPV4), is_defined(ENABLE_IPV6)),
+					 CILIUM_CALL_IPV6_CT_INGRESS_POLICY_ONLY,
+					 tail_ipv6_ct_ingress_policy_only);
 		break;
 #endif /* ENABLE_IPV6 */
 #ifdef ENABLE_IPV4
 	case bpf_htons(ETH_P_IP):
-		invoke_tailcall_if(__and(is_defined(ENABLE_IPV4), is_defined(ENABLE_IPV6)),
-				   CILIUM_CALL_IPV4_CT_INGRESS_POLICY_ONLY,
-				   tail_ipv4_ct_ingress_policy_only);
+		ret = invoke_tailcall_if(__and(is_defined(ENABLE_IPV4), is_defined(ENABLE_IPV6)),
+					 CILIUM_CALL_IPV4_CT_INGRESS_POLICY_ONLY,
+					 tail_ipv4_ct_ingress_policy_only);
 		break;
 #endif /* ENABLE_IPV4 */
 	default:
@@ -2153,7 +2150,7 @@ out:
 /* Attached to the lxc device on the way to the container, only if endpoint
  * routes are enabled.
  */
-__section("to-container")
+__section_entry
 int cil_to_container(struct __ctx_buff *ctx)
 {
 	enum trace_point trace = TRACE_FROM_STACK;

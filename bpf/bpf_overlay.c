@@ -57,7 +57,7 @@ static __always_inline int handle_ipv6(struct __ctx_buff *ctx,
 		return DROP_INVALID;
 #ifdef ENABLE_NODEPORT
 	if (!ctx_skip_nodeport(ctx)) {
-		ret = nodeport_lb6(ctx, *identity, ext_err);
+		ret = nodeport_lb6(ctx, ip6, *identity, ext_err);
 		if (ret < 0)
 			return ret;
 	}
@@ -550,7 +550,7 @@ static __always_inline bool is_esp(struct __ctx_buff *ctx, __u16 proto)
 /* Attached to the ingress of cilium_vxlan/cilium_geneve to execute on packets
  * entering the node via the tunnel.
  */
-__section("from-overlay")
+__section_entry
 int cil_from_overlay(struct __ctx_buff *ctx)
 {
 	__u16 proto;
@@ -668,7 +668,7 @@ out:
 /* Attached to the egress of cilium_vxlan/cilium_geneve to execute on packets
  * leaving the node via the tunnel.
  */
-__section("to-overlay")
+__section_entry
 int cil_to_overlay(struct __ctx_buff *ctx)
 {
 	int ret = TC_ACT_OK;

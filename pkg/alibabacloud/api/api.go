@@ -182,13 +182,30 @@ func (c *Client) GetVPCs(ctx context.Context) (ipamTypes.VirtualNetworkMap, erro
 
 // GetInstanceTypes returns all the known ECS instance types in the configured region
 func (c *Client) GetInstanceTypes(ctx context.Context) ([]ecs.InstanceType, error) {
+	var result []ecs.InstanceType
 	req := ecs.CreateDescribeInstanceTypesRequest()
-	resp, err := c.ecsClient.DescribeInstanceTypes(req)
-	if err != nil {
-		return nil, err
+	// When there are many instance types, some instance limits can not be queried,
+	// so use NextToken and MaxResults for paging query.
+	// MaxResults is the number of entries on each page, the maximum value of this parameter is 100.
+	// Ref: https://www.alibabacloud.com/help/en/elastic-compute-service/latest/describeinstancetypes
+	req.MaxResults = requests.NewInteger(100)
+	for {
+		resp, err := c.ecsClient.DescribeInstanceTypes(req)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, v := range resp.InstanceTypes.InstanceType {
+			result = append(result, v)
+		}
+
+		if resp.NextToken == "" {
+			break
+		}
+		req.NextToken = resp.NextToken
 	}
 
-	return resp.InstanceTypes.InstanceType, nil
+	return result, nil
 }
 
 // GetSecurityGroups return all sg
@@ -308,7 +325,7 @@ func (c *Client) AttachNetworkInterface(ctx context.Context, instanceID, eniID s
 // WaitENIAttached check ENI is attached to ECS and return attached ECS instanceID
 func (c *Client) WaitENIAttached(ctx context.Context, eniID string) (string, error) {
 	instanceID := ""
-	err := wait.ExponentialBackoffWithContext(ctx, maxAttachRetries, func() (done bool, err error) {
+	err := wait.ExponentialBackoffWithContext(ctx, maxAttachRetries, func(ctx context.Context) (done bool, err error) {
 		eni, err := c.DescribeNetworkInterface(ctx, eniID)
 		if err != nil {
 			return false, err

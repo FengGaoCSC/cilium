@@ -65,7 +65,7 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.14.6
+  cilium_cli_version: v0.14.7
   cilium_cli_ci_version:
   check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
@@ -87,7 +87,7 @@ jobs:
       # paths-filter to work.
       - name: Checkout code
         if: ${{ github.event.issue.pull_request }}
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           persist-credentials: false
       - name: Retrieve pull request's base and head
@@ -320,7 +320,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout main branch to access local actions
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -344,6 +344,8 @@ jobs:
             --helm-set=hubble.relay.image.tag=${SHA} \
             --helm-set=hubble.eventBufferCapacity=65535 \
             --helm-set=bpf.monitorAggregation=none \
+            --helm-set=authentication.mutual.spire.enabled=true \
+            --helm-set=authentication.mutual.spire.install.enabled=true \
             --nodes-without-cilium=kind-worker3 \
             --helm-set-string=kubeProxyReplacement=${{ matrix.kpr }}"
           TUNNEL="--helm-set-string=tunnelProtocol=${{ matrix.tunnel }}"
@@ -366,8 +368,11 @@ jobs:
           MASQ=""
           if [ "${{ matrix.kpr }}" == "strict" ]; then
             # BPF-masq requires KPR=strict.
-            # Disable IPv6 until https://github.com/cilium/cilium/issues/14350 has been resolved
-            MASQ="--helm-set=bpf.masquerade=true --helm-set=enableIPv6Masquerade=false"
+            MASQ="--helm-set=bpf.masquerade=true"
+            if [ "${{ matrix.host-fw }}" == "true" ]; then
+              # BPF IPv6 masquerade not currently supported with host firewall - GH-26074
+              MASQ="${MASQ} --helm-set=enableIPv6Masquerade=false"
+            fi
           fi
           EGRESS_GATEWAY=""
           if [ "${{ matrix.egress-gateway }}" == "true" ]; then
@@ -409,13 +414,13 @@ jobs:
           echo junit_type="${JUNIT}" >> $GITHUB_OUTPUT
 
       - name: Checkout pull request for Helm chart
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           ref: ${{ needs.setup-report.outputs.sha }}
           persist-credentials: false
 
       - name: Install Cilium CLI-cli
-        uses: cilium/cilium-cli@d610d6e2774e29aef9565bad935e3b4943d541af # v0.14.5
+        uses: cilium/cilium-cli@9fcfef089e5b7dd3212f2eac21ba8cfae6f05cca # v0.14.7
         with:
           release-version: ${{ env.cilium_cli_version }}
           ci-version: ${{ env.cilium_cli_ci_version }}
@@ -423,7 +428,7 @@ jobs:
           binary-dir: ./
 
       - name: Provision LVH VMs
-        uses: cilium/little-vm-helper@657fd0df35e4edfd7815efdae14ca44ea1e74897 # v0.0.4
+        uses: cilium/little-vm-helper@af4173a4a1c9132b7fb0a02dba74cd6233a175b5 # v0.0.6
         with:
           test-name: e2e-conformance
           image-version: ${{ matrix.kernel }}
@@ -443,7 +448,7 @@ jobs:
           done
 
       - name: Run tests (${{ join(matrix.*, ', ') }})
-        uses: cilium/little-vm-helper@657fd0df35e4edfd7815efdae14ca44ea1e74897 # v0.0.4
+        uses: cilium/little-vm-helper@af4173a4a1c9132b7fb0a02dba74cd6233a175b5 # v0.0.6
         with:
           provision: 'false'
           cmd: |
@@ -457,8 +462,11 @@ jobs:
             fi
 
             CILIUM_CLI_MODE=helm ./cilium-cli install ${{ steps.vars.outputs.cilium_install_defaults }}
+            kubectl -n cilium-spire wait --for=condition=Ready pod -l app=spire-server --timeout=300s
+            kubectl -n cilium-spire wait --for=condition=Ready pod -l app=spire-agent --timeout=300s
 
             ./cilium-cli status --wait
+            kubectl get pods --all-namespaces -o wide
             kubectl -n kube-system exec daemonset/cilium -- cilium status
 
             mkdir -p cilium-junits
@@ -474,7 +482,7 @@ jobs:
 
       - name: Fetch artifacts
         if: ${{ !success() }}
-        uses: cilium/little-vm-helper@657fd0df35e4edfd7815efdae14ca44ea1e74897 # v0.0.4
+        uses: cilium/little-vm-helper@af4173a4a1c9132b7fb0a02dba74cd6233a175b5 # v0.0.6
         with:
           provision: 'false'
           cmd: |

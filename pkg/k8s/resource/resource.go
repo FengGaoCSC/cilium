@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strconv"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
@@ -15,8 +16,11 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/cilium/cilium/pkg/hive"
+	k8smetrics "github.com/cilium/cilium/pkg/k8s/metrics"
 	"github.com/cilium/cilium/pkg/lock"
+	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/promise"
+	"github.com/cilium/cilium/pkg/stream"
 )
 
 // Resource provides access to a Kubernetes resource through either
@@ -40,6 +44,8 @@ import (
 // The resource is lazy, e.g. it will not start the informer until a call
 // has been made to Events() or Store().
 type Resource[T k8sRuntime.Object] interface {
+	stream.Observable[Event[T]]
+
 	// Events returns a channel of events. Each event must be marked as handled
 	// with a call to Done(), otherwise no new events for this key will be emitted.
 	//
@@ -115,8 +121,9 @@ func New[T k8sRuntime.Object](lc hive.Lifecycle, lw cache.ListerWatcher, opts ..
 }
 
 type options struct {
-	transform cache.TransformFunc      // if non-nil, the object is transformed with this function before storing
-	sourceObj func() k8sRuntime.Object // prototype for the object before it is transformed
+	transform   cache.TransformFunc      // if non-nil, the object is transformed with this function before storing
+	sourceObj   func() k8sRuntime.Object // prototype for the object before it is transformed
+	metricScope string                   // the scope label used when recording metrics for the resource
 }
 
 type ResourceOption func(o *options)
@@ -146,6 +153,13 @@ func WithLazyTransform(sourceObj func() k8sRuntime.Object, transform cache.Trans
 	return func(o *options) {
 		o.sourceObj = sourceObj
 		o.transform = transform
+	}
+}
+
+// WithMetric enables metrics collection for the resource using the provided scope.
+func WithMetric(scope string) ResourceOption {
+	return func(o *options) {
+		o.metricScope = scope
 	}
 }
 
@@ -187,7 +201,44 @@ func (r *resource[T]) Store(ctx context.Context) (Store[T], error) {
 	return r.storePromise.Await(ctx)
 }
 
+func (r *resource[T]) metricEventProcessed(eventKind EventKind, status bool) {
+	if r.opts.metricScope == "" {
+		return
+	}
+
+	result := "success"
+	if status == false {
+		result = "failed"
+	}
+
+	var action string
+	switch eventKind {
+	case Sync:
+		return
+	case Upsert:
+		action = "update"
+	case Delete:
+		action = "delete"
+	}
+
+	metrics.KubernetesEventProcessed.WithLabelValues(r.opts.metricScope, action, result).Inc()
+}
+
+func (r *resource[T]) metricEventReceived(action string, valid, equal bool) {
+	if r.opts.metricScope == "" {
+		return
+	}
+
+	k8smetrics.LastInteraction.Reset()
+
+	metrics.EventTS.WithLabelValues(metrics.LabelEventSourceK8s, r.opts.metricScope, action).SetToCurrentTime()
+	validStr := strconv.FormatBool(valid)
+	equalStr := strconv.FormatBool(equal)
+	metrics.KubernetesEventReceived.WithLabelValues(r.opts.metricScope, action, validStr, equalStr).Inc()
+}
+
 func (r *resource[T]) pushUpdate(key Key) {
+	r.metricEventReceived("update", true, false)
 	r.mu.RLock()
 	for _, queue := range r.queues {
 		queue.AddUpsert(key)
@@ -293,6 +344,10 @@ func WithErrorHandler(h ErrorHandler) EventsOpt {
 	return func(o *eventsOpts) {
 		o.errorHandler = h
 	}
+}
+
+func (r *resource[T]) Observe(ctx context.Context, next func(Event[T]), complete func(error)) {
+	stream.FromChannel(r.Events(ctx)).Observe(ctx, next, complete)
 }
 
 // Events subscribes the caller to resource events.
@@ -408,6 +463,7 @@ func (r *resource[T]) Events(ctx context.Context, opts ...EventsOpt) <-chan Even
 			event.Done = func(err error) {
 				runtime.SetFinalizer(eventDoneSentinel, nil)
 				queue.eventDone(entry, err)
+				r.metricEventProcessed(event.Kind, err == nil)
 			}
 
 			// Add a finalizer to catch forgotten calls to Done().

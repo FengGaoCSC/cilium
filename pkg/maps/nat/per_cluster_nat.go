@@ -61,24 +61,19 @@ type PerClusterNATMap struct {
 	innerMapEntries int
 }
 
-// +k8s:deepcopy-gen=true
-// +k8s:deepcopy-gen:interfaces=github.com/cilium/cilium/pkg/bpf.MapKey
 type PerClusterNATMapKey struct {
 	ClusterID uint32
 }
 
-func (k *PerClusterNATMapKey) String() string            { return strconv.FormatUint(uint64(k.ClusterID), 10) }
-func (k *PerClusterNATMapKey) GetKeyPtr() unsafe.Pointer { return unsafe.Pointer(k) }
-func (k *PerClusterNATMapKey) NewValue() bpf.MapValue    { return &PerClusterNATMapVal{} }
+func (k *PerClusterNATMapKey) String() string  { return strconv.FormatUint(uint64(k.ClusterID), 10) }
+func (n *PerClusterNATMapKey) New() bpf.MapKey { return &PerClusterNATMapKey{} }
 
-// +k8s:deepcopy-gen=true
-// +k8s:deepcopy-gen:interfaces=github.com/cilium/cilium/pkg/bpf.MapValue
 type PerClusterNATMapVal struct {
 	Fd uint32
 }
 
-func (v *PerClusterNATMapVal) String() string              { return fmt.Sprintf("fd=%d", v.Fd) }
-func (v *PerClusterNATMapVal) GetValuePtr() unsafe.Pointer { return unsafe.Pointer(v) }
+func (v *PerClusterNATMapVal) String() string    { return fmt.Sprintf("fd=%d", v.Fd) }
+func (n *PerClusterNATMapVal) New() bpf.MapValue { return &PerClusterNATMapVal{} }
 
 func newPerClusterNATMap(name string, v4 bool, innerMapEntries int) (*PerClusterNATMap, error) {
 	var (
@@ -103,13 +98,12 @@ func newPerClusterNATMap(name string, v4 bool, innerMapEntries int) (*PerCluster
 
 	om := bpf.NewMapWithInnerSpec(
 		name,
-		bpf.MapTypeArrayOfMaps,
+		ebpf.ArrayOfMaps,
 		&PerClusterNATMapKey{},
 		&PerClusterNATMapVal{},
 		perClusterNATMapMaxEntries,
 		0,
 		inner,
-		bpf.ConvertKeyValue,
 	)
 
 	if err := om.OpenOrCreate(); err != nil {

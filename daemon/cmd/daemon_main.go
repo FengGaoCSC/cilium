@@ -84,6 +84,7 @@ import (
 	"github.com/cilium/cilium/pkg/pidfile"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/promise"
+	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/sysctl"
 	"github.com/cilium/cilium/pkg/version"
 	wireguard "github.com/cilium/cilium/pkg/wireguard/agent"
@@ -679,8 +680,11 @@ func initializeFlags() {
 	flags.Bool(option.EnableIPMasqAgent, false, "Enable BPF ip-masq-agent")
 	option.BindEnv(Vp, option.EnableIPMasqAgent)
 
-	flags.Bool(option.EnableIPv6BIGTCP, false, "Enable IPv6 BIG TCP option which increases device's maximum GRO/GSO limits")
+	flags.Bool(option.EnableIPv6BIGTCP, false, "Enable IPv6 BIG TCP option which increases device's maximum GRO/GSO limits for IPv6")
 	option.BindEnv(Vp, option.EnableIPv6BIGTCP)
+
+	flags.Bool(option.EnableIPv4BIGTCP, false, "Enable IPv4 BIG TCP option which increases device's maximum GRO/GSO limits for IPv4")
+	option.BindEnv(Vp, option.EnableIPv4BIGTCP)
 
 	flags.Bool(option.EnableIPv4EgressGateway, false, "Enable egress gateway for IPv4")
 	option.BindEnv(Vp, option.EnableIPv4EgressGateway)
@@ -966,6 +970,9 @@ func initializeFlags() {
 		),
 	)
 	option.BindEnv(Vp, option.HubbleMonitorEvents)
+
+	flags.StringSlice(option.HubbleRedact, []string{}, "List of Hubble redact options")
+	option.BindEnv(Vp, option.HubbleRedact)
 
 	flags.StringSlice(option.DisableIptablesFeederRules, []string{}, "Chains to ignore when installing feeder rules.")
 	option.BindEnv(Vp, option.DisableIptablesFeederRules)
@@ -1391,8 +1398,11 @@ func initEnv() {
 		option.Config.EnableBandwidthManager = false
 	}
 
-	if option.Config.EnableIPv6Masquerade && option.Config.EnableBPFMasquerade {
-		log.Fatal("BPF masquerade is not supported for IPv6.")
+	if option.Config.EnableIPv6Masquerade && option.Config.EnableBPFMasquerade && option.Config.EnableHostFirewall {
+		// We should be able to support this, but we first need to
+		// check how this plays in the datapath if BPF-masquerading is
+		// enabled for IPv4 only or IPv6 only.
+		log.Fatal("IPv6 BPF masquerade is not supported along with the host firewall.")
 	}
 
 	if option.Config.EnableHighScaleIPcache {
@@ -1514,6 +1524,12 @@ func initEnv() {
 			)
 		}
 	}
+
+	if option.Config.IdentityAllocationMode == option.IdentityAllocationModeKVstore {
+		if option.Config.EnableIPv4EgressGateway {
+			log.Fatal("The egress gateway is not supported in KV store identity allocation mode.")
+		}
+	}
 }
 
 func (d *Daemon) initKVStore() {
@@ -1603,6 +1619,7 @@ type daemonParams struct {
 	ClusterMesh          *clustermesh.ClusterMesh
 	MonitorAgent         monitorAgent.Agent
 	L2Announcer          *l2announcer.L2Announcer
+	L7Proxy              *proxy.Proxy
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {

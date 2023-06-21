@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
+	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 
 	gobgp "github.com/osrg/gobgp/v3/api"
 )
@@ -51,6 +52,10 @@ func (g *GoBGPServer) GetPeerState(ctx context.Context) (types.GetPeerStateRespo
 
 		peerState := &models.BgpPeer{}
 
+		if peer.Transport != nil {
+			peerState.PeerPort = int64(peer.Transport.RemotePort)
+		}
+
 		if peer.Conf != nil {
 			peerState.LocalAsn = int64(peer.Conf.LocalAsn)
 			peerState.PeerAddress = peer.Conf.NeighborAddress
@@ -76,6 +81,8 @@ func (g *GoBGPServer) GetPeerState(ctx context.Context) (types.GetPeerStateRespo
 
 		if peer.EbgpMultihop != nil && peer.EbgpMultihop.Enabled {
 			peerState.EbgpMultihopTTL = int64(peer.EbgpMultihop.MultihopTtl)
+		} else {
+			peerState.EbgpMultihopTTL = int64(v2alpha1api.DefaultBGPEBGPMultihopTTL) // defaults to 1 if not enabled
 		}
 
 		if peer.Timers != nil {

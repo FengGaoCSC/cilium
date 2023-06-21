@@ -18,58 +18,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.after }}
   cancel-in-progress: true
 
-env:
-  # List of Runtime tests
-  # <description>: <Regex that matches the tests in the section>
-  ###
-  agent: "RuntimeAgent|RuntimeSSHTests"
-  # RuntimeAgentChaos Cilium agent Checking for file-descriptor leak
-  # RuntimeAgentChaos Cilium agent removing leftover Cilium interfaces
-  # RuntimeAgentChaos Connectivity over restarts Checking that during restart no traffic is dropped using Egress + Ingress Traffic
-  # RuntimeAgentChaos Endpoint Endpoint recovery on restart
-  # RuntimeAgentChaos KVStore Delete event on KVStore with CIDR identities
-  # RuntimeAgentChaos KVStore Validate that delete events on KVStore do not release in use identities
-  # RuntimeAgentFQDNPolicies Can update L7 DNS policy rules
-  # RuntimeAgentFQDNPolicies CNAME follow
-  # RuntimeAgentFQDNPolicies DNS proxy policy works if Cilium stops
-  # RuntimeAgentFQDNPolicies Enforces L3 policy even when no IPs are inserted
-  # RuntimeAgentFQDNPolicies Enforces ToFQDNs policy
-  # RuntimeAgentFQDNPolicies Implements matchPattern: *
-  # RuntimeAgentFQDNPolicies Interaction with other ToCIDR rules
-  # RuntimeAgentFQDNPolicies Roundrobin DNS
-  # RuntimeAgentFQDNPolicies toFQDNs populates toCIDRSet (data from proxy) L3-dependent L7/HTTP with toFQDN updates proxy policy
-  # RuntimeAgentFQDNPolicies toFQDNs populates toCIDRSet (data from proxy) Policy addition after DNS lookup
-  # RuntimeAgentFQDNPolicies Validate dns-proxy monitor information
-  # RuntimeAgentFQDNPolicies With verbose policy logs Validates DNSSEC responses
-  # RuntimeAgentKVStoreTest KVStore tests Consul KVStore
-  # RuntimeAgentKVStoreTest KVStore tests Etcd KVStore
-  # RuntimeAgentPolicies Init Policy Default Drop Test tests egress
-  # RuntimeAgentPolicies Init Policy Default Drop Test tests ingress
-  # RuntimeAgentPolicies Init Policy Default Drop Test With PolicyAuditMode tests egress
-  # RuntimeAgentPolicies Init Policy Default Drop Test With PolicyAuditMode tests ingress
-  # RuntimeAgentPolicies Init Policy Test Init Egress Policy Test
-  # RuntimeAgentPolicies Init Policy Test Init Ingress Policy Test
-  # RuntimeAgentPolicies TestsEgressToHost Tests Egress To Host
-  # RuntimeAgentPolicies TestsEgressToHost Tests egress with CIDR+L4 policy
-  # RuntimeAgentPolicies TestsEgressToHost Tests egress with CIDR+L4 policy to external https service
-  # RuntimeAgentPolicies TestsEgressToHost Tests egress with CIDR+L7 policy
-  # RuntimeAgentPolicies Tests Endpoint Connectivity Functions After Daemon Configuration Is Updated
-  # RuntimeAgentPolicies Tests EntityNone as a deny-all
-  # RuntimeSSHTests Should fail when context times out
-  ###
-  datapath: "RuntimeDatapathConntrackInVethModeTest|RuntimeDatapathMonitorTest"
-  # RuntimeDatapathConntrackInVethModeTest Conntrack-related configuration options for endpoints
-  # RuntimeDatapathMonitorTest With Sample Containers checks container ids match monitor output
-  # RuntimeDatapathMonitorTest With Sample Containers cilium monitor check --from
-  # RuntimeDatapathMonitorTest With Sample Containers cilium monitor check --related-to
-  # RuntimeDatapathMonitorTest With Sample Containers cilium monitor check --to
-  # RuntimeDatapathMonitorTest With Sample Containers Cilium monitor event types
-  # RuntimeDatapathMonitorTest With Sample Containers delivers the same information to multiple monitors
-  ###
-  privileged: "RuntimeDatapathPrivilegedUnitTests"
-  # RuntimeDatapathPrivilegedUnitTests Run Tests
-  ###
-
 jobs:
   # Pre-build the ginkgo binary so that we don't have to build it for all
   # runners.
@@ -89,7 +37,7 @@ jobs:
           echo "sha=${SHA}" >> $GITHUB_OUTPUT
 
       - name: Checkout code
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           ref: ${{ steps.vars.outputs.sha }}
           persist-credentials: false
@@ -110,7 +58,7 @@ jobs:
         uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.20.4
+          go-version: 1.20.5
 
       - name: Build Ginkgo
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
@@ -150,11 +98,11 @@ jobs:
     needs: build-ginkgo-binary
     runs-on:
       group: ginkgo-runners
-    name: Runtime Test
+    name: "Runtime Test (${{matrix.focus}})"
     env:
-      # GitHub doesn't provide a way to retrieve the name of a job so we have
+      # GitHub doesn't provide a way to retrieve the name of a job, so we have
       # to repeated it here.
-      job_name: "Runtime Test"
+      job_name: "Runtime Test (${{matrix.focus}})"
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -163,6 +111,60 @@ jobs:
           - "agent"
           - "datapath"
           - "privileged"
+
+        include:
+          ###
+          # RuntimeAgentChaos Cilium agent Checking for file-descriptor leak
+          # RuntimeAgentChaos Cilium agent removing leftover Cilium interfaces
+          # RuntimeAgentChaos Connectivity over restarts Checking that during restart no traffic is dropped using Egress + Ingress Traffic
+          # RuntimeAgentChaos Endpoint Endpoint recovery on restart
+          # RuntimeAgentChaos KVStore Delete event on KVStore with CIDR identities
+          # RuntimeAgentChaos KVStore Validate that delete events on KVStore do not release in use identities
+          # RuntimeAgentFQDNPolicies Can update L7 DNS policy rules
+          # RuntimeAgentFQDNPolicies CNAME follow
+          # RuntimeAgentFQDNPolicies DNS proxy policy works if Cilium stops
+          # RuntimeAgentFQDNPolicies Enforces L3 policy even when no IPs are inserted
+          # RuntimeAgentFQDNPolicies Enforces ToFQDNs policy
+          # RuntimeAgentFQDNPolicies Implements matchPattern: *
+          # RuntimeAgentFQDNPolicies Interaction with other ToCIDR rules
+          # RuntimeAgentFQDNPolicies Roundrobin DNS
+          # RuntimeAgentFQDNPolicies toFQDNs populates toCIDRSet (data from proxy) L3-dependent L7/HTTP with toFQDN updates proxy policy
+          # RuntimeAgentFQDNPolicies toFQDNs populates toCIDRSet (data from proxy) Policy addition after DNS lookup
+          # RuntimeAgentFQDNPolicies Validate dns-proxy monitor information
+          # RuntimeAgentFQDNPolicies With verbose policy logs Validates DNSSEC responses
+          # RuntimeAgentKVStoreTest KVStore tests Consul KVStore
+          # RuntimeAgentKVStoreTest KVStore tests Etcd KVStore
+          # RuntimeAgentPolicies Init Policy Default Drop Test tests egress
+          # RuntimeAgentPolicies Init Policy Default Drop Test tests ingress
+          # RuntimeAgentPolicies Init Policy Default Drop Test With PolicyAuditMode tests egress
+          # RuntimeAgentPolicies Init Policy Default Drop Test With PolicyAuditMode tests ingress
+          # RuntimeAgentPolicies Init Policy Test Init Egress Policy Test
+          # RuntimeAgentPolicies Init Policy Test Init Ingress Policy Test
+          # RuntimeAgentPolicies TestsEgressToHost Tests Egress To Host
+          # RuntimeAgentPolicies TestsEgressToHost Tests egress with CIDR+L4 policy
+          # RuntimeAgentPolicies TestsEgressToHost Tests egress with CIDR+L4 policy to external https service
+          # RuntimeAgentPolicies TestsEgressToHost Tests egress with CIDR+L7 policy
+          # RuntimeAgentPolicies Tests Endpoint Connectivity Functions After Daemon Configuration Is Updated
+          # RuntimeAgentPolicies Tests EntityNone as a deny-all
+          # RuntimeSSHTests Should fail when context times out
+          - focus: "agent"
+            cliFocus: "RuntimeAgent|RuntimeSSHTests"
+
+          ###
+          # RuntimeDatapathConntrackInVethModeTest Conntrack-related configuration options for endpoints
+          # RuntimeDatapathMonitorTest With Sample Containers checks container ids match monitor output
+          # RuntimeDatapathMonitorTest With Sample Containers cilium monitor check --from
+          # RuntimeDatapathMonitorTest With Sample Containers cilium monitor check --related-to
+          # RuntimeDatapathMonitorTest With Sample Containers cilium monitor check --to
+          # RuntimeDatapathMonitorTest With Sample Containers Cilium monitor event types
+          # RuntimeDatapathMonitorTest With Sample Containers delivers the same information to multiple monitors
+          - focus: "datapath"
+            cliFocus: "RuntimeDatapathConntrackInVethModeTest|RuntimeDatapathMonitorTest"
+
+          ###
+          # RuntimeDatapathPrivilegedUnitTests Run Tests
+          - focus: "privileged"
+            cliFocus: "RuntimeDatapathPrivilegedUnitTests"
 
     timeout-minutes: 20
     steps:
@@ -177,25 +179,8 @@ jobs:
 
           echo "sha=${SHA}" >> $GITHUB_OUTPUT
 
-          case ${{ matrix.focus }} in
-              agent)
-                  focus="${{ env.agent }}"
-                  ;;
-              datapath)
-                  focus="${{ env.datapath }}"
-                  ;;
-              privileged)
-                  focus="${{ env.privileged }}"
-                  ;;
-              *)
-                  echo "focus group not found!"
-                  ;;
-          esac
-
-          echo "focus=${focus}" >> $GITHUB_OUTPUT
-
       - name: Checkout pull request for tests
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           ref: ${{ steps.vars.outputs.sha }}
           persist-credentials: false
@@ -204,7 +189,7 @@ jobs:
         uses: ./.github/actions/set-env-variables
 
       - name: Provision LVH VMs
-        uses: cilium/little-vm-helper@d04a0cf0ee684b1b249a320a0a6030ffda5eef30 # v0.0.5
+        uses: cilium/little-vm-helper@af4173a4a1c9132b7fb0a02dba74cd6233a175b5 # v0.0.6
         with:
           test-name: runtime-tests
           install-dependencies: true
@@ -230,7 +215,7 @@ jobs:
 
       - name: Setup runtime
         timeout-minutes: 10
-        uses: cilium/little-vm-helper@d04a0cf0ee684b1b249a320a0a6030ffda5eef30 # v0.0.5
+        uses: cilium/little-vm-helper@af4173a4a1c9132b7fb0a02dba74cd6233a175b5 # v0.0.6
         with:
           provision: 'false'
           cmd: |
@@ -267,8 +252,8 @@ jobs:
           cd test
           export INTEGRATION_TESTS=true
           ./test.test \
-          --ginkgo.focus="${{ steps.vars.outputs.focus }}" \
-          --ginkgo.skip="${{ matrix.skip }}" \
+          --ginkgo.focus="${{ matrix.cliFocus }}" \
+          --ginkgo.skip="${{ matrix.cliSkip }}" \
           --ginkgo.seed=1679952881 \
           --ginkgo.v -- \
           -cilium.provision=false \
@@ -284,7 +269,7 @@ jobs:
       - name: Runtime privileged tests
         if: ${{ matrix.focus == 'privileged' }}
         timeout-minutes: 20
-        uses: cilium/little-vm-helper@d04a0cf0ee684b1b249a320a0a6030ffda5eef30 # v0.0.5
+        uses: cilium/little-vm-helper@af4173a4a1c9132b7fb0a02dba74cd6233a175b5 # v0.0.6
         with:
           provision: 'false'
           cmd: |
@@ -300,7 +285,7 @@ jobs:
         # which is 'agent' and 'datapath' focus.
         if:  ${{ !success() && (matrix.focus == 'agent' || matrix.focus == 'datapath') }}
         timeout-minutes: 10
-        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
+        uses: cilium/little-vm-helper@af4173a4a1c9132b7fb0a02dba74cd6233a175b5 # v0.0.6
         with:
           provision: 'false'
           cmd: |
@@ -332,7 +317,7 @@ jobs:
           # GH web UI - In the Summary page of a workflow run, left column
           # "Jobs" - so that we can map the junit file to the right job - step
           # pair on datastudio.
-          junit_filename="${{ env.job_name }} (${{ join(matrix.*, ', ') }}).xml"
+          junit_filename="${{ env.job_name }}.xml"
           for filename in *.xml; do cp "${filename}" "../cilium-junits/${junit_filename}"; done;
 
       - name: Upload JUnits [junit]
@@ -346,6 +331,6 @@ jobs:
 
       - name: Publish Test Results As GitHub Summary
         if: ${{ always() }}
-        uses: aanm/junit2md@86789108ea0fd9be947a4232dd560e2fa3b9467a # v0.0.1
+        uses: aanm/junit2md@332ebf0fddd34e91b03a832cfafaa826306558f9 # v0.0.3
         with:
           junit-directory: "cilium-junits"

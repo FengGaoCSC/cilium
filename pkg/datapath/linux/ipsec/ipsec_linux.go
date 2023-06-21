@@ -97,7 +97,7 @@ var (
 	wildcardIPv6   = net.ParseIP("0::0")
 	wildcardCIDRv6 = &net.IPNet{
 		IP:   wildcardIPv6,
-		Mask: net.CIDRMask(128, 128),
+		Mask: net.CIDRMask(0, 128),
 	}
 
 	defaultDropMark = &netlink.XfrmMark{
@@ -123,7 +123,8 @@ var (
 
 	// To attempt to remove any stale XFRM configs once at startup, after
 	// we've added the catch-all default-drop policy.
-	removeStaleXFRMOnce sync.Once
+	removeStaleIPv4XFRMOnce sync.Once
+	removeStaleIPv6XFRMOnce sync.Once
 )
 
 func getIPSecKeys(ip net.IP) *ipSecKey {
@@ -358,11 +359,18 @@ func _ipSecReplacePolicyInFwd(src, dst *net.IPNet, tmplSrc, tmplDst net.IP, prox
 		return fmt.Errorf("IPSec key missing")
 	}
 
+	wildcardIP := wildcardIPv4
+	wildcardCIDR := wildcardCIDRv4
+	if tmplDst.To4() == nil {
+		wildcardIP = wildcardIPv6
+		wildcardCIDR = wildcardCIDRv6
+	}
+
 	policy := ipSecNewPolicy()
 	policy.Dir = dir
-	policy.Dst = dst
 	if dir == netlink.XFRM_DIR_IN {
 		policy.Src = src
+		policy.Dst = dst
 		policy.Mark = &netlink.XfrmMark{
 			Mask: linux_defaults.IPsecMarkMaskIn,
 		}
@@ -377,7 +385,7 @@ func _ipSecReplacePolicyInFwd(src, dst *net.IPNet, tmplSrc, tmplDst net.IP, prox
 			optional = 1
 			// We set the source tmpl address to 0/0 to explicit that it
 			// doesn't matter.
-			tmplSrc = net.ParseIP("0.0.0.0")
+			tmplSrc = wildcardIP
 		} else {
 			policy.Mark.Value = linux_defaults.RouteMarkDecrypt
 		}
@@ -390,8 +398,8 @@ func _ipSecReplacePolicyInFwd(src, dst *net.IPNet, tmplSrc, tmplDst net.IP, prox
 		policy.Priority = linux_defaults.IPsecFwdPriority
 		// In case of fwd policies, we should tell the kernel the tmpl src
 		// doesn't matter; we want all fwd packets to go through.
-		tmplSrc = net.ParseIP("0.0.0.0")
-		policy.Src = &net.IPNet{IP: tmplSrc, Mask: net.IPv4Mask(0, 0, 0, 0)}
+		policy.Src = wildcardCIDR
+		policy.Dst = wildcardCIDR
 	}
 	ipSecAttachPolicyTempl(policy, key, tmplSrc, tmplDst, false, optional)
 	return netlink.XfrmPolicyUpdate(policy)
@@ -432,6 +440,10 @@ func IPsecDefaultDropPolicy(ipv6 bool) error {
 	// new priorities to take precedence.
 	// This code can be removed in Cilium v1.15 to instead remove the old XFRM
 	// OUT policy and state.
+	removeStaleXFRMOnce := &removeStaleIPv4XFRMOnce
+	if ipv6 {
+		removeStaleXFRMOnce = &removeStaleIPv6XFRMOnce
+	}
 	removeStaleXFRMOnce.Do(func() {
 		deprioritizeOldOutPolicy(family)
 	})
@@ -517,6 +529,13 @@ func ipSecReplacePolicyOut(src, dst *net.IPNet, tmplSrc, tmplDst net.IP, nodeID 
 	return netlink.XfrmPolicyUpdate(policy)
 }
 
+// Returns true if the given mark matches on the node ID. This works because
+// the node ID match is always in the first 16 bits.
+func matchesOnNodeID(mark *netlink.XfrmMark) bool {
+	return mark != nil &&
+		mark.Mask&linux_defaults.IPsecMarkMaskNodeID == linux_defaults.IPsecMarkMaskNodeID
+}
+
 func ipsecDeleteXfrmState(nodeID uint16) {
 	scopedLog := log.WithFields(logrus.Fields{
 		logfields.NodeID: nodeID,
@@ -528,7 +547,7 @@ func ipsecDeleteXfrmState(nodeID uint16) {
 		return
 	}
 	for _, s := range xfrmStateList {
-		if getNodeIDFromXfrmMark(s.Mark) == nodeID {
+		if matchesOnNodeID(s.Mark) && getNodeIDFromXfrmMark(s.Mark) == nodeID {
 			if err := netlink.XfrmStateDel(&s); err != nil {
 				scopedLog.WithError(err).Warning("Failed to delete XFRM state")
 			}
@@ -547,7 +566,7 @@ func ipsecDeleteXfrmPolicy(nodeID uint16) {
 		return
 	}
 	for _, p := range xfrmPolicyList {
-		if getNodeIDFromXfrmMark(p.Mark) == nodeID {
+		if matchesOnNodeID(p.Mark) && getNodeIDFromXfrmMark(p.Mark) == nodeID {
 			if err := netlink.XfrmPolicyDel(&p); err != nil {
 				scopedLog.WithError(err).Warning("Failed to delete XFRM policy")
 			}

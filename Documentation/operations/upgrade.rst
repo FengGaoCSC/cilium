@@ -333,6 +333,15 @@ Annotations:
   Egress rules in CiliumNetworkPolicy CRD. The old attribute name is no longer supported,
   please update your CiliumNetworkPolicy CRD accordingly. Also applicable values for this
   attribute are changed to ``disabled``, ``required`` and ``test-always-fail``.
+* Cilium agents now automatically clean up possible stale information about meshed
+  clusters after reconnecting to the corresponding remote kvstores (see :gh-issue:`24740`
+  for the rationale behind this change). This might lead to brief connectivity disruptions
+  towards remote pods and global services when v1.14 Cilium agents connect to older
+  versions of the *clustermesh-apiserver*, and the *clustermesh-apiserver* is restarted.
+  Please upgrade the *clustermesh-apiserver* in all clusters before the Cilium agents
+  to prevent the possibility of connectivity disruptions. Note: this issue does not
+  affect setups using a persistent etcd cluster instead of the ephemeral one bundled
+  with the *clustermesh-apiserver*.
 
 Removed Options
 ~~~~~~~~~~~~~~~
@@ -358,6 +367,15 @@ Deprecated Options
 * The ``disable-cnp-status-updates``, ``cnp-node-status-gc-interval duration`` and ``enable-k8s-event-handover``
   options are deprecated and will be removed in v1.15. There is no replacement for these
   flags as enabling them causes scalability and performance issues even in small clusters.
+* The ``cluster-pool-v2beta`` IPAM mode is deprecated and will be removed in v1.15.
+  The functionality to dynamically allocate Pod CIDRs is now provided  by the
+  more flexible ``multi-pool`` IPAM mode.
+
+Deprecated Commands
+~~~~~~~~~~~~~~~~~~~
+
+* The ``cilium endpoint regenerate`` command is deprecated and will be removed
+  in v1.15.
 
 Added Metrics
 ~~~~~~~~~~~~~
@@ -368,6 +386,14 @@ Added Metrics
 * ``cilium_operator_ipam_available_ips``
 * ``cilium_operator_ipam_used_ips``
 * ``cilium_operator_ipam_needed_ips``
+* ``kvstore_sync_queue_size``
+* ``kvstore_initial_sync_completed``
+
+You can now additionally configure the *clustermesh-apiserver* to expose a set
+of metrics about the synchronization process, kvstore operations, and the sidecar
+etcd instance. Please refer to :ref:`clustermesh_apiserver_metrics` and
+:ref:`the clustermesh-apiserver metrics reference<clustermesh_apiserver_metrics_reference>`
+for more information.
 
 Deprecated Metrics
 ~~~~~~~~~~~~~~~~~~
@@ -425,6 +451,9 @@ Helm Options
   will be removed in v1.15.
 * Values ``proxy.prometheus.enabled`` and ``proxy.prometheus.port`` are deprecated in favor of
   their ``envoy.prometheus.*`` counterparts.
+* Value ``disableEndpointCRD`` is now a boolean type instead of a string. Instead of using "true"
+  or "false" as values, you should remove the quotes. For example in helm command, instead of
+  ``--set-string disableEndpointCRD="true"``, it should be replaced by ``--set disableEndpointCRD=true``.
 
 .. _earlier_upgrade_notes:
 
@@ -445,10 +474,9 @@ Networking connectivity, policy enforcement and load balancing will remain
 functional in general. The following is a list of operations that will not be
 available during the upgrade:
 
-* API aware policy rules are enforced in user space proxies and are currently
-  running as part of the Cilium pod unless Cilium is configured to run in Istio
-  mode. Upgrading Cilium will cause the proxy to restart which will result in
-  a connectivity outage and connection to be reset.
+* API-aware policy rules are enforced in user space proxies and are
+  running as part of the Cilium pod. Upgrading Cilium causes the proxy to 
+  restart, which results in a connectivity outage and causes the connection to reset.
 
 * Existing policy will remain effective but implementation of new policy rules
   will be postponed to after the upgrade has been completed on a particular

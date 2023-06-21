@@ -53,7 +53,7 @@ type NeighLink struct {
 }
 
 type linuxNodeHandler struct {
-	mutex                lock.Mutex
+	mutex                lock.RWMutex
 	isInitialized        bool
 	nodeConfig           datapath.LocalNodeConfiguration
 	nodeAddressing       datapath.NodeAddressing
@@ -1041,6 +1041,11 @@ func (n *linuxNodeHandler) enableIPsecIPv4(newNode *nodeTypes.Node, zeroMark boo
 				upsertIPsecLog(err, "in NodeInternalIPv4", wildcardCIDR, cidr, spi)
 			}
 		} else {
+			/* Insert wildcard policy rules for traffic skipping back through host */
+			if err = ipsec.IpSecReplacePolicyFwd(wildcardCIDR, localIP); err != nil {
+				log.WithError(err).Warning("egress unable to replace policy fwd:")
+			}
+
 			localCIDR := n.nodeAddressing.IPv4().AllocationCIDR().IPNet
 			spi, err = ipsec.UpsertIPsecEndpoint(localCIDR, wildcardCIDR, localIP, wildcardIP, 0, ipsec.IPSecDirIn, false)
 			upsertIPsecLog(err, "in IPv4", localCIDR, wildcardCIDR, spi)
@@ -1075,11 +1080,6 @@ func (n *linuxNodeHandler) enableIPsecIPv4(newNode *nodeTypes.Node, zeroMark boo
 			n.replaceNodeIPSecOutRoute(new4Net)
 			spi, err = ipsec.UpsertIPsecEndpoint(localCIDR, remoteCIDR, localIP, remoteIP, remoteNodeID, ipsec.IPSecDirOut, false)
 			upsertIPsecLog(err, "out IPv4", localCIDR, remoteCIDR, spi)
-
-			/* Insert wildcard policy rules for traffic skipping back through host */
-			if err = ipsec.IpSecReplacePolicyFwd(remoteCIDR, remoteIP); err != nil {
-				log.WithError(err).Warning("egress unable to replace policy fwd:")
-			}
 		}
 	}
 }
@@ -1575,12 +1575,17 @@ func (n *linuxNodeHandler) deleteIPsec(oldNode *nodeTypes.Node) {
 	nodeID := n.getNodeIDForNode(oldNode)
 	if nodeID == 0 {
 		scopedLog.Warning("No node ID found for node.")
+	} else {
+		ipsec.DeleteIPsecEndpoint(nodeID)
 	}
-	ipsec.DeleteIPsecEndpoint(nodeID)
 
 	if n.nodeConfig.EnableIPv4 && oldNode.IPv4AllocCIDR != nil {
 		old4RouteNet := &net.IPNet{IP: oldNode.IPv4AllocCIDR.IP, Mask: oldNode.IPv4AllocCIDR.Mask}
-		n.deleteNodeIPSecOutRoute(old4RouteNet)
+		// This is only needed in IPAM modes where we install one route per
+		// remote pod CIDR.
+		if !n.subnetEncryption() {
+			n.deleteNodeIPSecOutRoute(old4RouteNet)
+		}
 		if n.nodeConfig.EncryptNode {
 			if remoteIPv4 := oldNode.GetNodeIP(false); remoteIPv4 != nil {
 				exactMask := net.IPv4Mask(255, 255, 255, 255)
@@ -1592,7 +1597,10 @@ func (n *linuxNodeHandler) deleteIPsec(oldNode *nodeTypes.Node) {
 
 	if n.nodeConfig.EnableIPv6 && oldNode.IPv6AllocCIDR != nil {
 		old6RouteNet := &net.IPNet{IP: oldNode.IPv6AllocCIDR.IP, Mask: oldNode.IPv6AllocCIDR.Mask}
-		n.deleteNodeIPSecOutRoute(old6RouteNet)
+		// See IPv4 case above.
+		if !n.subnetEncryption() {
+			n.deleteNodeIPSecOutRoute(old6RouteNet)
+		}
 		if n.nodeConfig.EncryptNode {
 			if remoteIPv6 := oldNode.GetNodeIP(true); remoteIPv6 != nil {
 				exactMask := net.CIDRMask(128, 128)

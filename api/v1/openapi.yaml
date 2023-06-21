@@ -1905,6 +1905,9 @@ definitions:
       ipv6-big-tcp:
         description: Status of IPv6 BIG TCP
         "$ref": "#/definitions/IPV6BigTCP"
+      ipv4-big-tcp:
+        description: Status of IPv4 BIG TCP
+        "$ref": "#/definitions/IPV4BigTCP"
       bandwidth-manager:
         description: Status of bandwidth manager
         "$ref": "#/definitions/BandwidthManager"
@@ -2445,10 +2448,16 @@ definitions:
         additionalProperties:
           type: object
       GSOMaxSize:
-        description: Maximum GSO size on workload facing devices
+        description: Maximum IPv6 GSO size on workload facing devices
         type: integer
       GROMaxSize:
-        description: Maximum GRO size on workload facing devices
+        description: Maximum IPv6 GRO size on workload facing devices
+        type: integer
+      GSOIPv4MaxSize:
+        description: Maximum IPv4 GSO size on workload facing devices
+        type: integer
+      GROIPv4MaxSize:
+        description: Maximum IPv4 GRO size on workload facing devices
         type: integer
   DatapathMode:
     description: Datapath mode
@@ -3037,6 +3046,16 @@ definitions:
       enabled:
         description: Is IPv6 BIG TCP enabled
         type: boolean
+  IPV4BigTCP:
+    description: |-
+      Status of IPv4 BIG TCP
+
+      +k8s:deepcopy-gen=true
+    type: object
+    properties:
+      enabled:
+        description: Is IPv4 BIG TCP enabled
+        type: boolean
   BandwidthManager:
     description: |-
       Status of bandwidth manager
@@ -3532,8 +3551,13 @@ definitions:
       ebgp-multihop-ttl:
         description: |
           Time To Live (TTL) value used in BGP packets sent to the eBGP neighbor.
-          0 if eBGP multi-hop feature is disabled.
+          1 implies that eBGP multi-hop feature is disabled (only a single hop is allowed).
         type: integer
+      peer-port:
+        description: TCP port number of peer
+        type: integer
+        minimum: 1
+        maximum: 65535
       session-state:
         description: |
           BGP peer operational state as described here

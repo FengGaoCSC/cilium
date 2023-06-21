@@ -22,8 +22,9 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.14.5
+  cilium_cli_version: v0.14.7
   cilium_cli_ci_version:
+  # renovate: datasource=github-releases depName=kubernetes-sigs/kind
   kind_version: v0.17.0
   kind_config: .github/kind-config.yaml
   gateway_api_version: v0.6.1
@@ -36,7 +37,7 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Checkout main branch to access local actions
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -44,7 +45,7 @@ jobs:
         uses: ./.github/actions/set-env-variables
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@d610d6e2774e29aef9565bad935e3b4943d541af # v0.14.5
+        uses: cilium/cilium-cli@9fcfef089e5b7dd3212f2eac21ba8cfae6f05cca # v0.14.7
         with:
           release-version: ${{ env.cilium_cli_version }}
           ci-version: ${{ env.cilium_cli_ci_version }}
@@ -76,7 +77,7 @@ jobs:
           echo cilium_install_defaults=${CILIUM_INSTALL_DEFAULTS} >> $GITHUB_OUTPUT
 
       - name: Checkout
-        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           ref: ${{ steps.vars.outputs.sha }}
           persist-credentials: false
@@ -91,7 +92,7 @@ jobs:
         uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.20.4
+          go-version: 1.20.5
 
       - name: Wait for images to be available
         timeout-minutes: 30
@@ -170,8 +171,7 @@ jobs:
             --gateway-class cilium \
             --supported-features ReferenceGrant,HTTPRoute,TLSRoute,HTTPRouteQueryParamMatching,HTTPRouteMethodMatching,RouteDestinationPortMatching,GatewayClassObservedGenerationBump,HTTPResponseHeaderModification \
             -test.run "TestConformance" \
-            -test.skip "TestConformance/HTTPRouteListenerHostnameMatching|TestConformance/HTTPRouteRedirectHostAndStatus" 
-            # Enable once HTTPRouteListenerHostnameMatchings #24217 is fixed
+            -test.skip "TestConformance/HTTPRouteRedirectHostAndStatus" 
             # Enable HTTPRouteRedirectHostAndStatus once https://github.com/kubernetes-sigs/gateway-api/issues/1805 is fixed upstream
 
       - name: Post-test information gathering
