@@ -36,5 +36,5 @@ jobs:
               gh issue edit ${issue} --repo "${GITHUB_REPOSITORY}" --remove-label "${{ inputs.remove-label }}"
             fi
             echo "Closing issue #${issue} as completed in #${{ inputs.pr-number }}."
-            gh issue close ${issue} --repo "${GITHUB_REPOSITORY}" --reason "completed" --comment "Done in #${PR_NUMBER}"
+            gh issue close ${issue} --repo "${GITHUB_REPOSITORY}" --reason "completed" --comment "Done in #${{ inputs.pr-number }}"
           done || true
