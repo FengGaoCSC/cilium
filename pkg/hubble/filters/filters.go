@@ -143,4 +143,5 @@ var DefaultFilters = []OnBuildFilter{
 	&IPVersionFilter{},
 	&TraceIDFilter{},
 	&TrafficDirectionFilter{},
+	&CELExpressionFilter{},
 }

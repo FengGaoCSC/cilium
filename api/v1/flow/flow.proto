@@ -527,6 +527,8 @@ message FlowFilter {
 
     // trace_id filters flows by trace ID
     repeated string trace_id = 28;
+
+    repeated string cel_expression = 31;
 }
 
 // EventType are constants are based on the ones from <linux/perf_event.h>.
