@@ -1601,6 +1601,26 @@ func init() {
           }
         }
       }
+    },
+    "/statedb/dump": {
+      "get": {
+        "produces": [
+          "application/octet-stream"
+        ],
+        "tags": [
+          "statedb"
+        ],
+        "summary": "Dump StateDB contents",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -3154,6 +3174,14 @@ func init() {
         "enabled": {
           "description": "Is IPv4 BIG TCP enabled",
           "type": "boolean"
+        },
+        "maxGRO": {
+          "description": "Maximum IPv4 GRO size",
+          "type": "integer"
+        },
+        "maxGSO": {
+          "description": "Maximum IPv4 GSO size",
+          "type": "integer"
         }
       }
     },
@@ -3164,6 +3192,14 @@ func init() {
         "enabled": {
           "description": "Is IPv6 BIG TCP enabled",
           "type": "boolean"
+        },
+        "maxGRO": {
+          "description": "Maximum IPv6 GRO size",
+          "type": "integer"
+        },
+        "maxGSO": {
+          "description": "Maximum IPv6 GSO size",
+          "type": "integer"
         }
       }
     },
@@ -6570,6 +6606,26 @@ func init() {
           }
         }
       }
+    },
+    "/statedb/dump": {
+      "get": {
+        "produces": [
+          "application/octet-stream"
+        ],
+        "tags": [
+          "statedb"
+        ],
+        "summary": "Dump StateDB contents",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -8237,6 +8293,14 @@ func init() {
         "enabled": {
           "description": "Is IPv4 BIG TCP enabled",
           "type": "boolean"
+        },
+        "maxGRO": {
+          "description": "Maximum IPv4 GRO size",
+          "type": "integer"
+        },
+        "maxGSO": {
+          "description": "Maximum IPv4 GSO size",
+          "type": "integer"
         }
       }
     },
@@ -8247,6 +8311,14 @@ func init() {
         "enabled": {
           "description": "Is IPv6 BIG TCP enabled",
           "type": "boolean"
+        },
+        "maxGRO": {
+          "description": "Maximum IPv6 GRO size",
+          "type": "integer"
+        },
+        "maxGSO": {
+          "description": "Maximum IPv6 GSO size",
+          "type": "integer"
         }
       }
     },
