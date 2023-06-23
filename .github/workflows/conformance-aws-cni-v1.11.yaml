@@ -174,10 +174,10 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - name: Checkout PR code
+      - name: Checkout main branch
         uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
         with:
-          ref: ${{ needs.setup-report.outputs.sha }}
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - name: Convert YAML to JSON
@@ -294,7 +294,7 @@ jobs:
           rm eksctl_$(uname -s)_amd64.tar.gz
 
       - name: Set up AWS CLI credentials
-        uses: aws-actions/configure-aws-credentials@5727f247b64f324ec403ac56ae05e220fd02b65f # v2.1.0
+        uses: aws-actions/configure-aws-credentials@5fd3084fc36e372ff1fff382a39b10d03659f355 # v2.2.0
         with:
           aws-access-key-id: ${{ secrets.AWS_PR_SA_ID }}
           aws-secret-access-key: ${{ secrets.AWS_PR_SA_KEY }}
@@ -361,7 +361,7 @@ jobs:
           echo "=== Retrieve cluster state ==="
           kubectl get pods --all-namespaces -o wide
           cilium status
-          cilium sysdump --output-filename cilium-sysdump-final
+          cilium sysdump --output-filename cilium-sysdump-final-${{ join(matrix.*, '-') }}
         shell: bash {0} # Disable default fail-fast behaviour so that all commands run independently
 
       - name: Clean up EKS

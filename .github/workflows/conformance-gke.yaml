@@ -68,6 +68,7 @@ env:
   # renovate: datasource=github-releases depName=cilium/cilium-cli
   cilium_cli_version: v0.14.7
   cilium_cli_ci_version:
+  CILIUM_CLI_MODE: helm
   check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
@@ -169,10 +170,10 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - name: Checkout PR code
+      - name: Checkout main branch
         uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
         with:
-          ref: ${{ needs.setup-report.outputs.sha }}
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - name: Convert YAML to JSON
@@ -335,7 +336,7 @@ jobs:
 
       - name: Install Cilium
         run: |
-          CILIUM_CLI_MODE=helm cilium install ${{ steps.vars.outputs.cilium_install_defaults }} ${{ matrix.config.cilium-install-opts }}
+          cilium install ${{ steps.vars.outputs.cilium_install_defaults }} ${{ matrix.config.cilium-install-opts }}
 
       - name: Wait for Cilium to be ready
         run: |
@@ -367,7 +368,7 @@ jobs:
         run: |
           kubectl get pods --all-namespaces -o wide
           cilium status
-          cilium sysdump --output-filename cilium-sysdump-final
+          cilium sysdump --output-filename cilium-sysdump-final-${{ matrix.k8s.version }}-${{ matrix.config.index }}-${{ matrix.config.type }}
         shell: bash {0} # Disable default fail-fast behaviour so that all commands run independently
 
       - name: Clean up GKE
