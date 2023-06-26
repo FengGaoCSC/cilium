@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/cilium/cilium-cli v0.14.7-0.20230606150742-fb2b5866e4bf
+	github.com/cloudflare/cfssl v1.6.4
 	k8s.io/api v0.27.2
 	k8s.io/apimachinery v0.27.2
 )
@@ -30,7 +31,6 @@ require (
 	github.com/cilium/proxy v0.0.0-20230605062141-384b5008dce4 // indirect
 	github.com/cilium/tetragon/pkg/k8s v0.0.0-20230530162345-26256999192b // indirect
 	github.com/cilium/workerpool v1.2.0 // indirect
-	github.com/cloudflare/cfssl v1.6.4 // indirect
 	github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4 // indirect
 	github.com/containerd/containerd v1.7.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect

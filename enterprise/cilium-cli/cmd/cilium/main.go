@@ -14,12 +14,17 @@ import (
 	"fmt"
 	"os"
 
+	cfsslLog "github.com/cloudflare/cfssl/log"
+
 	"github.com/cilium/cilium-cli/cli"
 
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks"
 )
 
 func main() {
+	// Hide unwanted cfssl log messages
+	cfsslLog.Level = cfsslLog.LevelWarning
+
 	if err := cli.NewCiliumCommand(&hooks.EnterpriseHooks{}).Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
