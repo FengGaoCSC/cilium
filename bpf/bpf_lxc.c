@@ -1519,7 +1519,7 @@ skip_policy_enforcement:
 		{
 			bool node_port =
 				ct_has_nodeport_egress_entry6(get_ct_map6(tuple),
-							      tuple, false);
+							      tuple, NULL, false);
 
 			ct_state_new.node_port = node_port;
 			if (ret == CT_REOPENED &&
@@ -1847,7 +1847,7 @@ skip_policy_enforcement:
 		{
 			bool node_port =
 				ct_has_nodeport_egress_entry4(get_ct_map4(tuple),
-							      tuple, false);
+							      tuple, NULL, false);
 
 			ct_state_new.node_port = node_port;
 			if (ret == CT_REOPENED &&
