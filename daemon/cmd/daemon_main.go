@@ -86,6 +86,7 @@ import (
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/proxy"
+	"github.com/cilium/cilium/pkg/srv6"
 	"github.com/cilium/cilium/pkg/statedb"
 	"github.com/cilium/cilium/pkg/sysctl"
 	"github.com/cilium/cilium/pkg/version"
@@ -1613,6 +1614,7 @@ type daemonParams struct {
 	L2Announcer          *l2announcer.L2Announcer
 	L7Proxy              *proxy.Proxy
 	DB                   statedb.DB
+	SRv6Manager          *srv6.Manager
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
@@ -1847,6 +1849,13 @@ func runDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daem
 				d.nodeDiscovery.Manager.StartNeighborRefresh(d.datapath.NodeNeighbors())
 			}
 		}
+	}
+
+	// Assign the BGP Control to the struct field so non-modularized components
+	// can interact with the BGP Controller like they are used to.
+	d.bgpControlPlaneController = params.BGPController
+	if d.srv6Manager != nil {
+		d.srv6Manager.SetSIDAllocator(d.ipam.IPv6Allocator)
 	}
 
 	log.WithField("bootstrapTime", time.Since(bootstrapTimestamp)).

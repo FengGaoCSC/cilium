@@ -225,6 +225,9 @@ func (k *K8sWatcher) endpointUpdated(oldEndpoint, endpoint *types.CiliumEndpoint
 	if k.egressGatewayManager != nil {
 		k.egressGatewayManager.OnUpdateEndpoint(endpoint)
 	}
+	if option.Config.EnableSRv6 {
+		k.srv6Manager.OnUpdateEndpoint(endpoint)
+	}
 }
 
 func (k *K8sWatcher) endpointDeleted(endpoint *types.CiliumEndpoint) {
@@ -249,8 +252,12 @@ func (k *K8sWatcher) endpointDeleted(endpoint *types.CiliumEndpoint) {
 			k.policyManager.TriggerPolicyUpdates(true, "Named ports deleted")
 		}
 	}
+
 	if k.egressGatewayManager != nil {
 		k.egressGatewayManager.OnDeleteEndpoint(endpoint)
+	}
+	if option.Config.EnableSRv6 {
+		k.srv6Manager.OnDeleteEndpoint(endpoint)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	k8s_metrics "k8s.io/client-go/tools/metrics"
@@ -55,6 +56,7 @@ import (
 	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/service"
 	"github.com/cilium/cilium/pkg/source"
+	"github.com/cilium/cilium/pkg/srv6"
 )
 
 const (
@@ -174,6 +176,15 @@ type EgressGatewayManager interface {
 	OnDeleteNode(node nodeTypes.Node)
 }
 
+type srv6Manager interface {
+	OnAddSRv6Policy(config srv6.EgressPolicy)
+	OnDeleteSRv6Policy(configID types.NamespacedName)
+	OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint)
+	OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint)
+	OnAddSRv6VRF(vrf srv6.VRF)
+	OnDeleteSRv6VRF(vrfID types.NamespacedName)
+}
+
 type envoyConfigManager interface {
 	UpsertEnvoyResources(context.Context, envoy.Resources, envoy.PortAllocator) error
 	UpdateEnvoyResources(ctx context.Context, old, new envoy.Resources, portAllocator envoy.PortAllocator) error
@@ -241,6 +252,7 @@ type K8sWatcher struct {
 	redirectPolicyManager redirectPolicyManager
 	bgpSpeakerManager     bgpSpeakerManager
 	egressGatewayManager  EgressGatewayManager
+	srv6Manager           srv6Manager
 	ipcache               ipcacheManager
 	envoyConfigManager    envoyConfigManager
 	cgroupManager         cgroupManager
@@ -291,6 +303,7 @@ func NewK8sWatcher(
 	redirectPolicyManager redirectPolicyManager,
 	bgpSpeakerManager bgpSpeakerManager,
 	egressGatewayManager EgressGatewayManager,
+	srv6Manager srv6Manager,
 	envoyConfigManager envoyConfigManager,
 	cfg WatcherConfiguration,
 	ipcache ipcacheManager,
@@ -314,6 +327,7 @@ func NewK8sWatcher(
 		redirectPolicyManager: redirectPolicyManager,
 		bgpSpeakerManager:     bgpSpeakerManager,
 		egressGatewayManager:  egressGatewayManager,
+		srv6Manager:           srv6Manager,
 		cgroupManager:         cgroupManager,
 		NodeChain:             subscriber.NewNodeChain(),
 		CiliumNodeChain:       subscriber.NewCiliumNodeChain(),
@@ -581,6 +595,10 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 			// no-op; handled in k8sAPIGroupCiliumEndpointV2
 		case k8sAPIGroupCiliumLocalRedirectPolicyV2:
 			k.ciliumLocalRedirectPolicyInit(k.clientset)
+		case k8sAPIGroupCiliumSRv6EgressPolicyV2Alpha1:
+			k.ciliumSRv6EgressPolicyInit(k.clientset)
+		case k8sAPIGroupCiliumSRv6VRFV2Alpha1:
+			k.ciliumSRv6VRFInit(k.clientset)
 		case k8sAPIGroupCiliumClusterwideEnvoyConfigV2:
 			k.ciliumClusterwideEnvoyConfigInit(ctx, k.clientset)
 		case k8sAPIGroupCiliumEnvoyConfigV2:

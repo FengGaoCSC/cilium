@@ -91,6 +91,7 @@ import (
 	"github.com/cilium/cilium/pkg/service"
 	serviceStore "github.com/cilium/cilium/pkg/service/store"
 	"github.com/cilium/cilium/pkg/source"
+	"github.com/cilium/cilium/pkg/srv6"
 	"github.com/cilium/cilium/pkg/statedb"
 	"github.com/cilium/cilium/pkg/status"
 	"github.com/cilium/cilium/pkg/trigger"
@@ -195,6 +196,8 @@ type Daemon struct {
 	ipamMetadata *ipamMetadata.Manager
 
 	multiNetworkManager *multinetwork.Manager
+
+	srv6Manager *srv6.Manager
 
 	apiLimiterSet *rate.APILimiterSet
 
@@ -549,6 +552,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		l2announcer:          params.L2Announcer,
 		l7Proxy:              params.L7Proxy,
 		db:                   params.DB,
+		srv6Manager:          params.SRv6Manager,
 	}
 
 	d.configModifyQueue = eventqueue.NewEventQueueBuffered("config-modify-queue", ConfigModifyQueueSize)
@@ -659,6 +663,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.redirectPolicyManager,
 		d.bgpSpeaker,
 		egressGatewayWatcher,
+		d.srv6Manager,
 		d.l7Proxy,
 		option.Config,
 		d.ipcache,
@@ -1077,6 +1082,12 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 	if option.Config.EnableIPv6 {
 		d.restoreCiliumHostIPs(true, router6FromK8s)
+		// if SRv6 is enabled the mananger will use the IPv6 allocator to allocate
+		// VRF SIDs
+		if option.Config.EnableSRv6 {
+			log.Info("IPv6 and SRv6 is enabled, setting SRv6 Manager's SID Allocator")
+			d.srv6Manager.SetSIDAllocator(d.ipam.IPv6Allocator)
+		}
 	}
 
 	// restore endpoints before any IPs are allocated to avoid eventual IP
