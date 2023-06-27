@@ -3,12 +3,12 @@ name: codeql
 on:
   pull_request:
     branches:
-      - main-ce
-      - ft/main/**
+      - v1.14-ce
+      - ft/v1.14-ce/**
   push:
     branches:
-      - main-ce
-      - ft/main/**
+      - v1.14-ce
+      - ft/v1.14-ce/**
   schedule:
     - cron: "45 6 * * 3"
 

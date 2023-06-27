@@ -8,8 +8,8 @@ on:
       - 'test/**'
   push:
     branches:
-      - main-ce
-      - ft/main/**
+      - v1.14-ce
+      - ft/v1.14-ce/**
     paths-ignore:
       - 'Documentation/**'
       - 'test/**'
