@@ -15,6 +15,7 @@ import (
 
 	"github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
+	cemaps "github.com/cilium/cilium/enterprise/pkg/maps"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 )
 
@@ -27,6 +28,7 @@ var (
 
 		// enterprise-only cells here
 		EnterpriseControlPlane,
+		EnterpriseDatapath,
 	)
 
 	EnterpriseControlPlane = cell.Module(
@@ -36,5 +38,12 @@ var (
 		cecm.Cell,
 		sidmanager.SIDManagerCell,
 		bgpv1.Cell,
+	)
+
+	EnterpriseDatapath = cell.Module(
+		"enterprise-datapath",
+		"Datapath Enterprise",
+
+		cemaps.Cell,
 	)
 )
