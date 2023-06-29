@@ -31,6 +31,11 @@ var Cell = cell.Module(
 		func(cfg cecmcfg.Config) cmtypes.ValidationMode {
 			return cmtypes.ValidationMode(cfg.EnableClusterAwareAddressing)
 		},
+
+		// Inject the ClusterIDManager implementation with the extended logic
+		// to handle per-cluster maps creation and removal.
+		newClusterIDManager,
+		func(mgr ClusterIDsManager) clustermesh.ClusterIDsManager { return mgr },
 	),
 
 	cell.Invoke(
