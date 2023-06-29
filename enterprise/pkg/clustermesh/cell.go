@@ -13,6 +13,7 @@ package clustermesh
 import (
 	"github.com/cilium/cilium/pkg/clustermesh"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
+	"github.com/cilium/cilium/pkg/datapath/linux"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/option"
 
@@ -53,5 +54,8 @@ var Cell = cell.Module(
 		// Register enterprise-only jobs, currently handling the garbage
 		// collection of stale per-cluster maps.
 		registerJobs,
+
+		// Inject the mutator to propagate the cluster ID to the tunnel map.
+		linux.InjectCEPrefixClusterMutator,
 	),
 )
