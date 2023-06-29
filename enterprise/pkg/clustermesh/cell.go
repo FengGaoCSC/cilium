@@ -40,6 +40,9 @@ var Cell = cell.Module(
 
 		// Inject the extra datapath configs required for overlapping PodCIDR support.
 		datapathNodeHeaderConfigProvider,
+
+		// Inject the extra ipcache watcher options to enable cluster ID propagation.
+		extraIPCacheWatcherOptsProvider,
 	),
 
 	cell.Invoke(

@@ -18,8 +18,10 @@ import (
 
 	"github.com/cilium/cilium/pkg/clustermesh"
 	"github.com/cilium/cilium/pkg/clustermesh/types"
+	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 
+	cecmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
 	cectnat "github.com/cilium/cilium/enterprise/pkg/maps/ctnat"
 )
 
@@ -81,4 +83,16 @@ func (mgr ClusterIDsManager) cleanupStalePerClusterMaps() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func extraIPCacheWatcherOptsProvider(cmcfg cecmcfg.Config) clustermesh.IPCacheWatcherOptsFn {
+	return func(config *types.CiliumClusterConfig) []ipcache.IWOpt {
+		var opts []ipcache.IWOpt
+
+		if config != nil && cmcfg.EnableClusterAwareAddressing {
+			opts = append(opts, ipcache.WithClusterID(config.ID))
+		}
+
+		return opts
+	}
 }
