@@ -302,7 +302,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.extraVolumes | list | `[]` | Additional envoy volumes. |
 | envoy.healthPort | int | `9878` | TCP port for the health API. |
 | envoy.idleTimeoutDurationSeconds | int | `60` | Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s |
-| envoy.image | object | `{"digest":"sha256:f165787c05050a4d57c5940dcd59de03cafecff9c02965a1d076c2b2935505d8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.25.7-384b5008dce426eba89af8ef17f52e4fb066ff40","useDigest":true}` | Envoy container image. |
+| envoy.image | object | `{"digest":"sha256:7edab48930186cc988baa6fb2ef6c352325306f0d6a0c89e43bef28941189095","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.25.7-8fddead4e52c704a6b189e3f80a69403c6cdc997","useDigest":true}` | Envoy container image. |
 | envoy.livenessProbe.failureThreshold | int | `10` | failure threshold of liveness probe |
 | envoy.livenessProbe.periodSeconds | int | `30` | interval between checks of the liveness probe |
 | envoy.log.format | string | `"[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v"` | The format string to use for laying out the log message metadata of Envoy. |
@@ -707,15 +707,16 @@ contributors across the globe, there is almost always someone available to help.
 | svcSourceRangeCheck | bool | `true` | Enable check of service source ranges (currently, only for LoadBalancer). |
 | synchronizeK8sNodes | bool | `true` | Synchronize Kubernetes nodes to kvstore and perform CNP GC. |
 | terminationGracePeriodSeconds | int | `1` | Configure termination grace period for cilium-agent DaemonSet. |
-| tls | object | `{"ca":{"cert":"","certValidityDuration":1095,"key":""},"caBundle":{"enabled":false,"key":"ca.crt","name":"cilium-root-ca.crt"},"secretsBackend":"local"}` | Configure TLS configuration in the agent. |
+| tls | object | `{"ca":{"cert":"","certValidityDuration":1095,"key":""},"caBundle":{"enabled":false,"key":"ca.crt","name":"cilium-root-ca.crt","useSecret":false},"secretsBackend":"local"}` | Configure TLS configuration in the agent. |
 | tls.ca | object | `{"cert":"","certValidityDuration":1095,"key":""}` | Base64 encoded PEM values for the CA certificate and private key. This can be used as common CA to generate certificates used by hubble and clustermesh components. It is neither required nor used when cert-manager is used to generate the certificates. |
 | tls.ca.cert | string | `""` | Optional CA cert. If it is provided, it will be used by cilium to generate all other certificates. Otherwise, an ephemeral CA is generated. |
 | tls.ca.certValidityDuration | int | `1095` | Generated certificates validity duration in days. This will be used for auto generated CA. |
 | tls.ca.key | string | `""` | Optional CA private key. If it is provided, it will be used by cilium to generate all other certificates. Otherwise, an ephemeral CA is generated. |
-| tls.caBundle | object | `{"enabled":false,"key":"ca.crt","name":"cilium-root-ca.crt"}` | Configure the CA trust bundle used for the validation of the certificates leveraged by hubble and clustermesh. When enabled, it overrides the content of the 'ca.crt' field of the respective certificates, allowing for CA rotation with no down-time. |
+| tls.caBundle | object | `{"enabled":false,"key":"ca.crt","name":"cilium-root-ca.crt","useSecret":false}` | Configure the CA trust bundle used for the validation of the certificates leveraged by hubble and clustermesh. When enabled, it overrides the content of the 'ca.crt' field of the respective certificates, allowing for CA rotation with no down-time. |
 | tls.caBundle.enabled | bool | `false` | Enable the use of the CA trust bundle. |
 | tls.caBundle.key | string | `"ca.crt"` | Entry of the ConfigMap containing the CA trust bundle. |
 | tls.caBundle.name | string | `"cilium-root-ca.crt"` | Name of the ConfigMap containing the CA trust bundle. |
+| tls.caBundle.useSecret | bool | `false` | Use a Secret instead of a ConfigMap. |
 | tls.secretsBackend | string | `"local"` | This configures how the Cilium agent loads the secrets used TLS-aware CiliumNetworkPolicies (namely the secrets referenced by terminatingTLS and originatingTLS). Possible values:   - local   - k8s |
 | tolerations | list | `[{"operator":"Exists"}]` | Node tolerations for agent scheduling to nodes with taints ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ |
 | tunnel | string | `""` | Configure the encapsulation configuration for communication between nodes. Possible values:   - disabled   - vxlan (default)   - geneve |

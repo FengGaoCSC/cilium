@@ -292,7 +292,7 @@ func initializeFlags() {
 
 	flags.Var(option.NewNamedMapOptions(option.IPAMMultiPoolPreAllocation, &option.Config.IPAMMultiPoolPreAllocation, nil),
 		option.IPAMMultiPoolPreAllocation,
-		fmt.Sprintf("Defines how the minimum number of IPs a node should pre-allocate from each pool (default %s)", defaults.IPAMMultiPoolPreAllocation))
+		fmt.Sprintf("Defines the minimum number of IPs a node should pre-allocate from each pool (default %s)", defaults.IPAMMultiPoolPreAllocation))
 	Vp.SetDefault(option.IPAMMultiPoolPreAllocation, defaults.IPAMMultiPoolPreAllocation)
 	option.BindEnv(Vp, option.IPAMMultiPoolPreAllocation)
 
@@ -329,7 +329,7 @@ func initializeFlags() {
 	flags.String(option.EnablePolicy, option.DefaultEnforcement, "Enable policy enforcement")
 	option.BindEnv(Vp, option.EnablePolicy)
 
-	flags.Bool(option.EnableExternalIPs, defaults.EnableExternalIPs, fmt.Sprintf("Enable k8s service externalIPs feature (requires enabling %s)", option.EnableNodePort))
+	flags.Bool(option.EnableExternalIPs, false, fmt.Sprintf("Enable k8s service externalIPs feature (requires enabling %s)", option.EnableNodePort))
 	option.BindEnv(Vp, option.EnableExternalIPs)
 
 	flags.Bool(option.K8sEnableEndpointSlice, defaults.K8sEnableEndpointSlice, "Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it")
@@ -523,18 +523,16 @@ func initializeFlags() {
 	flags.StringSlice(option.Labels, []string{}, "List of label prefixes used to determine identity of an endpoint")
 	option.BindEnv(Vp, option.Labels)
 
-	flags.String(option.KubeProxyReplacement, option.KubeProxyReplacementPartial, fmt.Sprintf(
+	flags.String(option.KubeProxyReplacement, option.KubeProxyReplacementFalse, fmt.Sprintf(
 		"Enable only selected features (will panic if any selected feature cannot be enabled) (%q), "+
-			"or enable all features (will panic if any feature cannot be enabled) (%q), "+
-			"or completely disable it (ignores any selected feature) (%q)",
-		option.KubeProxyReplacementPartial, option.KubeProxyReplacementStrict,
-		option.KubeProxyReplacementDisabled))
+			"or enable all features (will panic if any feature cannot be enabled) (%q)",
+		option.KubeProxyReplacementFalse, option.KubeProxyReplacementTrue))
 	option.BindEnv(Vp, option.KubeProxyReplacement)
 
 	flags.String(option.KubeProxyReplacementHealthzBindAddr, defaults.KubeProxyReplacementHealthzBindAddr, "The IP address with port for kube-proxy replacement health check server to serve on (set to '0.0.0.0:10256' for all IPv4 interfaces and '[::]:10256' for all IPv6 interfaces). Set empty to disable.")
 	option.BindEnv(Vp, option.KubeProxyReplacementHealthzBindAddr)
 
-	flags.Bool(option.EnableHostPort, true, fmt.Sprintf("Enable k8s hostPort mapping feature (requires enabling %s)", option.EnableNodePort))
+	flags.Bool(option.EnableHostPort, false, fmt.Sprintf("Enable k8s hostPort mapping feature (requires enabling %s)", option.EnableNodePort))
 	option.BindEnv(Vp, option.EnableHostPort)
 
 	flags.Bool(option.EnableNodePort, false, "Enable NodePort type services by Cilium")
@@ -1328,7 +1326,7 @@ func initEnv() {
 		if option.Config.NodePortAcceleration != option.NodePortAccelerationDisabled {
 			option.Config.EnablePMTUDiscovery = true
 		}
-		option.Config.KubeProxyReplacement = option.KubeProxyReplacementPartial
+		option.Config.KubeProxyReplacement = option.KubeProxyReplacementFalse
 		option.Config.EnableSocketLB = true
 		// Socket-LB tracing relies on metadata that's retrieved from Kubernetes.
 		option.Config.EnableSocketLBTracing = false
