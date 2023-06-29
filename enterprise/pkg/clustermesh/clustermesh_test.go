@@ -97,3 +97,56 @@ func TestClusterMeshWithOverlappingPodCIDR(t *testing.T) {
 	require.False(t, maps.CT().Has(newcfg.ID), "CT maps not released correctly")
 	require.False(t, maps.NAT().Has(newcfg.ID), "NAT maps not released correctly")
 }
+
+func TestClusterMeshWithOverlappingPodCIDRRestart(t *testing.T) {
+	testutils.IntegrationTest(t)
+
+	kvstore.SetupDummy(t, "etcd")
+
+	identity.InitWellKnownIdentities(&fakeConfig.Config{})
+	mgr := cache.NewCachingIdentityAllocator(&testidentity.IdentityAllocatorOwnerMock{})
+	<-mgr.InitIdentityAllocator(nil)
+	t.Cleanup(mgr.Close)
+
+	maps := cectnat.NewFakePerCluster(true, true)
+
+	// Emulate the situation that user disconnected cluster during Cilium restart
+	oldcfg := cmtypes.CiliumClusterConfig{ID: 255}
+	err := maps.CT().CreateClusterCTMaps(oldcfg.ID)
+	require.NoError(t, err, "Failed to update CT maps")
+	err = maps.NAT().CreateClusterNATMaps(oldcfg.ID)
+	require.NoError(t, err, "Failed to update NAT maps")
+
+	idsMgr := newClusterIDManager(logging.DefaultLogger, maps)
+	cm := clustermesh.NewClusterMesh(hivetest.Lifecycle(t), clustermesh.Configuration{
+		Config:               cmcommon.Config{ClusterMeshConfig: t.TempDir()},
+		ClusterIDName:        cmtypes.ClusterIDName{ClusterID: 99, ClusterName: "foo"},
+		ConfigValidationMode: cmtypes.Strict,
+		ClusterIDsManager:    idsMgr,
+
+		RemoteIdentityWatcher: mgr,
+		Metrics:               clustermesh.NewMetrics(),
+		CommonMetrics:         cmcommon.MetricsProvider("foo")(),
+	})
+	require.NotNil(t, cm, "Failed to initialize clustermesh")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel the context so that Run() terminates immediately
+
+	// "Connect" a new cluster
+	cfg := cmtypes.CiliumClusterConfig{ID: 1}
+	ready := make(chan error, 1)
+	cm.NewRemoteCluster("cluster1", nil).Run(ctx, kvstore.Client(), &cfg, ready)
+	require.NoError(t, <-ready)
+
+	// Trigger cleanup
+	idsMgr.cleanupStalePerClusterMaps()
+
+	// Ensure that the maps for the connected cluster are kept
+	require.True(t, maps.CT().Has(cfg.ID), "CT maps not initialized correctly")
+	require.True(t, maps.NAT().Has(cfg.ID), "NAT maps not initialized correctly")
+
+	// Ensure that the stale maps are deleted
+	require.False(t, maps.CT().Has(oldcfg.ID), "CT maps not released correctly")
+	require.False(t, maps.NAT().Has(oldcfg.ID), "NAT maps not released correctly")
+}

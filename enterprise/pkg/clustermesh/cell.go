@@ -46,5 +46,9 @@ var Cell = cell.Module(
 		func(cfg cecmcfg.Config, dcfg *option.DaemonConfig) error {
 			return cfg.Validate(dcfg)
 		},
+
+		// Register enterprise-only jobs, currently handling the garbage
+		// collection of stale per-cluster maps.
+		registerJobs,
 	),
 )

@@ -11,11 +11,13 @@
 package clustermesh
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/clustermesh"
+	"github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 
 	cectnat "github.com/cilium/cilium/enterprise/pkg/maps/ctnat"
@@ -57,4 +59,26 @@ func (mgr ClusterIDsManager) ReleaseClusterID(clusterID uint32) {
 	}
 
 	mgr.usedIDs.ReleaseClusterID(clusterID)
+}
+
+// cleanupStalePerClusterMaps cleanups all per-cluster (inner) maps currently
+// not used by any remote clusters. This function exists for handling the case
+// that users delete the remote cluster from the clustermesh configuration file
+// while Cilium is stopping. This should be called after ClustersSynced().
+// Otherwise, we may break the existing connection on agent restart.
+func (mgr ClusterIDsManager) cleanupStalePerClusterMaps() error {
+	var errs []error
+
+	mgr.usedIDs.UsedClusterIDsMutex.Lock()
+	defer mgr.usedIDs.UsedClusterIDsMutex.Unlock()
+
+	for id := uint32(1); id <= types.ClusterIDMax; id++ {
+		if _, ok := mgr.usedIDs.UsedClusterIDs[id]; !ok {
+			if err := mgr.maps.Delete(id); err != nil {
+				errs = append(errs, fmt.Errorf("cluster ID %d: %w", id, err))
+			}
+		}
+	}
+
+	return errors.Join(errs...)
 }
