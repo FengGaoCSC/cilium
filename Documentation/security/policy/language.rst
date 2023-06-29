@@ -304,8 +304,8 @@ have ``external:yes`` set as the label.
 Limitations
 ~~~~~~~~~~~
 
-``toServices`` statements cannot be combined with ``toPorts`` statements in the
-same rule.
+``toServices`` statements must not be combined with ``toPorts`` statements in the
+same rule. If a rule combines both these statements, the policy is rejected.
 
 .. _Entities based:
 
