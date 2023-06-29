@@ -11,22 +11,27 @@
 package k8s
 
 import (
+	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/service/store"
 	serviceStore "github.com/cilium/cilium/pkg/service/store"
+
+	cmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
 )
 
 // CEServiceMerger wraps a ServiceCache, overriding the cluster service merging
 // logic to support additional enterprise features (e.g., phantom services).
 type CEServiceMerger struct {
-	sc *ServiceCache
+	sc    *ServiceCache
+	cmcfg cmcfg.Config
 }
 
-func NewCEServiceMerger(sc *ServiceCache) CEServiceMerger {
+func NewCEServiceMerger(sc *ServiceCache, cmcfg cmcfg.Config) CEServiceMerger {
 	return CEServiceMerger{
-		sc: sc,
+		sc:    sc,
+		cmcfg: cmcfg,
 	}
 }
 
@@ -40,6 +45,10 @@ func (s CEServiceMerger) MergeExternalServiceUpdate(service *serviceStore.Cluste
 	// Ignore updates of own cluster
 	if service.Cluster == option.Config.ClusterName {
 		return
+	}
+
+	if s.cmcfg.EnableClusterAwareAddressing {
+		service = annotateBackendsWithID(*service)
 	}
 
 	s.sc.mutex.Lock()
@@ -105,4 +114,21 @@ func (s *CEServiceMerger) mergeServiceUpdateLocked(service *store.ClusterService
 	}
 
 	s.sc.mergeServiceUpdateLocked(service, nil, swg)
+}
+
+// annotateBackendsWithID annotates each backend of the service with the
+// associated cluster ID, so that it can then be parsed and eventually
+// propagated to the datapath for Overlapping PodCIDR support.
+//
+// The service object is passed by value to create a shallow copy, and
+// avoid mutating the original one during this operation.
+func annotateBackendsWithID(service serviceStore.ClusterService) *serviceStore.ClusterService {
+	backends := make(map[string]serviceStore.PortConfiguration, len(service.Backends))
+
+	for backend, value := range service.Backends {
+		backends[cmtypes.AnnotateIPCacheKeyWithClusterID(backend, service.ClusterID)] = value
+	}
+
+	service.Backends = backends
+	return &service
 }

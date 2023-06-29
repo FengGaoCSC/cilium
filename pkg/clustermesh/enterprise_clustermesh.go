@@ -10,14 +10,18 @@
 
 package clustermesh
 
-import "github.com/cilium/cilium/pkg/k8s"
+import (
+	"github.com/cilium/cilium/pkg/k8s"
+
+	cmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
+)
 
 // InjectCEServiceMerger allows to override the default ServiceMerger injected
 // through hive, to support additional enterprise features in addition to global
 // services (e.g., phantom services). This method is intended to be executed
 // through an Invoke function before starting the clustermesh subsystem.
-func InjectCEServiceMerger(cm *ClusterMesh, sc *k8s.ServiceCache) {
+func InjectCEServiceMerger(cm *ClusterMesh, cmcfg cmcfg.Config, sc *k8s.ServiceCache) {
 	if cm != nil {
-		cm.conf.ServiceMerger = k8s.NewCEServiceMerger(sc)
+		cm.conf.ServiceMerger = k8s.NewCEServiceMerger(sc, cmcfg)
 	}
 }

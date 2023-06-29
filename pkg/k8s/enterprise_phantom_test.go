@@ -23,6 +23,8 @@ import (
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/service/store"
+
+	cmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
 )
 
 func TestPhantomServiceMutator(t *testing.T) {
@@ -76,7 +78,7 @@ func TestPhantomServiceMutator(t *testing.T) {
 }
 
 func TestPhantomServiceUpdate(t *testing.T) {
-	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()))
+	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()), cmcfg.Config{})
 
 	svc := store.ClusterService{
 		Cluster:   "other",
@@ -127,7 +129,7 @@ func TestPhantomServiceUpdate(t *testing.T) {
 }
 
 func TestPhantomServiceDelete(t *testing.T) {
-	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()))
+	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()), cmcfg.Config{})
 
 	svc := store.ClusterService{
 		Cluster:   "other",
@@ -170,7 +172,7 @@ func TestPhantomServiceDelete(t *testing.T) {
 }
 
 func TestGlobalToPhantomToGlobalService(t *testing.T) {
-	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()))
+	svcCache := NewCEServiceMerger(NewServiceCache(fakeDatapath.NewNodeAddressing()), cmcfg.Config{})
 
 	k8sSvc := slim_corev1.Service{
 		ObjectMeta: slim_metav1.ObjectMeta{
