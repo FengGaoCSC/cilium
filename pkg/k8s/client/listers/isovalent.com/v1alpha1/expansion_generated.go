@@ -9,6 +9,10 @@ package v1alpha1
 // IsovalentFQDNGroupLister.
 type IsovalentFQDNGroupListerExpansion interface{}
 
+// IsovalentPodNetworkListerExpansion allows custom methods to be added to
+// IsovalentPodNetworkLister.
+type IsovalentPodNetworkListerExpansion interface{}
+
 // IsovalentSRv6SIDManagerListerExpansion allows custom methods to be added to
 // IsovalentSRv6SIDManagerLister.
 type IsovalentSRv6SIDManagerListerExpansion interface{}

@@ -143,3 +143,9 @@ annotations:
       displayName: Cilium Pod IP Pool
       description: |
         CiliumPodIPPool defines an IP pool that can be used for pooled IPAM (i.e. the multi-pool IPAM mode).
+    - kind: IsovalentPodNetwork
+      version: v1alpha1
+      name: isovalentpodnetwork.isovalent.com
+      displayName: Isovalent Pod Network
+      description: |
+        IsovalentPodNetwork defines a network to which pods can be attached.

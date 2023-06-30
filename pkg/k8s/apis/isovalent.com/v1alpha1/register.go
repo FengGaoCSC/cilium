@@ -27,6 +27,11 @@ const (
 	SRv6SIDManagerPluralName     = "isovalentsrv6sidmanagers"
 	SRv6SIDManagerKindDefinition = "IsovalentSRv6SIDManager"
 	SRv6SIDManagerName           = SRv6SIDManagerPluralName + "." + CustomResourceDefinitionGroup
+
+	// IsovalentPodNetwork (IPN)
+	IPNPluralName     = "isovalentpodnetworks"
+	IPNKindDefinition = "IsovalentPodNetwork"
+	IPNName           = IPNPluralName + "." + CustomResourceDefinitionGroup
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -74,6 +79,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&IsovalentFQDNGroupList{},
 		&IsovalentSRv6SIDManager{},
 		&IsovalentSRv6SIDManagerList{},
+		&IsovalentPodNetwork{},
+		&IsovalentPodNetworkList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

@@ -19,6 +19,10 @@ func (c *FakeIsovalentV1alpha1) IsovalentFQDNGroups() v1alpha1.IsovalentFQDNGrou
 	return &FakeIsovalentFQDNGroups{c}
 }
 
+func (c *FakeIsovalentV1alpha1) IsovalentPodNetworks() v1alpha1.IsovalentPodNetworkInterface {
+	return &FakeIsovalentPodNetworks{c}
+}
+
 func (c *FakeIsovalentV1alpha1) IsovalentSRv6SIDManagers() v1alpha1.IsovalentSRv6SIDManagerInterface {
 	return &FakeIsovalentSRv6SIDManagers{c}
 }

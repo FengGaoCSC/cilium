@@ -42,6 +42,9 @@ const (
 
 	// SRv6SIDManagerName is the full name of the IsovalentSRv6SIDManager CRD.
 	SRv6SIDManagerName = k8sconstv1alpha1.SRv6SIDManagerKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// IPNCRDName is the full name of the IsovalentPodNetwork CRD.
+	IPNCRDName = k8sconstv1alpha1.IPNKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 )
 
 var (
@@ -62,6 +65,7 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 		synced.CRDResourceName(k8sconstv1alpha1.IFGName):            createIFGCRD,
 		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName): createSRv6SIDManagerCRD,
 		synced.CRDResourceName(k8sconstv1.IEGPName):                 createIEGPCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IPNName):            createIPNCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -85,6 +89,9 @@ var (
 
 	//go:embed crds/v1/isovalentegressgatewaypolicies.yaml
 	crdsv1IsovalentEgressGatewayPolicies []byte
+
+	//go:embed crds/v1alpha1/isovalentpodnetworks.yaml
+	crdsv2Alpha1IsovalentPodNetworks []byte
 )
 
 // GetPregeneratedCRD returns the pregenerated CRD based on the requested CRD
@@ -106,6 +113,8 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv1Alpha1IsovalentSRv6SIDManagers
 	case IEGPCRDName:
 		crdBytes = crdsv1IsovalentEgressGatewayPolicies
+	case IPNCRDName:
+		crdBytes = crdsv2Alpha1IsovalentPodNetworks
 	default:
 		scopedLog.Fatal("Pregenerated CRD does not exist")
 	}
@@ -148,6 +157,17 @@ func createSRv6SIDManagerCRD(clientset apiextensionsclient.Interface) error {
 	return createUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.SRv6SIDManagerName, ciliumCRD),
+		newDefaultPoller(),
+	)
+}
+
+// createIPNCRD creates and updates the IsovalentPodNetwork CRD.
+func createIPNCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(IPNCRDName)
+
+	return createUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.IPNName, ciliumCRD),
 		newDefaultPoller(),
 	)
 }

@@ -16,6 +16,7 @@ import (
 type IsovalentV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	IsovalentFQDNGroupsGetter
+	IsovalentPodNetworksGetter
 	IsovalentSRv6SIDManagersGetter
 }
 
@@ -26,6 +27,10 @@ type IsovalentV1alpha1Client struct {
 
 func (c *IsovalentV1alpha1Client) IsovalentFQDNGroups() IsovalentFQDNGroupInterface {
 	return newIsovalentFQDNGroups(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentPodNetworks() IsovalentPodNetworkInterface {
+	return newIsovalentPodNetworks(c)
 }
 
 func (c *IsovalentV1alpha1Client) IsovalentSRv6SIDManagers() IsovalentSRv6SIDManagerInterface {

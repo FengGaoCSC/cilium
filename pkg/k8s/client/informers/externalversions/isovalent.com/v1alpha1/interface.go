@@ -13,6 +13,8 @@ import (
 type Interface interface {
 	// IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.
 	IsovalentFQDNGroups() IsovalentFQDNGroupInformer
+	// IsovalentPodNetworks returns a IsovalentPodNetworkInformer.
+	IsovalentPodNetworks() IsovalentPodNetworkInformer
 	// IsovalentSRv6SIDManagers returns a IsovalentSRv6SIDManagerInformer.
 	IsovalentSRv6SIDManagers() IsovalentSRv6SIDManagerInformer
 }
@@ -31,6 +33,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.
 func (v *version) IsovalentFQDNGroups() IsovalentFQDNGroupInformer {
 	return &isovalentFQDNGroupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentPodNetworks returns a IsovalentPodNetworkInformer.
+func (v *version) IsovalentPodNetworks() IsovalentPodNetworkInformer {
+	return &isovalentPodNetworkInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // IsovalentSRv6SIDManagers returns a IsovalentSRv6SIDManagerInformer.

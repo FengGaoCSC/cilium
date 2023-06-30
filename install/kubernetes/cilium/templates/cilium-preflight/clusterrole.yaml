@@ -153,4 +153,12 @@ rules:
   - ciliuml2announcementpolicies/status
   verbs:
   - patch
+- apiGroups:
+    - isovalent.com
+  resources:
+    - isovalentpodnetworks
+  verbs:
+    - list
+    - watch
+    - get
 {{- end }}
