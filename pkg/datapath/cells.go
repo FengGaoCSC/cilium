@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/l2responder"
 	"github.com/cilium/cilium/pkg/datapath/link"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
+	dpcfg "github.com/cilium/cilium/pkg/datapath/linux/config"
 	"github.com/cilium/cilium/pkg/datapath/linux/utime"
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/types"
@@ -68,6 +69,9 @@ var Cell = cell.Module(
 	// Gratuitous ARP event processor emits GARP packets on k8s pod creation events.
 	garp.Cell,
 
+	// This cell provides the object used to write the headers for datapath program types.
+	dpcfg.Cell,
+
 	cell.Provide(func(dp types.Datapath) types.NodeIDHandler {
 		return dp.NodeIDs()
 	}),
@@ -120,7 +124,7 @@ func newDatapath(params datapathParams) types.Datapath {
 			return nil
 		}})
 
-	datapath := linuxdatapath.NewDatapath(datapathConfig, iptablesManager, params.WgAgent, params.NodeMap)
+	datapath := linuxdatapath.NewDatapath(datapathConfig, iptablesManager, params.WgAgent, params.NodeMap, params.ConfigWriter)
 
 	params.LC.Append(hive.Hook{
 		OnStart: func(hive.HookContext) error {
@@ -143,4 +147,6 @@ type datapathParams struct {
 	BpfMaps []bpf.BpfMap `group:"bpf-maps"`
 
 	NodeMap nodemap.Map
+
+	ConfigWriter types.ConfigWriter
 }
