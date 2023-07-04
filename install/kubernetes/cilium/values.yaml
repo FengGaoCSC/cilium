@@ -14,6 +14,9 @@ enterprise:
     autoCreateDefaultPodNetwork: true
     # -- Enable multi-network aware automatic L2 routing between nodes
     autoDirectNodeRoutes: true
+  clustermesh:
+    # -- Enable overlapping PodCIDR support
+    enableOverlappingPodCIDRSupport: false
 
 # upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation
