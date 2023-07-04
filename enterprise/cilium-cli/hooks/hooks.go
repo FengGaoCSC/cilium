@@ -11,9 +11,12 @@
 package hooks
 
 import (
+	"context"
+
+	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
+
 	"github.com/cilium/cilium-cli/cli"
 	"github.com/cilium/cilium-cli/connectivity/check"
-
 	"github.com/cilium/cilium-cli/sysdump"
 )
 
@@ -21,16 +24,31 @@ import (
 // sysdump tasks that are specific to Isovalent Enterprise for Cilium.
 type EnterpriseHooks struct {
 	cli.NopHooks
+	externalCiliumDNSProxyPods map[string]check.Pod
 }
 
 // AddConnectivityTests registers connectivity tests that are specific to
 // Isovalent Enterprise for Cilium.
 func (eh *EnterpriseHooks) AddConnectivityTests(ct *check.ConnectivityTest) error {
-	return addConnectivityTests(ct)
+	return addConnectivityTests(ct, eh.externalCiliumDNSProxyPods)
 }
 
 // AddSysdumpTasks registers sysdump tasks that are specific to Isovalent
 // Enterprise for Cilium.
 func (eh *EnterpriseHooks) AddSysdumpTasks(collector *sysdump.Collector) error {
 	return addSysdumpTasks(collector)
+}
+
+func (eh *EnterpriseHooks) SetupAndValidate(ctx context.Context, ct *check.ConnectivityTest) error {
+	err := detectFeatures(ctx, ct)
+	if err != nil {
+		return err
+	}
+
+	eh.externalCiliumDNSProxyPods, err = tests.RetrieveExternalCiliumDNSProxyPods(ctx, ct)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

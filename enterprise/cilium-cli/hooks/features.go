@@ -13,11 +13,11 @@ package hooks
 import (
 	"context"
 	"fmt"
-	"github.com/cilium/cilium-cli/defaults"
 
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
 
 	"github.com/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium-cli/defaults"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
