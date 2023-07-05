@@ -25,6 +25,11 @@ func (k *K8sWatcher) endpointsInit() {
 	// real resource kind since the codepath is the same for all.
 	apiGroup := resources.K8sAPIGroupEndpointSliceOrEndpoint
 
+	metric := resources.MetricEndpoint
+	if k8s.SupportsEndpointSlice() {
+		metric = resources.MetricEndpointSlice
+	}
+
 	var synced atomic.Bool
 	synced.Store(false)
 
@@ -51,11 +56,13 @@ func (k *K8sWatcher) endpointsInit() {
 				case resource.Sync:
 					synced.Store(true)
 				case resource.Upsert:
-					k.k8sResourceSynced.SetEventTimestamp(apiGroup)
+					k.K8sEventReceived(apiGroup, metric, resources.MetricUpdate, true, false)
 					k.updateEndpoint(event.Object, swg)
+					k.K8sEventProcessed(metric, resources.MetricUpdate, true)
 				case resource.Delete:
-					k.k8sResourceSynced.SetEventTimestamp(apiGroup)
+					k.K8sEventReceived(apiGroup, metric, resources.MetricDelete, true, false)
 					k.K8sSvcCache.DeleteEndpoints(event.Object.EndpointSliceID, swg)
+					k.K8sEventProcessed(metric, resources.MetricDelete, true)
 				}
 				event.Done(nil)
 			}

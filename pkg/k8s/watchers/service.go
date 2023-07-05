@@ -51,12 +51,14 @@ func (k *K8sWatcher) serviceEventLoop(synced *atomic.Bool, swg *lock.StoppableWa
 				synced.Store(true)
 			case resource.Upsert:
 				svc := event.Object
-				k.k8sResourceSynced.SetEventTimestamp(apiGroup)
+				k.K8sEventReceived(apiGroup, resources.MetricService, resources.MetricUpdate, true, false)
 				err = k.upsertK8sServiceV1(svc, swg)
+				k.K8sEventProcessed(resources.MetricService, resources.MetricUpdate, err == nil)
 			case resource.Delete:
 				svc := event.Object
-				k.k8sResourceSynced.SetEventTimestamp(apiGroup)
+				k.K8sEventReceived(apiGroup, resources.MetricService, resources.MetricUpdate, true, false)
 				err = k.deleteK8sServiceV1(svc, swg)
+				k.K8sEventProcessed(resources.MetricService, resources.MetricDelete, err == nil)
 			}
 			event.Done(err)
 		}

@@ -76,9 +76,7 @@ func (k *K8sWatcher) createAllPodsController(slimClient slimclientset.Interface)
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				if pod := k8s.ObjTov1Pod(obj); pod != nil {
-					err := k.addK8sPodV1(pod)
-					k.K8sEventProcessed(metricPod, resources.MetricCreate, err == nil)
-					k.K8sEventReceived(podApiGroup, metricPod, resources.MetricCreate, true, false)
+					k.addK8sPodV1(pod)
 				} else {
 					k.K8sEventReceived(podApiGroup, metricPod, resources.MetricCreate, false, false)
 				}
@@ -89,9 +87,7 @@ func (k *K8sWatcher) createAllPodsController(slimClient slimclientset.Interface)
 						if oldPod.DeepEqual(newPod) {
 							k.K8sEventReceived(podApiGroup, metricPod, resources.MetricUpdate, false, true)
 						} else {
-							err := k.updateK8sPodV1(oldPod, newPod)
-							k.K8sEventProcessed(metricPod, resources.MetricUpdate, err == nil)
-							k.K8sEventReceived(podApiGroup, metricPod, resources.MetricUpdate, true, false)
+							k.updateK8sPodV1(oldPod, newPod)
 						}
 					}
 				} else {
@@ -100,9 +96,7 @@ func (k *K8sWatcher) createAllPodsController(slimClient slimclientset.Interface)
 			},
 			DeleteFunc: func(obj interface{}) {
 				if pod := k8s.ObjTov1Pod(obj); pod != nil {
-					err := k.deleteK8sPodV1(pod)
-					k.K8sEventProcessed(metricPod, resources.MetricDelete, err == nil)
-					k.K8sEventReceived(podApiGroup, metricPod, resources.MetricDelete, true, false)
+					k.deleteK8sPodV1(pod)
 				} else {
 					k.K8sEventReceived(podApiGroup, metricPod, resources.MetricDelete, false, false)
 				}
@@ -142,11 +136,9 @@ func (k *K8sWatcher) podsInit(slimClient slimclientset.Interface, asyncControlle
 					} else {
 						k.updateK8sPodV1(oldPod, newPod)
 					}
-					k.k8sResourceSynced.SetEventTimestamp(podApiGroup)
 					pods[ev.Key] = newPod
 				case resource.Delete:
 					k.deleteK8sPodV1(ev.Object)
-					k.k8sResourceSynced.SetEventTimestamp(podApiGroup)
 					delete(pods, ev.Key)
 				}
 
@@ -221,8 +213,12 @@ func (k *K8sWatcher) podsInit(slimClient slimclientset.Interface, asyncControlle
 	}
 }
 
-func (k *K8sWatcher) addK8sPodV1(pod *slim_corev1.Pod) error {
+func (k *K8sWatcher) addK8sPodV1(pod *slim_corev1.Pod) {
 	var err error
+	defer func() {
+		k.K8sEventProcessed(metricPod, resources.MetricCreate, err == nil)
+		k.K8sEventReceived(podApiGroup, metricPod, resources.MetricCreate, true, false)
+	}()
 
 	logger := log.WithFields(logrus.Fields{
 		logfields.K8sPodName:   pod.ObjectMeta.Name,
@@ -259,12 +255,12 @@ func (k *K8sWatcher) addK8sPodV1(pod *slim_corev1.Pod) error {
 	// is no longer in use.
 	if !k8sUtils.IsPodRunning(pod.Status) {
 		err = k.deleteK8sPodV1(pod)
-		return err
+		return
 	}
 
 	if pod.Spec.HostNetwork && !option.Config.EnableLocalRedirectPolicy {
 		logger.Debug("Skip pod event using host networking")
-		return err
+		return
 	}
 
 	podIPs := k8sUtils.ValidIPs(pod.Status)
@@ -282,15 +278,17 @@ func (k *K8sWatcher) addK8sPodV1(pod *slim_corev1.Pod) error {
 		logger.WithError(err).Warning("Unable to update ipcache map entry on pod add")
 	}
 	logger.Debug("Updated ipcache map entry on pod add")
-
-	return err
 }
 
-func (k *K8sWatcher) updateK8sPodV1(oldK8sPod, newK8sPod *slim_corev1.Pod) error {
+func (k *K8sWatcher) updateK8sPodV1(oldK8sPod, newK8sPod *slim_corev1.Pod) {
 	var err error
+	defer func() {
+		k.K8sEventProcessed(metricPod, resources.MetricUpdate, err == nil)
+		k.K8sEventReceived(podApiGroup, metricPod, resources.MetricUpdate, true, false)
+	}()
 
 	if oldK8sPod == nil || newK8sPod == nil {
-		return err
+		return
 	}
 
 	logger := log.WithFields(logrus.Fields{
@@ -312,13 +310,13 @@ func (k *K8sWatcher) updateK8sPodV1(oldK8sPod, newK8sPod *slim_corev1.Pod) error
 	// is no longer in use.
 	if !k8sUtils.IsPodRunning(newK8sPod.Status) {
 		err = k.deleteK8sPodV1(newK8sPod)
-		return err
+		return
 	}
 
 	if newK8sPod.Spec.HostNetwork && !option.Config.EnableLocalRedirectPolicy &&
 		!option.Config.EnableSocketLBTracing {
 		logger.Debug("Skip pod event using host networking")
-		return err
+		return
 	}
 
 	k.cgroupManager.OnUpdatePod(oldK8sPod, newK8sPod)
@@ -329,7 +327,7 @@ func (k *K8sWatcher) updateK8sPodV1(oldK8sPod, newK8sPod *slim_corev1.Pod) error
 
 	if err != nil {
 		logger.WithError(err).Warning("Unable to update ipcache map entry on pod update")
-		return err
+		return
 	}
 
 	// Check annotation updates.
@@ -373,7 +371,7 @@ func (k *K8sWatcher) updateK8sPodV1(oldK8sPod, newK8sPod *slim_corev1.Pod) error
 
 	// Nothing changed.
 	if !annotationsChanged && !labelsChanged {
-		return err
+		return
 	}
 
 	podNSName := k8sUtils.GetObjNamespaceName(&newK8sPod.ObjectMeta)
@@ -381,13 +379,13 @@ func (k *K8sWatcher) updateK8sPodV1(oldK8sPod, newK8sPod *slim_corev1.Pod) error
 	podEP := k.endpointManager.LookupPodName(podNSName)
 	if podEP == nil {
 		log.WithField("pod", podNSName).Debugf("Endpoint not found running for the given pod")
-		return err
+		return
 	}
 
 	if labelsChanged {
 		err := updateEndpointLabels(podEP, oldPodLabels, newPodLabels)
 		if err != nil {
-			return err
+			return
 		}
 
 		// Synchronize Pod labels with CiliumEndpoint labels if there is a change.
@@ -426,8 +424,6 @@ func (k *K8sWatcher) updateK8sPodV1(oldK8sPod, newK8sPod *slim_corev1.Pod) error
 		}
 		realizePodAnnotationUpdate(podEP)
 	}
-
-	return err
 }
 
 func realizePodAnnotationUpdate(podEP *endpoint.Endpoint) {
@@ -508,6 +504,10 @@ func updateEndpointLabels(ep *endpoint.Endpoint, oldLbls, newLbls map[string]str
 
 func (k *K8sWatcher) deleteK8sPodV1(pod *slim_corev1.Pod) error {
 	var err error
+	defer func() {
+		k.K8sEventProcessed(metricPod, resources.MetricDelete, err == nil)
+		k.K8sEventReceived(podApiGroup, metricPod, resources.MetricDelete, true, false)
+	}()
 
 	logger := log.WithFields(logrus.Fields{
 		logfields.K8sPodName:   pod.ObjectMeta.Name,

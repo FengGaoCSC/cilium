@@ -227,13 +227,23 @@ func (k *K8sWatcher) onUpsert(
 ) error {
 	initialRecvTime := time.Now()
 
+	var (
+		equal  bool
+		action string
+	)
+
+	// wrap k.K8sEventReceived call into a naked func() to capture equal in the closure
 	defer func() {
-		k.k8sResourceSynced.SetEventTimestamp(apiGroup)
+		k.K8sEventReceived(apiGroup, metricLabel, action, true, equal)
 	}()
 
 	oldCNP, ok := cnpCache[key]
-	if ok {
+	if !ok {
+		action = resources.MetricCreate
+	} else {
+		action = resources.MetricUpdate
 		if oldCNP.DeepEqual(cnp) {
+			equal = true
 			return nil
 		}
 	}
@@ -272,6 +282,8 @@ func (k *K8sWatcher) onUpsert(
 		cnpCache[key] = cnpCpy
 	}
 
+	k.K8sEventProcessed(metricLabel, action, err == nil)
+
 	return err
 }
 
@@ -290,7 +302,8 @@ func (k *K8sWatcher) onDelete(
 	delete(cidrGroupPolicies, key)
 	metrics.CIDRGroupPolicies.Set(float64(len(cidrGroupPolicies)))
 
-	k.k8sResourceSynced.SetEventTimestamp(apiGroup)
+	k.K8sEventProcessed(metricLabel, resources.MetricDelete, err == nil)
+	k.K8sEventReceived(apiGroup, metricLabel, resources.MetricDelete, true, true)
 
 	return err
 }
