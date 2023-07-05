@@ -2359,6 +2359,16 @@ func init() {
           "description": "Maximum IPv6 GSO size on workload facing devices",
           "type": "integer"
         },
+        "MultiNetworking": {
+          "description": "Status of multi-networking features",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Whether multi-networking is enabled",
+              "type": "boolean"
+            }
+          }
+        },
         "addressing": {
           "$ref": "#/definitions/NodeAddressing"
         },
@@ -7678,6 +7688,16 @@ func init() {
           "description": "Maximum IPv6 GSO size on workload facing devices",
           "type": "integer"
         },
+        "MultiNetworking": {
+          "description": "Status of multi-networking features",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Whether multi-networking is enabled",
+              "type": "boolean"
+            }
+          }
+        },
         "addressing": {
           "$ref": "#/definitions/NodeAddressing"
         },
@@ -7756,6 +7776,16 @@ func init() {
         },
         "ipv6": {
           "description": "Status of masquerading for IPv6 traffic",
+          "type": "boolean"
+        }
+      }
+    },
+    "DaemonConfigurationStatusMultiNetworking": {
+      "description": "Status of multi-networking features",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Whether multi-networking is enabled",
           "type": "boolean"
         }
       }

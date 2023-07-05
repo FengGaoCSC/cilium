@@ -2665,6 +2665,13 @@ definitions:
       GROIPv4MaxSize:
         description: Maximum IPv4 GRO size on workload facing devices
         type: integer
+      MultiNetworking:
+        description: Status of multi-networking features
+        type: object
+        properties:
+          enabled:
+            description: Whether multi-networking is enabled
+            type: boolean
   DatapathMode:
     description: Datapath mode
     type: string

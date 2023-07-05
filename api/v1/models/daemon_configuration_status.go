@@ -35,6 +35,9 @@ type DaemonConfigurationStatus struct {
 	// Maximum IPv6 GSO size on workload facing devices
 	GSOMaxSize int64 `json:"GSOMaxSize,omitempty"`
 
+	// multi networking
+	MultiNetworking *DaemonConfigurationStatusMultiNetworking `json:"MultiNetworking,omitempty"`
+
 	// addressing
 	Addressing *NodeAddressing `json:"addressing,omitempty"`
 
@@ -85,6 +88,10 @@ type DaemonConfigurationStatus struct {
 func (m *DaemonConfigurationStatus) Validate(formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.validateMultiNetworking(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validateAddressing(formats); err != nil {
 		res = append(res, err)
 	}
@@ -116,6 +123,25 @@ func (m *DaemonConfigurationStatus) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *DaemonConfigurationStatus) validateMultiNetworking(formats strfmt.Registry) error {
+	if swag.IsZero(m.MultiNetworking) { // not required
+		return nil
+	}
+
+	if m.MultiNetworking != nil {
+		if err := m.MultiNetworking.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("MultiNetworking")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("MultiNetworking")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -254,6 +280,10 @@ func (m *DaemonConfigurationStatus) validateRealized(formats strfmt.Registry) er
 func (m *DaemonConfigurationStatus) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.contextValidateMultiNetworking(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.contextValidateAddressing(ctx, formats); err != nil {
 		res = append(res, err)
 	}
@@ -285,6 +315,22 @@ func (m *DaemonConfigurationStatus) ContextValidate(ctx context.Context, formats
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *DaemonConfigurationStatus) contextValidateMultiNetworking(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.MultiNetworking != nil {
+		if err := m.MultiNetworking.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("MultiNetworking")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("MultiNetworking")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -447,6 +493,43 @@ func (m *DaemonConfigurationStatusMasqueradeProtocols) MarshalBinary() ([]byte, 
 // UnmarshalBinary interface implementation
 func (m *DaemonConfigurationStatusMasqueradeProtocols) UnmarshalBinary(b []byte) error {
 	var res DaemonConfigurationStatusMasqueradeProtocols
+	if err := swag.ReadJSON(b, &res); err != nil {
+		return err
+	}
+	*m = res
+	return nil
+}
+
+// DaemonConfigurationStatusMultiNetworking Status of multi-networking features
+//
+// swagger:model DaemonConfigurationStatusMultiNetworking
+type DaemonConfigurationStatusMultiNetworking struct {
+
+	// Whether multi-networking is enabled
+	Enabled bool `json:"enabled,omitempty"`
+}
+
+// Validate validates this daemon configuration status multi networking
+func (m *DaemonConfigurationStatusMultiNetworking) Validate(formats strfmt.Registry) error {
+	return nil
+}
+
+// ContextValidate validates this daemon configuration status multi networking based on context it is used
+func (m *DaemonConfigurationStatusMultiNetworking) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+	return nil
+}
+
+// MarshalBinary interface implementation
+func (m *DaemonConfigurationStatusMultiNetworking) MarshalBinary() ([]byte, error) {
+	if m == nil {
+		return nil, nil
+	}
+	return swag.WriteJSON(m)
+}
+
+// UnmarshalBinary interface implementation
+func (m *DaemonConfigurationStatusMultiNetworking) UnmarshalBinary(b []byte) error {
+	var res DaemonConfigurationStatusMultiNetworking
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}
