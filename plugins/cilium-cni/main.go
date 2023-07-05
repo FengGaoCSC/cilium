@@ -483,8 +483,6 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		ep.DatapathConfiguration.ExternalIpam = true
 	}
 
-	res := &cniTypesV1.Result{}
-
 	switch conf.DatapathMode {
 	case datapathOption.DatapathModeVeth:
 		var (
@@ -506,11 +504,6 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			}
 		}()
 
-		res.Interfaces = append(res.Interfaces, &cniTypesV1.Interface{
-			Name: veth.Attrs().Name,
-			Mac:  veth.Attrs().HardwareAddr.String(),
-		})
-
 		if err = netlink.LinkSetNsFd(peer, int(netNs.Fd())); err != nil {
 			return fmt.Errorf("unable to move veth pair '%v' to netns: %s", peer, err)
 		}
@@ -524,6 +517,8 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 	state := CmdState{
 		HostAddr: ipam.HostAddressing,
 	}
+
+	res := &cniTypesV1.Result{}
 
 	if !ipv6IsEnabled(ipam) && !ipv4IsEnabled(ipam) {
 		return fmt.Errorf("IPAM did not provide IPv4 or IPv6 address")
@@ -542,8 +537,6 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		if err != nil {
 			return fmt.Errorf("unable to prepare IP addressing for '%s': %s", ep.Addressing.IPV6, err)
 		}
-		// set the addresses interface index to that of the container-side veth
-		ipConfig.Interface = cniTypesV1.Int(len(res.Interfaces))
 		res.IPs = append(res.IPs, ipConfig)
 		res.Routes = append(res.Routes, routes...)
 	}
@@ -557,8 +550,6 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		if err != nil {
 			return fmt.Errorf("unable to prepare IP addressing for '%s': %s", ep.Addressing.IPV4, err)
 		}
-		// set the addresses interface index to that of the container-side veth
-		ipConfig.Interface = cniTypesV1.Int(len(res.Interfaces))
 		res.IPs = append(res.IPs, ipConfig)
 		res.Routes = append(res.Routes, routes...)
 	}
@@ -589,6 +580,11 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		Mac:     macAddrStr,
 		Sandbox: args.Netns,
 	})
+
+	// Add to the result the Interface as index of Interfaces
+	for i := range res.Interfaces {
+		res.IPs[i].Interface = cniTypesV1.Int(i)
+	}
 
 	// Specify that endpoint must be regenerated synchronously. See GH-4409.
 	ep.SyncBuildEndpoint = true
