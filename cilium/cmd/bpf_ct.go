@@ -9,13 +9,13 @@ import (
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 )
 
-// bpfCtCmd represents the bpf_ct command
-var bpfCtCmd = &cobra.Command{
+// BPFCtCmd represents the bpf_ct command
+var BPFCtCmd = &cobra.Command{
 	Use:   "ct",
 	Short: "Connection tracking tables",
 }
 
 func init() {
 	ctmap.InitMapInfo(true, true, true)
-	bpfCmd.AddCommand(bpfCtCmd)
+	BPFCmd.AddCommand(BPFCtCmd)
 }
