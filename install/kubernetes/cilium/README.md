@@ -1,6 +1,9 @@
 # cilium
 
-![Version: 1.14.0-dev](https://img.shields.io/badge/Version-1.14.0--dev-informational?style=flat-square) ![AppVersion: 1.14.0-dev](https://img.shields.io/badge/AppVersion-1.14.0--dev-informational?style=flat-square)
+
+
+
+![Version: 1.14.0-rc.0](https://img.shields.io/badge/Version-1.14.0--rc.0-informational?style=flat-square) ![AppVersion: 1.14.0-rc.0](https://img.shields.io/badge/AppVersion-1.14.0--rc.0-informational?style=flat-square) 
 
 Cilium is open source software for providing and transparently securing
 network connectivity and loadbalancing between application workloads such as
@@ -38,6 +41,8 @@ $ helm install cilium cilium/cilium --namespace=kube-system
 
 After Cilium is installed, you can explore the features that Cilium has to
 offer from the [Getting Started Guides page](https://docs.cilium.io/en/stable/gettingstarted/).
+
+
 
 ## Source Code
 
