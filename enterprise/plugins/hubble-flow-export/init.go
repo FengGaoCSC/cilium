@@ -19,6 +19,7 @@ import (
 
 	"github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/enterprise/plugins"
+	aggregation "github.com/cilium/cilium/enterprise/plugins/hubble-flow-aggregation"
 	"github.com/cilium/cilium/pkg/hubble/filters"
 	metricsAPI "github.com/cilium/cilium/pkg/hubble/metrics/api"
 	"github.com/cilium/cilium/pkg/logging"
@@ -33,7 +34,7 @@ type export struct {
 	denylist           filters.FilterFuncs
 	allowlist          filters.FilterFuncs
 	logger             logrus.FieldLogger
-	aggregationPlugin  aggregationPlugin
+	aggregationPlugin  aggregation.Plugin
 	aggregationContext context.Context
 	formatVersion      string
 	enabled            bool
@@ -116,20 +117,10 @@ func parseFilterList(filters string) ([]*flow.FlowFilter, error) {
 	return results, nil
 }
 
-type aggregationPlugin interface {
-	GetAggregationContext(
-		aggregators []string,
-		filters []string,
-		ignoreSourcePort bool,
-		ttl time.Duration,
-		renewTTL bool) (context.Context, error)
-	OnFlowDelivery(ctx context.Context, f *flow.Flow) (bool, error)
-}
-
 // AcceptDeps is used to check if the aggregation plugin is enabled.
 func (e *export) AcceptDeps(list plugins.Instances) error {
 	for _, instance := range list {
-		if agg, ok := instance.(aggregationPlugin); ok {
+		if agg, ok := instance.(aggregation.Plugin); ok {
 			e.aggregationPlugin = agg
 		}
 	}

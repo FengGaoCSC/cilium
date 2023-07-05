@@ -12,6 +12,7 @@ package aggregation
 
 import (
 	"context"
+	"time"
 
 	"github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/api/v1/observer"
@@ -25,7 +26,18 @@ var (
 	// validate interface conformity
 	_ plugins.Init          = New
 	_ plugins.ServerOptions = (*flowAggregationPlugin)(nil)
+	_ Plugin                = (*flowAggregationPlugin)(nil)
 )
+
+type Plugin interface {
+	GetAggregationContext(
+		aggregators []string,
+		filters []string,
+		ignoreSourcePort bool,
+		ttl time.Duration,
+		renewTTL bool) (context.Context, error)
+	OnFlowDelivery(ctx context.Context, f *flow.Flow) (bool, error)
+}
 
 type flowAggregation struct {
 	logger logrus.FieldLogger
