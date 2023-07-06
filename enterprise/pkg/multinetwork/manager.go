@@ -64,6 +64,8 @@ func (r *ResourceNotFound) Is(target error) bool {
 }
 
 type Manager struct {
+	config config
+
 	podResource k8s.LocalPodResource
 	podStore    resource.Store[*slim_core_v1.Pod]
 
@@ -89,6 +91,12 @@ func (m *Manager) Stop(ctx hive.HookContext) error {
 	m.podStore = nil
 	m.networkStore = nil
 	return nil
+}
+
+func (m *Manager) GetConfigurationStatus() *models.DaemonConfigurationStatusMultiNetworking {
+	return &models.DaemonConfigurationStatusMultiNetworking{
+		Enabled: m.config.EnableMultiNetwork,
+	}
 }
 
 func (m *Manager) GetNetworksForPod(ctx context.Context, podNamespace, podName string) (*models.NetworkAttachmentList, error) {

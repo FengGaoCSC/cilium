@@ -68,6 +68,7 @@ func newMultiNetworkManager(params managerParams) *Manager {
 	}
 
 	manager := &Manager{
+		config:          params.Config,
 		podResource:     params.PodResource,
 		networkResource: params.NetworkResource,
 	}

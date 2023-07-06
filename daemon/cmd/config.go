@@ -205,6 +205,10 @@ func (h *getConfig) Handle(params GetConfigParams) middleware.Responder {
 		GSOIPV4MaxSize:              int64(d.bigTCPConfig.GetGSOIPv4MaxSize()),
 	}
 
+	if d.multiNetworkManager != nil {
+		status.MultiNetworking = d.multiNetworkManager.GetConfigurationStatus()
+	}
+
 	cfg := &models.DaemonConfiguration{
 		Spec:   spec,
 		Status: status,

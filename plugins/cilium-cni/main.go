@@ -445,6 +445,10 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		return err
 	}
 
+	if conf.MultiNetworking != nil && conf.MultiNetworking.Enabled {
+		return multiNetworkCmdAdd(args, n, logger, cniArgs, c, netNs, conf)
+	}
+
 	var ipam *models.IPAMResponse
 	var releaseIPsFunc func(context.Context)
 	if conf.IpamMode == ipamOption.IPAMDelegatedPlugin {
