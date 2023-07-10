@@ -48,7 +48,7 @@ func (s *externalCiliumDNSProxy) Run(ctx context.Context, t *check.Test) {
 				// Iterate enough time to observe the metric evolves, nslookup command will
 				// hit the cilium-dnsproxy pods, note that the iteration is done directly in
 				// the pod for performance concerns.
-				cmd := fmt.Sprintf("for i in `seq 0 25`; do nslookup %s; done", svc.Name)
+				cmd := fmt.Sprintf("for i in `seq 0 25`; do nslookup %s; done", svc.NameWithoutNamespace())
 				a.ExecInPod(ctx, []string{"/bin/sh", "-c", cmd})
 
 				// Retrieve the cilium-dnsproxy pod on the same node as the client.
