@@ -2503,11 +2503,11 @@ func init() {
           "type": "integer"
         },
         "interface-index": {
-          "description": "Index of network device",
+          "description": "Index of network device in host netns",
           "type": "integer"
         },
         "interface-name": {
-          "description": "Name of network device",
+          "description": "Name of network device in host netns",
           "type": "string"
         },
         "k8s-namespace": {
@@ -2691,11 +2691,11 @@ func init() {
           "type": "string"
         },
         "interface-index": {
-          "description": "Index of network device",
+          "description": "Index of network device in host netns",
           "type": "integer"
         },
         "interface-name": {
-          "description": "Name of network device",
+          "description": "Name of network device in host netns",
           "type": "string"
         },
         "mac": {
@@ -7647,11 +7647,11 @@ func init() {
           "type": "integer"
         },
         "interface-index": {
-          "description": "Index of network device",
+          "description": "Index of network device in host netns",
           "type": "integer"
         },
         "interface-name": {
-          "description": "Name of network device",
+          "description": "Name of network device in host netns",
           "type": "string"
         },
         "k8s-namespace": {
@@ -7835,11 +7835,11 @@ func init() {
           "type": "string"
         },
         "interface-index": {
-          "description": "Index of network device",
+          "description": "Index of network device in host netns",
           "type": "integer"
         },
         "interface-name": {
-          "description": "Name of network device",
+          "description": "Name of network device in host netns",
           "type": "string"
         },
         "mac": {
