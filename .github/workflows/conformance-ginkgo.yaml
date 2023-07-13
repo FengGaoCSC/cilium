@@ -435,6 +435,7 @@ jobs:
           mkdir -p cilium-junits
           cd test/
           junit_filename="${{ env.job_name }}.xml"
+          shopt -s nullglob
           for filename in *.xml; do cp "${filename}" "../cilium-junits/${junit_filename}"; done;
 
       - name: Upload JUnits [junit]

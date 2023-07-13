@@ -318,6 +318,7 @@ jobs:
           # "Jobs" - so that we can map the junit file to the right job - step
           # pair on datastudio.
           junit_filename="${{ env.job_name }}.xml"
+          shopt -s nullglob
           for filename in *.xml; do cp "${filename}" "../cilium-junits/${junit_filename}"; done;
 
       - name: Upload JUnits [junit]
