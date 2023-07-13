@@ -60,14 +60,14 @@ jobs:
 
       - name: Install Cilium
         run: |
-          helm install -n kube-system cilium ${{ env.helm_chart_repo }} --version ${{ steps.vars.outputs.version }}
+          helm install -n kube-system cilium ${{ env.helm_chart_repo }} --version ${{ steps.vars.outputs.version }} --set-string extraConfig.external-dns-proxy="true"
           kubectl rollout status -n kube-system ds/cilium
 
       - name: Install FQDN proxy
         run: |
           helm repo add isovalent https://helm.isovalent.com
           helm repo update
-          helm install -n kube-system cilium-dnsproxy isovalent/cilium-dnsproxy --version ${{ env.fqdn_proxy_version }}
+          helm install -n kube-system cilium-dnsproxy isovalent/cilium-dnsproxy --version ${{ env.fqdn_proxy_version }} --set prometheus.enabled=true
           kubectl rollout status -n kube-system ds/cilium
 
       - name: Run enterprise tests
