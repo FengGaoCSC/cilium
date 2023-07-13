@@ -13,6 +13,7 @@ import (
 	versioned "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned"
 	ciliumio "github.com/cilium/cilium/pkg/k8s/client/informers/externalversions/cilium.io"
 	internalinterfaces "github.com/cilium/cilium/pkg/k8s/client/informers/externalversions/internalinterfaces"
+	isovalentcom "github.com/cilium/cilium/pkg/k8s/client/informers/externalversions/isovalent.com"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -231,8 +232,13 @@ type SharedInformerFactory interface {
 	InformerFor(obj runtime.Object, newFunc internalinterfaces.NewInformerFunc) cache.SharedIndexInformer
 
 	Cilium() ciliumio.Interface
+	Isovalent() isovalentcom.Interface
 }
 
 func (f *sharedInformerFactory) Cilium() ciliumio.Interface {
 	return ciliumio.New(f, f.namespace, f.tweakListOptions)
+}
+
+func (f *sharedInformerFactory) Isovalent() isovalentcom.Interface {
+	return isovalentcom.New(f, f.namespace, f.tweakListOptions)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/client"
+	isovalentclient "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/client"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 )
 
@@ -30,6 +31,7 @@ var RegisterCRDsCell = cell.Module(
 
 	cell.ProvidePrivate(
 		newCiliumGroupCRDs,
+		newIsovalentGroupCRDs,
 	),
 )
 
@@ -90,5 +92,11 @@ type registerCRDsFuncOut struct {
 func newCiliumGroupCRDs() registerCRDsFuncOut {
 	return registerCRDsFuncOut{
 		Func: client.RegisterCRDs,
+	}
+}
+
+func newIsovalentGroupCRDs() registerCRDsFuncOut {
+	return registerCRDsFuncOut{
+		Func: isovalentclient.RegisterCRDs,
 	}
 }
