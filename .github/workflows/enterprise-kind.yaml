@@ -67,11 +67,28 @@ jobs:
         run: |
           helm repo add isovalent https://helm.isovalent.com
           helm repo update
-          helm install -n kube-system cilium-dnsproxy isovalent/cilium-dnsproxy --version ${{ env.fqdn_proxy_version }} --set prometheus.enabled=true
+          helm install -n kube-system cilium-dnsproxy isovalent/cilium-dnsproxy --version ${{ env.fqdn_proxy_version }}
           kubectl rollout status -n kube-system ds/cilium
 
       - name: Run enterprise tests
         run: |
           cd enterprise/cilium-cli
           ./cilium version
-          ./cilium connectivity test --debug
+          ./cilium connectivity test --debug --collect-sysdump-on-failure
+
+      - name: Cleanup
+        if: ${{ always() }}
+        run: |
+          cd enterprise/cilium-cli
+          ./cilium status
+          kubectl get pods --all-namespaces -o wide
+          ./cilium sysdump --output-filename cilium-sysdump-out --hubble-flows-count 10000
+        shell: bash {0} # Disable default fail-fast behaviour so that all commands run independently
+
+      - name: Upload artifacts
+        if: ${{ !success() }}
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        with:
+          name: cilium-sysdump-out.zip
+          path: enterprise/cilium-cli/cilium-sysdump-*.zip
+          retention-days: 5
