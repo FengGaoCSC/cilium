@@ -14,6 +14,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/cilium/cilium/api/v1/observer"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,4 +24,22 @@ func Test_flowAggregation_OnFlowDelivery(t *testing.T) {
 	stop, err := p.OnFlowDelivery(context.TODO(), nil)
 	assert.NoError(t, err)
 	assert.False(t, stop)
+}
+
+func TestConfigureAggregator(t *testing.T) {
+	a, err := ConfigureAggregator([]*observer.Aggregator{})
+	assert.True(t, err == nil)
+	assert.True(t, a == nil)
+
+	a, err = ConfigureAggregator([]*observer.Aggregator{{Type: 10000}})
+	assert.True(t, err != nil)
+	assert.True(t, a == nil)
+
+	a, err = ConfigureAggregator([]*observer.Aggregator{{Type: observer.AggregatorType_identity}})
+	assert.True(t, err == nil)
+	assert.True(t, a.String() == "compare")
+
+	a, err = ConfigureAggregator([]*observer.Aggregator{{Type: observer.AggregatorType_identity}, {Type: observer.AggregatorType_connection}})
+	assert.True(t, err == nil)
+	assert.True(t, a.String()[0] == '[')
 }
