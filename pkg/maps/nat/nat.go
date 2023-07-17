@@ -97,7 +97,9 @@ func NewMap(name string, family IPFamily, entries int) *Map {
 			mapValue,
 			entries,
 			0,
-		).WithCache().WithEvents(option.Config.GetEventBufferConfig(name)),
+		).WithCache().
+			WithEvents(option.Config.GetEventBufferConfig(name)).
+			WithPressureMetric(),
 		family: family,
 	}
 }
@@ -188,6 +190,7 @@ func (m *Map) Flush() int {
 	if m.family == IPv4 {
 		return int(doFlush4(m).deleted)
 	}
+
 	return int(doFlush6(m).deleted)
 }
 
