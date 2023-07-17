@@ -91,6 +91,10 @@ issues:
     - path: "pkg/ipam/(cidrset|service)/.+\\.go"
       linters:
         - goheader
+    # Skip goheader check on enterprise only files
+    - path: "enterprise((/|_).+)?\\.go$"
+      linters:
+        - goheader
 
 linters:
   disable-all: true
