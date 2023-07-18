@@ -4680,6 +4680,10 @@ func init() {
       "description": "Health and status information of daemon\n\n+k8s:deepcopy-gen=true",
       "type": "object",
       "properties": {
+        "auth-certificate-provider": {
+          "description": "Status of Mutual Authentication certificate provider",
+          "$ref": "#/definitions/Status"
+        },
         "bandwidth-manager": {
           "description": "Status of bandwidth manager",
           "$ref": "#/definitions/BandwidthManager"
@@ -10486,6 +10490,10 @@ func init() {
       "description": "Health and status information of daemon\n\n+k8s:deepcopy-gen=true",
       "type": "object",
       "properties": {
+        "auth-certificate-provider": {
+          "description": "Status of Mutual Authentication certificate provider",
+          "$ref": "#/definitions/Status"
+        },
         "bandwidth-manager": {
           "description": "Status of bandwidth manager",
           "$ref": "#/definitions/BandwidthManager"
