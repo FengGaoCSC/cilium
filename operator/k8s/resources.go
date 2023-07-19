@@ -8,6 +8,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	cilium_api_v2alpha1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
+	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 )
@@ -28,6 +29,7 @@ var (
 			k8s.LBIPPoolsResource,
 			k8s.CiliumIdentityResource,
 			k8s.CiliumPodIPPoolResource,
+			k8s.IsovalentFQDNGroup,
 		),
 	)
 )
@@ -41,4 +43,5 @@ type Resources struct {
 	LBIPPools        resource.Resource[*cilium_api_v2alpha1.CiliumLoadBalancerIPPool]
 	Identities       resource.Resource[*cilium_api_v2.CiliumIdentity]
 	CiliumPodIPPools resource.Resource[*cilium_api_v2alpha1.CiliumPodIPPool]
+	FQDNGroups       resource.Resource[*isovalent_api_v1alpha1.IsovalentFQDNGroup]
 }
