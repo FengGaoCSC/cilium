@@ -21,6 +21,7 @@ import (
 func AllIsovalentCRDResourceNames() []string {
 	result := []string{
 		CRDResourceName(v1alpha1.IFGName),
+		CRDResourceName(v1alpha1.SRv6SIDManagerName),
 	}
 
 	if option.Config.EnableIPv4EgressGateway {

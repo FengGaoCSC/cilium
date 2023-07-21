@@ -8,3 +8,7 @@ package v1alpha1
 // IsovalentFQDNGroupListerExpansion allows custom methods to be added to
 // IsovalentFQDNGroupLister.
 type IsovalentFQDNGroupListerExpansion interface{}
+
+// IsovalentSRv6SIDManagerListerExpansion allows custom methods to be added to
+// IsovalentSRv6SIDManagerLister.
+type IsovalentSRv6SIDManagerListerExpansion interface{}

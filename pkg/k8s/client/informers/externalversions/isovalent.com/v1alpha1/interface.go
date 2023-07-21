@@ -13,6 +13,8 @@ import (
 type Interface interface {
 	// IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.
 	IsovalentFQDNGroups() IsovalentFQDNGroupInformer
+	// IsovalentSRv6SIDManagers returns a IsovalentSRv6SIDManagerInformer.
+	IsovalentSRv6SIDManagers() IsovalentSRv6SIDManagerInformer
 }
 
 type version struct {
@@ -29,4 +31,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // IsovalentFQDNGroups returns a IsovalentFQDNGroupInformer.
 func (v *version) IsovalentFQDNGroups() IsovalentFQDNGroupInformer {
 	return &isovalentFQDNGroupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentSRv6SIDManagers returns a IsovalentSRv6SIDManagerInformer.
+func (v *version) IsovalentSRv6SIDManagers() IsovalentSRv6SIDManagerInformer {
+	return &isovalentSRv6SIDManagerInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

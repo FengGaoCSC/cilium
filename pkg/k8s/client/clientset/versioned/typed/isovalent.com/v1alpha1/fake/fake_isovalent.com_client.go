@@ -19,6 +19,10 @@ func (c *FakeIsovalentV1alpha1) IsovalentFQDNGroups() v1alpha1.IsovalentFQDNGrou
 	return &FakeIsovalentFQDNGroups{c}
 }
 
+func (c *FakeIsovalentV1alpha1) IsovalentSRv6SIDManagers() v1alpha1.IsovalentSRv6SIDManagerInterface {
+	return &FakeIsovalentSRv6SIDManagers{c}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeIsovalentV1alpha1) RESTClient() rest.Interface {

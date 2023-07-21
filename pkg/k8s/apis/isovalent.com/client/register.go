@@ -39,6 +39,9 @@ const (
 
 	// IEGPCRDName is the full name of the IsovalentEgressGatewayPolicy CRD.
 	IEGPCRDName = k8sconstv1.IEGPKindDefinition + "/" + k8sconstv1.CustomResourceDefinitionVersion
+
+	// SRv6SIDManagerName is the full name of the IsovalentSRv6SIDManager CRD.
+	SRv6SIDManagerName = k8sconstv1alpha1.SRv6SIDManagerKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 )
 
 var (
@@ -56,8 +59,9 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 	g, _ := errgroup.WithContext(context.Background())
 
 	resourceToCreateFnMapping := map[string]crdCreationFn{
-		synced.CRDResourceName(k8sconstv1alpha1.IFGName): createIFGCRD,
-		synced.CRDResourceName(k8sconstv1.IEGPName):      createIEGPCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IFGName):            createIFGCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName): createSRv6SIDManagerCRD,
+		synced.CRDResourceName(k8sconstv1.IEGPName):                 createIEGPCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -75,6 +79,9 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 var (
 	//go:embed crds/v1alpha1/isovalentfqdngroups.yaml
 	crdsv1Alpha1IsovalentFQDNGroups []byte
+
+	//go:embed crds/v1alpha1/isovalentsrv6sidmanagers.yaml
+	crdsv1Alpha1IsovalentSRv6SIDManagers []byte
 
 	//go:embed crds/v1/isovalentegressgatewaypolicies.yaml
 	crdsv1IsovalentEgressGatewayPolicies []byte
@@ -95,6 +102,8 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 	switch crdName {
 	case IFGCRDName:
 		crdBytes = crdsv1Alpha1IsovalentFQDNGroups
+	case SRv6SIDManagerName:
+		crdBytes = crdsv1Alpha1IsovalentSRv6SIDManagers
 	case IEGPCRDName:
 		crdBytes = crdsv1IsovalentEgressGatewayPolicies
 	default:
@@ -128,6 +137,17 @@ func createIEGPCRD(clientset apiextensionsclient.Interface) error {
 	return createUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1.IEGPName, ciliumCRD),
+		newDefaultPoller(),
+	)
+}
+
+// createSRv6SIDManagerCRD creates and updates the IsovalentSRv6SIDManager CRD.
+func createSRv6SIDManagerCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(SRv6SIDManagerName)
+
+	return createUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.SRv6SIDManagerName, ciliumCRD),
 		newDefaultPoller(),
 	)
 }
