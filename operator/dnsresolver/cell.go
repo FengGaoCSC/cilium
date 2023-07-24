@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/operator/dnsclient"
+	"github.com/cilium/cilium/operator/option"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -21,6 +22,9 @@ const (
 	// FQDNGroupMinQueryInterval is the minimum interval between two
 	// consecutive queries for resolving a FQDN belonging to an IFG.
 	FQDNGroupMinQueryInterval = "fqdn-group-min-query-interval"
+
+	// MetricIFG is the scope label for IsovalentFQDNGroup event metrics.
+	MetricIFG = "IsovalentFQDNGroup"
 )
 
 // Cell invokes the creation of the DNS resolvers manager. The manager reacts
@@ -32,6 +36,9 @@ var Cell = cell.Module(
 
 	cell.Config(defaultConfig),
 	cell.Invoke(newManager),
+	cell.ProvidePrivate(func(cfg *option.OperatorConfig) bool {
+		return cfg.EnableMetrics
+	}),
 )
 
 // Config contains the configuration for the identity-gc.
@@ -61,4 +68,6 @@ type resolverManagerParams struct {
 	DNSClient         dnsclient.Resolver
 	Clientset         k8sClient.Clientset
 	FQDNGroupResource resource.Resource[*isovalent_api_v1alpha1.IsovalentFQDNGroup]
+
+	EnableMetrics bool
 }

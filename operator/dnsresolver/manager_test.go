@@ -19,6 +19,7 @@ import (
 
 	"github.com/cilium/cilium/operator/dnsclient"
 	operatorK8s "github.com/cilium/cilium/operator/k8s"
+	"github.com/cilium/cilium/operator/option"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -47,6 +48,9 @@ func TestManagerSingleFQDNGroup(t *testing.T) {
 		operatorK8s.ResourcesCell,
 		cell.Provide(func() dnsclient.Resolver {
 			return &mockClient{ipv4, ipv6}
+		}),
+		cell.Provide(func() *option.OperatorConfig {
+			return &option.OperatorConfig{EnableMetrics: false}
 		}),
 
 		// initial setup for the test
@@ -158,6 +162,9 @@ func TestManagerSingleFQDNGroupSameCIDRs(t *testing.T) {
 		operatorK8s.ResourcesCell,
 		cell.Provide(func() dnsclient.Resolver {
 			return &mockClient{ipv4, ipv6}
+		}),
+		cell.Provide(func() *option.OperatorConfig {
+			return &option.OperatorConfig{EnableMetrics: false}
 		}),
 
 		// initial setup for the test
@@ -278,6 +285,9 @@ func TestManagerMultipleSets(t *testing.T) {
 		operatorK8s.ResourcesCell,
 		cell.Provide(func() dnsclient.Resolver {
 			return &mockClient{ipv4, ipv6}
+		}),
+		cell.Provide(func() *option.OperatorConfig {
+			return &option.OperatorConfig{EnableMetrics: false}
 		}),
 
 		// initial setup for the test
@@ -477,6 +487,10 @@ func TestManagerPeriodicResolver(t *testing.T) {
 			return nil
 		}),
 
+		cell.Provide(func() bool {
+			// disable manager metrics
+			return false
+		}),
 		cell.Provide(func() Config {
 			return Config{
 				FQDNGroupMinQueryInterval: time.Millisecond,

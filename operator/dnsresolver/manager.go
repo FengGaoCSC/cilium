@@ -6,6 +6,7 @@ package dnsresolver
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/cilium/workerpool"
@@ -13,11 +14,13 @@ import (
 	"go.uber.org/multierr"
 
 	"github.com/cilium/cilium/operator/dnsclient"
+	"github.com/cilium/cilium/operator/metrics"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	cilium_client_v2alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
+	"github.com/cilium/cilium/pkg/k8s/watchers/resources"
 )
 
 // manager is responsible for handling IsovalentFQDNGroup events. It will spin
@@ -47,6 +50,8 @@ type manager struct {
 	store *fqdnStore
 
 	wp *workerpool.WorkerPool
+
+	enableMetrics bool
 }
 
 func newManager(params resolverManagerParams) *manager {
@@ -55,18 +60,19 @@ func newManager(params resolverManagerParams) *manager {
 	}
 
 	mgr := &manager{
-		logger:      params.Logger,
-		shutdowner:  params.Shutdowner,
-		clientset:   params.Clientset.CiliumV2alpha1().CiliumCIDRGroups(),
-		fqdnGroup:   params.FQDNGroupResource,
-		ctrMgr:      controller.NewManager(),
-		dnsClient:   params.DNSClient,
-		minInterval: params.Cfg.FQDNGroupMinQueryInterval,
-		resolvers:   make(map[string]*resolver),
-		reconcilers: make(map[string]*reconciler),
-		cache:       make(status),
-		store:       newStore(),
-		wp:          workerpool.New(1),
+		logger:        params.Logger,
+		shutdowner:    params.Shutdowner,
+		clientset:     params.Clientset.CiliumV2alpha1().CiliumCIDRGroups(),
+		fqdnGroup:     params.FQDNGroupResource,
+		ctrMgr:        controller.NewManager(),
+		dnsClient:     params.DNSClient,
+		minInterval:   params.Cfg.FQDNGroupMinQueryInterval,
+		resolvers:     make(map[string]*resolver),
+		reconcilers:   make(map[string]*reconciler),
+		cache:         make(status),
+		store:         newStore(),
+		wp:            workerpool.New(1),
+		enableMetrics: params.EnableMetrics,
 	}
 	params.LC.Append(mgr)
 
@@ -121,20 +127,47 @@ func (mgr *manager) run(ctx context.Context) error {
 }
 
 func (mgr *manager) onUpdate(ctx context.Context, obj *v1alpha1.IsovalentFQDNGroup) error {
+	var (
+		action string
+		err    error
+	)
+
+	// wrap the function calls into a naked func() to capture variables in the closure
+	defer func() {
+		if !mgr.enableMetrics {
+			return
+		}
+
+		metrics.KubernetesEventProcessed.WithLabelValues(
+			MetricIFG,
+			action,
+			result(err),
+		).Inc()
+		ifgEventReceived(action, err == nil)
+	}()
+
 	fqdnGroup := obj.Name
+	if _, ok := mgr.cache[fqdnGroup]; !ok {
+		action = resources.MetricCreate
+	} else {
+		action = resources.MetricUpdate
+	}
+
 	mgr.logger.WithField("fqdnGroup", fqdnGroup).Debug(
 		"resyncing streams and restarting cidr group reconciler",
 	)
 
 	fqdns := toStrings(obj.Spec.FQDNs)
-	if err := mgr.syncResolvers(fqdnGroup, fqdns); err != nil {
+	err = mgr.syncResolvers(fqdnGroup, fqdns)
+	if err != nil {
 		return fmt.Errorf("failed to sync resolvers on FQDNGroup %s update: %w", fqdnGroup, err)
 	}
 
 	// stop the old reconciler and start a new one listening to notifications
 	// related to the updated FQDNGroup
 	if reconciler, ok := mgr.reconcilers[fqdnGroup]; ok {
-		if err := reconciler.close(); err != nil {
+		err = reconciler.close()
+		if err != nil {
 			return fmt.Errorf("failed to close reconciler on FQDNGroup %s update: %w", fqdnGroup, err)
 		}
 	}
@@ -147,7 +180,8 @@ func (mgr *manager) onUpdate(ctx context.Context, obj *v1alpha1.IsovalentFQDNGro
 		mgr.ctrMgr,
 		mgr.store,
 	)
-	if err := reconciler.run(); err != nil {
+	err = reconciler.run()
+	if err != nil {
 		return fmt.Errorf("failed to run reconciler on FQDNGroup %s update: %w", fqdnGroup, err)
 	}
 
@@ -159,22 +193,41 @@ func (mgr *manager) onUpdate(ctx context.Context, obj *v1alpha1.IsovalentFQDNGro
 }
 
 func (mgr *manager) onDelete(ctx context.Context, obj *v1alpha1.IsovalentFQDNGroup) error {
+	var err error
+
+	// wrap the function calls into a naked func() to capture variables in the closure
+	defer func() {
+		if !mgr.enableMetrics {
+			return
+		}
+
+		metrics.KubernetesEventProcessed.WithLabelValues(
+			MetricIFG,
+			resources.MetricDelete,
+			result(err),
+		).Inc()
+		ifgEventReceived(resources.MetricDelete, err == nil)
+	}()
+
 	fqdnGroup := obj.Name
 	mgr.logger.WithField("fqdnGroup", fqdnGroup).Debug(
 		"deleting streams and cidr group reconciler",
 	)
 
 	if reconciler, ok := mgr.reconcilers[fqdnGroup]; ok {
-		if err := reconciler.close(); err != nil {
+		err = reconciler.close()
+		if err != nil {
 			return fmt.Errorf("failed to close reconciler on FQDNGroup %s delete: %w", fqdnGroup, err)
 		}
 	}
 
-	if err := mgr.ctrMgr.RemoveController(fqdnGroup); err != nil {
+	err = mgr.ctrMgr.RemoveController(fqdnGroup)
+	if err != nil {
 		return fmt.Errorf("failed to remove reconciler FQDNGroup %s controller: %w", fqdnGroup, err)
 	}
 
-	if err := mgr.syncResolvers(fqdnGroup, nil); err != nil {
+	err = mgr.syncResolvers(fqdnGroup, nil)
+	if err != nil {
 		return fmt.Errorf("failed to sync resolvers on FQDNGroup %s delete: %w", fqdnGroup, err)
 	}
 
@@ -233,4 +286,26 @@ func (mgr *manager) syncResolvers(fqdnGroup string, fqdns []string) error {
 	}
 
 	return nil
+}
+
+func ifgEventReceived(action string, valid bool) {
+	metrics.EventTS.WithLabelValues(
+		metrics.LabelEventSourceK8s,
+		MetricIFG,
+		action,
+	).SetToCurrentTime()
+	metrics.KubernetesEventReceived.WithLabelValues(
+		MetricIFG,
+		action,
+		strconv.FormatBool(valid),
+		strconv.FormatBool(false),
+	).Inc()
+}
+
+func result(err error) string {
+	if err == nil {
+		return "success"
+	} else {
+		return "failed"
+	}
 }
