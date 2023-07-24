@@ -123,6 +123,17 @@ var (
 	// CiliumEndpointSliceQueueDelay measures the time spent by CES's in the workqueue. This measures time difference between
 	// CES insert in the workqueue and removal from workqueue.
 	CiliumEndpointSliceQueueDelay prometheus.Histogram
+
+	// KubernetesEventProcessed is the number of Kubernetes events
+	// processed labeled by scope, action and execution result
+	KubernetesEventProcessed *prometheus.CounterVec
+
+	// KubernetesEventReceived is the number of Kubernetes events received
+	// labeled by scope, action, valid data and equalness.
+	KubernetesEventReceived *prometheus.CounterVec
+
+	// EventTS is the timestamp of k8s resource events.
+	EventTS *prometheus.GaugeVec
 )
 
 const (
@@ -134,6 +145,18 @@ const (
 
 	// LabelOpcode indicates the kind of CES metric, could be CEP insert or remove
 	LabelOpcode = "opcode"
+
+	// LabelScope is the label used to defined multiples scopes in the same
+	// metric. For example, one counter may measure a metric over the scope of
+	// the entire event (scope=global), or just part of an event
+	// (scope=slow_path)
+	LabelScope = "scope"
+
+	// LabelAction is the label used to defined what kind of action was performed in a metric
+	LabelAction = "action"
+
+	// LabelEventSource is the source of a label for event metrics
+	LabelEventSource = "source"
 
 	// Label values
 
@@ -154,6 +177,9 @@ const (
 
 	// LabelValueCEPRemove is used to indicate the number of CEPs removed from a CES
 	LabelValueCEPRemove = "cepremoved"
+
+	// LabelEventSourceK8s marks event-related metrics that come from k8s
+	LabelEventSourceK8s = "k8s"
 )
 
 func registerMetrics() []prometheus.Collector {
@@ -220,6 +246,27 @@ func registerMetrics() []prometheus.Collector {
 		Buckets:   append(prometheus.DefBuckets, 60, 300, 900, 1800, 3600),
 	})
 	collectors = append(collectors, CiliumEndpointSliceQueueDelay)
+
+	KubernetesEventProcessed = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: Namespace,
+		Name:      "kubernetes_events_total",
+		Help:      "Number of Kubernetes events processed labeled by scope, action and execution result",
+	}, []string{LabelScope, LabelAction, LabelStatus})
+	collectors = append(collectors, KubernetesEventProcessed)
+
+	KubernetesEventReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: Namespace,
+		Name:      "kubernetes_events_received_total",
+		Help:      "Number of Kubernetes events received labeled by scope, action, valid data and equalness",
+	}, []string{LabelScope, LabelAction, "valid", "equal"})
+	collectors = append(collectors, KubernetesEventReceived)
+
+	EventTS = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: Namespace,
+		Name:      "event_ts",
+		Help:      "Last timestamp when we received an event",
+	}, []string{LabelEventSource, LabelScope, LabelAction})
+	collectors = append(collectors, EventTS)
 
 	Registry.MustRegister(collectors...)
 
