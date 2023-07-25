@@ -21,7 +21,6 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	v2alpha1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
-	"github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/informer"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
@@ -103,14 +102,6 @@ func AllCiliumCRDResourceNames() []string {
 		AgentCRDResourceNames(),
 		CRDResourceName(v2.CEWName),
 	)
-}
-
-// AllIsovalentCRDResourceNames returns a list of all Isovalent CRD resource
-// names.
-func AllIsovalentCRDResourceNames() []string {
-	return []string{
-		CRDResourceName(v1alpha1.IFGName),
-	}
 }
 
 // SyncCRDs will sync Cilium CRDs to ensure that they have all been
