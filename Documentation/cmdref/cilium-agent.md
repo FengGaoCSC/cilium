@@ -96,6 +96,7 @@ cilium-agent [flags]
       --enable-cilium-api-server-access strings                   List of cilium API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cilium-endpoint-slice                              Enable the CiliumEndpointSlice watcher in place of the CiliumEndpoint watcher (beta)
       --enable-cilium-health-api-server-access strings            List of cilium health API APIs which are administratively enabled. Supports '*'. (default [*])
+      --enable-cluster-aware-addressing                           Enable cluster-aware addressing, to support overlapping PodCIDRs
       --enable-custom-calls                                       Enable tail call hooks for custom eBPF programs
       --enable-endpoint-health-checking                           Enable connectivity health checking between virtual endpoints (default true)
       --enable-endpoint-routes                                    Use per endpoint routes instead of routing via cilium_host
@@ -110,6 +111,7 @@ cilium-agent [flags]
       --enable-hubble                                             Enable hubble server
       --enable-hubble-recorder-api                                Enable the Hubble recorder API (default true)
       --enable-identity-mark                                      Enable setting identity mark for local traffic (default true)
+      --enable-inter-cluster-snat                                 Enable inter-cluster SNAT, to support overlapping PodCIDRs
       --enable-ip-masq-agent                                      Enable BPF ip-masq-agent
       --enable-ipsec                                              Enable IPSec support
       --enable-ipsec-key-watcher                                  Enable watcher for IPsec key. If disabled, a restart of the agent will be necessary on key rotations. (default true)

@@ -12,13 +12,34 @@ package clustermesh
 
 import (
 	"github.com/cilium/cilium/pkg/clustermesh"
+	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/option"
+
+	cecmcfg "github.com/cilium/cilium/enterprise/pkg/clustermesh/config"
 )
 
 var Cell = cell.Module(
 	"enterprise-clustermesh",
 	"ClusterMesh is the Isovalent Enterprise for Cilium multicluster implementation",
 
-	// Override the OSS ServiceMerger, to introduce the support for enterprise features.
-	cell.Invoke(clustermesh.InjectCEServiceMerger),
+	cell.Config(cecmcfg.Config{}),
+
+	cell.Provide(
+		// Strictly require that the cluster-config is always exposed by
+		// remote clusters when overlapping PodCIDR support is enabled.
+		func(cfg cecmcfg.Config) cmtypes.ValidationMode {
+			return cmtypes.ValidationMode(cfg.EnableClusterAwareAddressing)
+		},
+	),
+
+	cell.Invoke(
+		// Override the OSS ServiceMerger, to introduce the support for enterprise features.
+		clustermesh.InjectCEServiceMerger,
+
+		// Validate the enterprise clustermesh configuration.
+		func(cfg cecmcfg.Config, dcfg *option.DaemonConfig) error {
+			return cfg.Validate(dcfg)
+		},
+	),
 )

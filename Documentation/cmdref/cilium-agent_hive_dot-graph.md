@@ -28,6 +28,8 @@ cilium-agent hive dot-graph [flags]
       --egress-gateway-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 1s)
       --enable-cilium-api-server-access strings                   List of cilium API APIs which are administratively enabled. Supports '*'. (default [*])
       --enable-cilium-health-api-server-access strings            List of cilium health API APIs which are administratively enabled. Supports '*'. (default [*])
+      --enable-cluster-aware-addressing                           Enable cluster-aware addressing, to support overlapping PodCIDRs
+      --enable-inter-cluster-snat                                 Enable inter-cluster SNAT, to support overlapping PodCIDRs
       --enable-k8s                                                Enable the k8s clientset (default true)
       --enable-k8s-api-discovery                                  Enable discovery of Kubernetes API groups and resources with the discovery API
       --enable-l2-pod-announcements                               Enable announcing Pod IPs with Gratuitous ARP
