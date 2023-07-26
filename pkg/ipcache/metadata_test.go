@@ -15,7 +15,6 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipcache/types"
-	"github.com/cilium/cilium/pkg/ipcache/types/fake"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/labels/cidr"
 	"github.com/cilium/cilium/pkg/source"
@@ -506,7 +505,6 @@ func setupTest(t *testing.T) (cleanup func()) {
 		IdentityAllocator: allocator,
 		PolicyHandler:     &mockUpdater{},
 		DatapathHandler:   &mockTriggerer{},
-		NodeIDHandler:     &fake.FakeNodeIDHandler{},
 	})
 
 	IPIdentityCache.metadata.upsertLocked(worldPrefix, source.CustomResource, "kube-uid", labels.LabelKubeAPIServer)
