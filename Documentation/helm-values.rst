@@ -964,6 +964,10 @@
      - Update ENI Adapter limits from the EC2 API
      - bool
      - ``true``
+   * - :spelling:ignore:`enterprise`
+     - 
+     - string
+     - ``nil``
    * - :spelling:ignore:`envoy.affinity`
      - Affinity for cilium-envoy.
      - object

@@ -83,6 +83,8 @@ metadata:
   name: cilium-config
   namespace: {{ .Release.Namespace }}
 data:
+{{- include "enterprise.cilium-config" . | indent 2 }}
+
 {{- if .Values.etcd.enabled }}
   # The kvstore configuration is used to enable use of a kvstore for state
   # storage. This can either be provided with an external kvstore or with the
