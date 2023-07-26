@@ -1,24 +1,25 @@
-name: ClusterMesh with Overlapping PodCIDR (clustermesh-overlapping-podcidr-v1.13)
+name: ClusterMesh with Overlapping PodCIDR (ci-multicluster)
 
 # Any change in triggers needs to be reflected in the concurrency group.
 on:
-  issue_comment:
-    types:
-      - created
-  ### FOR TESTING PURPOSES
-  # This workflow runs in the context of `master`, and ignores changes to
-  # workflow files in PRs. For testing changes to this workflow from a PR:
-  # - Make sure the PR uses a branch from the base repository (requires write
-  #   privileges). It will not work with a branch from a fork (missing secrets).
-  # - Uncomment the `pull_request` event below, commit separately with a `DO
-  #   NOT MERGE` message, and push to the PR. As long as the commit is present,
-  #   any push to the PR will trigger this workflow.
-  # - Don't forget to remove the `DO NOT MERGE` commit once satisfied. The run
-  #   will disappear from the PR checks: please provide a direct link to the
-  #   successful workflow run (can be found from Actions tab) in a comment.
-  #
-  # pull_request: {}
-  ###
+  workflow_dispatch:
+    inputs:
+      PR-number:
+        description: "Pull request number."
+        required: true
+      context-ref:
+        description: "Context in which the workflow runs. If PR is from a fork, will be the PR target branch (general case). If PR is NOT from a fork, will be the PR branch itself (this allows committers to test changes to workflows directly from PRs)."
+        required: true
+      SHA:
+        description: "SHA under test (head of the PR branch)."
+        required: true
+      extra-args:
+        description: "[JSON object] Arbitrary arguments passed from the trigger comment via regex capture group. Parse with 'fromJson(inputs.extra-args).argName' in workflow."
+        required: false
+        default: '{}'
+  # Run every 6 hours
+  schedule:
+    - cron:  '0 3/6 * * *'
 
 # By specifying the access of one of the scopes, all of those that are not
 # specified are set to 'none'.
@@ -27,7 +28,7 @@ permissions:
   contents: read
   # To allow retrieving information from the PR API
   pull-requests: read
-  # So that Sibz/github-status-action can write into the status API
+  # To be able to set commit status
   statuses: write
 
 concurrency:
@@ -36,124 +37,51 @@ concurrency:
   # - Event type
   # - A unique identifier depending on event type:
   #   - schedule: SHA
-  #   - issue_comment: PR number
-  #   - pull_request: PR number
+  #   - workflow_dispatch: PR number
   #
   # This structure ensures a unique concurrency group name is generated for each
-  # type of testing:
-  # - schedule: {name} schedule {SHA}
-  # - issue_comment: {name} issue_comment {PR number}
-  # - pull_request: {name} pull_request {PR number}
-  #
-  # Note: for `issue_comment` triggers, we additionally need to filter out based
-  # on comment content, otherwise any comment will interrupt workflow runs.
+  # type of testing, such that re-runs will cancel the previous run.
   group: |
     ${{ github.workflow }}
     ${{ github.event_name }}
     ${{
       (github.event_name == 'schedule' && github.sha) ||
-      (github.event_name == 'issue_comment' && (
-        github.event.comment.body == '/clustermesh-overlapping-podcidr-v1.13' ||
-        github.event.comment.body == '/test-backport-1.13'
-      ) && github.event.issue.number) ||
-      (github.event_name == 'pull_request' && github.event.pull_request.number)
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.PR-number)
     }}
   cancel-in-progress: true
 
 env:
-  kind_version: v0.17.0
-  k8s_version: v1.24.12
+  # renovate: datasource=github-releases depName=kubernetes-sigs/kind
+  kind_version: v0.20.0
+  # renovate: datasource=docker depName=quay.io/cilium/kindest-node
+  k8s_version: v1.27.1
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.13.1
+  cilium_cli_version: v0.15.5
+  cilium_cli_ci_version:
   clusterName1: cluster1-${{ github.run_id }}
   clusterName2: cluster2-${{ github.run_id }}
   contextName1: kind-cluster1-${{ github.run_id }}
   contextName2: kind-cluster2-${{ github.run_id }}
-  check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
-  check_changes:
+  commit-status-start:
     runs-on: ubuntu-latest
-    outputs:
-      tested: ${{ steps.tested-tree.outputs.src }}
     steps:
-      # Because we run on issue comments, we need to checkout the code for
-      # paths-filter to work.
-      - name: Checkout code
-        if: ${{ github.event.issue.pull_request }}
-        uses: actions/checkout@24cb9080177205b6e8c946b17badbe402adc938f # v3.4.0
+      - name: Set initial commit status
+        uses: myrotvorets/set-commit-status-action@243b4f7e597f62335408d58001edf8a02cf3e1fd # v1.1.7
         with:
-          persist-credentials: false
-      - name: Retrieve pull request's base and head
-        if: ${{ github.event.issue.pull_request }}
-        id: pr
-        run: |
-          curl ${{ github.event.issue.pull_request.url }} > pr.json
-          echo "base=$(jq -r '.base.sha' pr.json)" >> $GITHUB_OUTPUT
-          echo "head=$(jq -r '.head.sha' pr.json)" >> $GITHUB_OUTPUT
-      - name: Check code changes
-        if: ${{ github.event.issue.pull_request }}
-        uses: dorny/paths-filter@4512585405083f25c027a35db413c2b3b9006d50 # v2.11.1
-        id: tested-tree
-        with:
-          base: ${{ steps.pr.outputs.base }}
-          ref: ${{ steps.pr.outputs.head }}
-          filters: |
-            src:
-              - '!(test|Documentation)/**'
+          sha: ${{ inputs.SHA || github.sha }}
 
-  skip-test-run:
-    # If the modified files are not relevant for this test then we can skip
-    # this test and mark it as successful.
-    if: github.event.comment.body == '/test' && needs.check_changes.outputs.tested == 'false'
-    runs-on: ubuntu-latest
-    needs: check_changes
-    steps:
-    - name: Set up job variables
-      id: vars
-      run: |
-        if [ ${{ github.event.issue.pull_request || github.event.pull_request }} ]; then
-          PR_API_JSON=$(curl \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            ${{ github.event.issue.pull_request.url || github.event.pull_request.url }})
-          SHA=$(echo "$PR_API_JSON" | jq -r ".head.sha")
-        elif [ "${{ github.event_name }}" = "schedule" ]; then
-          curl https://api.github.com/repos/cilium/cilium/branches/v1.13 > branch.json
-          SHA=$(jq -r '.commit.sha' branch.json)
-        else
-          SHA=${{ github.sha }}
-        fi
-        echo "sha=${SHA}" >> $GITHUB_OUTPUT
-    - name: Set commit status to success
-      uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
-      with:
-        authToken: ${{ secrets.GITHUB_TOKEN }}
-        sha: ${{ steps.vars.outputs.sha }}
-        context: ${{ github.workflow }}
-        description: ClusterMesh with overlapping PodCIDR test skipped
-        state: success
-        target_url: ${{ env.check_url }}
-
-  # This job is skipped when the workflow was triggered with the generic `/test`
-  # trigger if the only modified files were under `test/` or `Documentation/`.
   installation-and-connectivity:
-    needs: check_changes
     name: Setup & Test
-    if: |
-      (github.event_name == 'issue_comment' && (
-        github.event.comment.body == '/clustermesh-overlapping-podcidr-v1.13' ||
-        (github.event.comment.body == '/test-backport-1.13' && needs.check_changes.outputs.tested == 'true')
-      )) ||
-      github.event_name == 'schedule' ||
-      github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+
     steps:
-    - name: Checkout default branch
-      uses: actions/checkout@24cb9080177205b6e8c946b17badbe402adc938f # v3.4.0
+    - name: Checkout context ref
+      uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
       with:
-        ref: ${{ github.event.repository.default_branch }}
+        ref: ${{ inputs.context-ref || github.sha }}
         persist-credentials: false
 
     - name: Set Environment Variables
@@ -162,20 +90,15 @@ jobs:
     - name: Set up job variables for GHA environment
       id: vars
       run: |
-        if [ ${{ github.event.issue.pull_request || github.event.pull_request }} ]; then
-          PR_API_JSON=$(curl \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            ${{ github.event.issue.pull_request.url || github.event.pull_request.url }})
-          SHA=$(echo "$PR_API_JSON" | jq -r ".head.sha")
-          OWNER=$(echo "$PR_API_JSON" | jq -r ".number")
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          SHA="${{ inputs.SHA }}"
         else
-          SHA=${{ github.sha }}
-          OWNER=${{ github.sha }}
+          SHA="${{ github.sha }}"
         fi
 
         # bpf.masquerade is disabled due to #23283
         CILIUM_INSTALL_DEFAULTS="--chart-directory=install/kubernetes/cilium \
+          --helm-set=debug.enabled=true \
           --helm-set=image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci \
           --helm-set=image.useDigest=false \
           --helm-set=image.tag=${SHA} \
@@ -184,15 +107,17 @@ jobs:
           --helm-set=operator.image.tag=${SHA} \
           --helm-set=operator.image.useDigest=false \
           --helm-set=bpf.masquerade=false \
-          --helm-set=clustermesh.enableOverlappingPodCIDRSupport=true \
+          --helm-set=bpf.monitorAggregation=none \
+          --helm-set=clustermesh.useAPIServer=true \
+          --helm-set=clustermesh.apiserver.image.override=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/clustermesh-apiserver-ci:${SHA} \
+          --helm-set=clustermesh.apiserver.image.useDigest=false \
+          --helm-set=enterprise.clustermesh.enableOverlappingPodCIDRSupport=true \
           --helm-set=socketLB.enabled=true \
           --helm-set=socketLB.hostNamespaceOnly=true \
           --helm-set=endpointHealthChecking.enabled=false \
           --helm-set=endpointStatus.enabled=true \
           --helm-set=endpointStatus.status=policy \
-          --config monitor-aggregation=none \
-          --rollback=false \
-          --version="
+        "
 
         CILIUM_INSTALL_TUNNEL="--helm-set=tunnel=vxlan"
 
@@ -202,14 +127,10 @@ jobs:
         KIND_POD_CIDR_2="10.242.0.0/16"
         KIND_SVC_CIDR_2="10.243.0.0/16"
 
-        CLUSTERMESH_ENABLE_DEFAULTS="--apiserver-image=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/clustermesh-apiserver-ci \
-          --apiserver-version=${SHA} --service-type=NodePort"
-
         CONNECTIVITY_TEST_DEFAULTS="--hubble=false --flow-validation=disabled --external-target=google.com --collect-sysdump-on-failure"
 
         echo cilium_install_defaults="${CILIUM_INSTALL_DEFAULTS} ${CILIUM_INSTALL_TUNNEL} ${CILIUM_INSTALL_IPFAMILY}" >> $GITHUB_OUTPUT
         echo connectivity_test_defaults=${CONNECTIVITY_TEST_DEFAULTS} >> $GITHUB_OUTPUT
-        echo clustermesh_enable_defaults=${CLUSTERMESH_ENABLE_DEFAULTS} >> $GITHUB_OUTPUT
 
         echo kind_pod_cidr_1=${KIND_POD_CIDR_1} >> $GITHUB_OUTPUT
         echo kind_svc_cidr_1=${KIND_SVC_CIDR_1} >> $GITHUB_OUTPUT
@@ -218,23 +139,11 @@ jobs:
 
         echo sha=${SHA} >> $GITHUB_OUTPUT
 
-    - name: Set commit status to pending
-      uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
-      with:
-        authToken: ${{ secrets.GITHUB_TOKEN }}
-        sha: ${{ steps.vars.outputs.sha }}
-        context: ${{ github.workflow }}
-        description: Connectivity test in progress...
-        state: pending
-        target_url: ${{ env.check_url }}
-
     - name: Install Cilium CLI
-      run: |
-        curl -sSL --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${{ env.cilium_cli_version }}/cilium-linux-amd64.tar.gz{,.sha256sum}
-        sha256sum --check cilium-linux-amd64.tar.gz.sha256sum
-        sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
-        rm cilium-linux-amd64.tar.gz{,.sha256sum}
-        cilium version
+      uses: cilium/cilium-cli@8144df39be1411403dbe06a14fdddf24e9eb0c1e # v0.15.5
+      with:
+        release-version: ${{ env.cilium_cli_version }}
+        ci-version: ${{ env.cilium_cli_ci_version }}
 
     - name: Generate Kind configuration files
       run: |
@@ -253,7 +162,7 @@ jobs:
           envsubst < ./.github/kind-config.yaml.tmpl > ./.github/kind-config-cluster2.yaml
 
     - name: Create Kind cluster 1
-      uses: helm/kind-action@d8ccf8fb623ce1bb360ae2f45f323d9d5c5e9f00 # v1.5.0
+      uses: helm/kind-action@dda0770415bac9fc20092cacbc54aa298604d140 # v1.8.0
       with:
         cluster_name: ${{ env.clusterName1 }}
         version: ${{ env.kind_version }}
@@ -261,7 +170,7 @@ jobs:
         wait: 0 # The control-plane never becomes ready, since no CNI is present
 
     - name: Create Kind cluster 2
-      uses: helm/kind-action@d8ccf8fb623ce1bb360ae2f45f323d9d5c5e9f00 # v1.5.0
+      uses: helm/kind-action@dda0770415bac9fc20092cacbc54aa298604d140 # v1.8.0
       with:
         cluster_name: ${{ env.clusterName2 }}
         version: ${{ env.kind_version }}
@@ -276,35 +185,38 @@ jobs:
           until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.vars.outputs.sha }} &> /dev/null; do sleep 45s; done
         done
 
-    - name: Checkout code
-      uses: actions/checkout@24cb9080177205b6e8c946b17badbe402adc938f # v3.4.0
+    # Warning: since this is a privileged workflow, subsequent workflow job
+    # steps must take care not to execute untrusted code.
+    - name: Checkout pull request branch (NOT TRUSTED)
+      uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
       with:
         ref: ${{ steps.vars.outputs.sha }}
         persist-credentials: false
 
     - name: Install Cilium in cluster1
       run: |
-        # Using the deprecated flag --cluster-name due to cilium/cilium-cli#1347
-        # --helm-set cluster.name ${{ env.clusterName1 }}
+        # Explicitly configure the NodePort to make sure that it is different in
+        # each cluster, to workaround #24692
         cilium --context ${{ env.contextName1 }} install \
-          ${{ steps.vars.outputs.cilium_install_defaults }} \
-          --cluster-name ${{ env.clusterName1 }} \
-          --helm-set cluster.id=1
+        ${{ steps.vars.outputs.cilium_install_defaults }} \
+          --helm-set cluster.name=${{ env.clusterName1 }} \
+          --helm-set cluster.id=1 \
+          --helm-set clustermesh.apiserver.service.nodePort=32379
+
+    - name: Copy the Cilium CA secret to cluster2, as they must match
+      run: |
+        kubectl --context ${{ env.contextName1 }} get secret -n kube-system cilium-ca -o yaml |
+          kubectl --context ${{ env.contextName2 }} create -f -
 
     - name: Install Cilium in cluster2
       run: |
-        # Using the deprecated form --cluster-name due to cilium/cilium-cli#1347
-        # --helm-set cluster.name ${{ env.clusterName2 }}
+        # Explicitly configure the NodePort to make sure that it is different in
+        # each cluster, to workaround #24692
         cilium --context ${{ env.contextName2 }} install \
           ${{ steps.vars.outputs.cilium_install_defaults }} \
-          --cluster-name ${{ env.clusterName2 }} \
+          --helm-set cluster.name=${{ env.clusterName2 }} \
           --helm-set cluster.id=255 \
-          --inherit-ca ${{ env.contextName1 }}
-
-    - name: Enable Cluster Mesh
-      run: |
-        cilium --context ${{ env.contextName1 }} clustermesh enable ${{ steps.vars.outputs.clustermesh_enable_defaults }}
-        cilium --context ${{ env.contextName2 }} clustermesh enable ${{ steps.vars.outputs.clustermesh_enable_defaults }}
+          --helm-set clustermesh.apiserver.service.nodePort=32380
 
     - name: Wait for cluster mesh status to be ready
       run: |
@@ -474,35 +386,13 @@ jobs:
         path: cilium-sysdump-*.zip
         retention-days: 5
 
-    - name: Set commit status to success
-      if: ${{ success() }}
-      uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
-      with:
-        authToken: ${{ secrets.GITHUB_TOKEN }}
-        sha: ${{ steps.vars.outputs.sha }}
-        context: ${{ github.workflow }}
-        description: Connectivity test successful
-        state: success
-        target_url: ${{ env.check_url }}
-
-    - name: Set commit status to failure
-      if: ${{ failure() }}
-      uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
-      with:
-        authToken: ${{ secrets.GITHUB_TOKEN }}
-        sha: ${{ steps.vars.outputs.sha }}
-        context: ${{ github.workflow }}
-        description: Connectivity test failed
-        state: failure
-        target_url: ${{ env.check_url }}
-
-    - name: Set commit status to cancelled
-      if: ${{ cancelled() }}
-      uses: Sibz/github-status-action@650dd1a882a76dbbbc4576fb5974b8d22f29847f # v1.1.6
-      with:
-        authToken: ${{ secrets.GITHUB_TOKEN }}
-        sha: ${{ steps.vars.outputs.sha }}
-        context: ${{ github.workflow }}
-        description: Connectivity test cancelled
-        state: error
-        target_url: ${{ env.check_url }}
+  commit-status-final:
+    if: ${{ always() }}
+    needs: installation-and-connectivity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set final commit status
+        uses: myrotvorets/set-commit-status-action@243b4f7e597f62335408d58001edf8a02cf3e1fd # v1.1.7
+        with:
+          sha: ${{ inputs.SHA || github.sha }}
+          status: ${{ needs.installation-and-connectivity.result }}
