@@ -80,6 +80,7 @@ func startCiliumAgent(t *testing.T, clientset k8sClient.Clientset, extraCell cel
 		cell.Provide(
 			func() k8sClient.Clientset { return clientset },
 			func() datapath.Datapath { return fdp },
+			func() datapath.NodeIDHandler { return fdp.NodeIDs() },
 			func() *option.DaemonConfig { return option.Config },
 			func() cnicell.CNIConfigManager { return &fakecni.FakeCNIConfigManager{} },
 			func() signalmap.Map { return fakesignalmap.NewFakeSignalMap([][]byte{}, time.Second) },
