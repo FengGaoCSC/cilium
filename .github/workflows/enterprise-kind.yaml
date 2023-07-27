@@ -15,7 +15,7 @@ concurrency:
 
 env:
   helm_chart_repo: oci://quay.io/isovalent-charts-dev/cilium
-  fqdn_proxy_version: v1.13.2
+  fqdn_proxy_version: v1.14.0-rc0
   kind_version: v0.17.0
   kind_config: .github/kind-config.yaml
 
