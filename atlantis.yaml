@@ -3,11 +3,11 @@ scheme: v1alpha4
 lib:
   package: github.com/isovalent/atlantis
   version: d08deac735a85c97bffcd79d73f5f34cc58ae2a9
-plugins: []
-  #- package: github.com/isovalent/fqdn-proxy/plugin
-  #  version: v1.13.0
-  #  edit:
-  #    cilium: .FQDNProxy
+plugins:
+  - package: github.com/isovalent/fqdn-proxy/plugin
+    version: v1.14.0-rc0
+    edit:
+      cilium: .FQDNProxy
 goModOptions:
   tidyOptions:
     - "-compat"
