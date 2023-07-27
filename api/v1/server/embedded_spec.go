@@ -2490,6 +2490,10 @@ func init() {
           "description": "ID of datapath tail call map",
           "type": "integer"
         },
+        "disable-legacy-identifiers": {
+          "description": "Disables lookup using legacy endpoint identifiers (container name, container id, pod name) for this endpoint",
+          "type": "boolean"
+        },
         "docker-endpoint-id": {
           "description": "Docker endpoint ID",
           "type": "string"
@@ -7641,6 +7645,10 @@ func init() {
         "datapath-map-id": {
           "description": "ID of datapath tail call map",
           "type": "integer"
+        },
+        "disable-legacy-identifiers": {
+          "description": "Disables lookup using legacy endpoint identifiers (container name, container id, pod name) for this endpoint",
+          "type": "boolean"
         },
         "docker-endpoint-id": {
           "description": "Docker endpoint ID",
