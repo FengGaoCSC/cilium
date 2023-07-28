@@ -1,0 +1,20 @@
+name: Fail if a dont-merge/* label exists
+
+on:
+  pull_request:
+    types: [synchronize, opened, reopened, labeled, unlabeled]
+
+jobs:
+  check-dont-merge-labels:
+    runs-on: ubuntu-latest
+    env:
+      LABELS: "${{ toJson(github.event.pull_request.labels.*.name) }}"
+    steps:
+      - run: |
+          for label in $(echo "$LABELS" | jq -r '.[]');
+          do
+            if [[ "$label" =~ ^dont-merge\/.* ]]; then
+              echo "$label found"
+              exit 1
+            fi
+          done
