@@ -1221,6 +1221,10 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		ipsec.StartStaleKeysReclaimer(ctx)
 	}
 
+	if d.multiNetworkManager != nil {
+		params.MultiNetworkManager.StartRoutingController(d.nodeDiscovery)
+	}
+
 	return &d, restoredEndpoints, nil
 }
 

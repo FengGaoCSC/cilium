@@ -7,17 +7,21 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-openapi/swag"
 
 	"github.com/cilium/cilium/api/v1/models"
-	"github.com/cilium/cilium/daemon/k8s"
+	k8sResource "github.com/cilium/cilium/daemon/k8s"
+	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/hive"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_core_v1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
+	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/nodediscovery"
 )
 
 var (
@@ -63,10 +67,16 @@ func (r *ResourceNotFound) Is(target error) bool {
 	return true
 }
 
-type Manager struct {
-	config config
+type daemonConfig interface {
+	IPv4Enabled() bool
+	IPv6Enabled() bool
+}
 
-	podResource k8s.LocalPodResource
+type Manager struct {
+	config       config
+	daemonConfig daemonConfig
+
+	podResource k8sResource.LocalPodResource
 	podStore    resource.Store[*slim_core_v1.Pod]
 
 	networkResource resource.Resource[*iso_v1alpha1.IsovalentPodNetwork]
@@ -150,4 +160,34 @@ func (m *Manager) GetNetworksForPod(ctx context.Context, podNamespace, podName s
 		PodName:      podName,
 		PodNamespace: podNamespace,
 	}, nil
+}
+
+// StartRoutingController implements a multi-network aware version of auto-direct-node-routes.
+// We currently duplicate this logic here because the routing logic in the open-source linuxNodeHandler
+// is not multi-network aware, but the goal is to eventually upstream this.
+func (m *Manager) StartRoutingController(nodeDiscovery *nodediscovery.NodeDiscovery) {
+	if !m.config.MultiNetworkAutoDirectNodeRoutes || m.networkStore == nil {
+		return
+	}
+
+	controllerMgr := controller.NewManager()
+
+	// localNetworkIPCollector auto-detects local node IPs and provides them to
+	// nodeDiscovery
+	localIP := &localNetworkIPCollector{
+		daemonConfig:        m.daemonConfig,
+		networkStore:        m.networkStore,
+		mutex:               lock.Mutex{},
+		nodeIPByNetworkName: make(map[string]nodeIPPair),
+	}
+
+	// Collects local podCIDRs and stores them in nodeIPByNetworkName
+	controllerMgr.UpdateController(localNodeSyncController, controller.ControllerParams{
+		DoFunc: func(ctx context.Context) error {
+			return localIP.updateNodeIPAddresses(nodeDiscovery)
+		},
+		RunInterval: 15 * time.Second,
+	})
+	// Announces IPs in nodeIPByNetworkName in CiliumNode via NodeDiscovery
+	nodeDiscovery.WithAdditionalNodeAddressSource(localIP)
 }

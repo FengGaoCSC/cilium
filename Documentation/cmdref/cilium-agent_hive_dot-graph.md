@@ -50,6 +50,7 @@ cilium-agent hive dot-graph [flags]
       --mesh-auth-spire-admin-socket string                       The path for the SPIRE admin agent Unix socket.
       --metrics strings                                           Metrics that should be enabled or disabled from the default metric list. (+metric_foo to enable metric_foo, -metric_bar to disable metric_bar)
       --monitor-queue-size int                                    Size of the event queue when reading monitor events
+      --multi-network-auto-direct-node-routes                     Enable multi-network aware automatic L2 routing between nodes (experimental) (default true)
       --pprof                                                     Enable serving pprof debugging API
       --pprof-address string                                      Address that pprof listens on (default "localhost")
       --pprof-port uint16                                         Port that pprof listens on (default 6060)

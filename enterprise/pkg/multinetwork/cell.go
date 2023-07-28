@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/k8s/utils"
+	"github.com/cilium/cilium/pkg/option"
 )
 
 var Cell = cell.Module(
@@ -26,15 +27,18 @@ var Cell = cell.Module(
 )
 
 var defaultConfig = config{
-	EnableMultiNetwork: false,
+	EnableMultiNetwork:               false,
+	MultiNetworkAutoDirectNodeRoutes: true,
 }
 
 type config struct {
-	EnableMultiNetwork bool
+	EnableMultiNetwork               bool
+	MultiNetworkAutoDirectNodeRoutes bool
 }
 
 func (c config) Flags(flags *pflag.FlagSet) {
 	flags.Bool("enable-multi-network", c.EnableMultiNetwork, "Enable support for multiple pod networks")
+	flags.Bool("multi-network-auto-direct-node-routes", c.MultiNetworkAutoDirectNodeRoutes, "Enable multi-network aware automatic L2 routing between nodes (experimental)")
 }
 
 // isovalentPodNetworkResource returns a resource handle for IsovalentPodNetworks
@@ -58,6 +62,7 @@ type managerParams struct {
 	Lifecycle hive.Lifecycle
 	Config    config
 
+	DaemonConfig    *option.DaemonConfig
 	PodResource     k8s.LocalPodResource
 	NetworkResource resource.Resource[*iso_v1alpha1.IsovalentPodNetwork]
 }
@@ -69,6 +74,7 @@ func newMultiNetworkManager(params managerParams) *Manager {
 
 	manager := &Manager{
 		config:          params.Config,
+		daemonConfig:    params.DaemonConfig,
 		podResource:     params.PodResource,
 		networkResource: params.NetworkResource,
 	}
