@@ -8,7 +8,7 @@
 //  or reproduction of this material is strictly forbidden unless prior written
 //  permission is obtained from Isovalent Inc.
 
-package srv6
+package sidmanager
 
 import (
 	"encoding/binary"
@@ -53,10 +53,10 @@ type StructuredSIDAllocator struct {
 	// SID is allocated from this locator prefix
 	locator types.Locator
 
-	// Allocator to manage the allocation of function part.
+	// Allocator to manage the allocation of function part
 	allocator *allocator.AllocationBitmap
 
-	// Function part => SID allocation mappings.
+	// Function part => SID allocation mappings
 	allocatedSIDs map[int]*SIDInfo
 
 	// A lock to protect allocatedSIDs
