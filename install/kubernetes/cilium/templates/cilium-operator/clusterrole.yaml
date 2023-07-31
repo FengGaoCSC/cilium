@@ -199,6 +199,7 @@ rules:
   - ciliuml2announcementpolicies.cilium.io
   - ciliumpodippools.cilium.io
   - isovalentfqdngroups.isovalent.com
+  - isovalentegressgatewaypolicies.isovalent.com
 - apiGroups:
   - cilium.io
   resources:

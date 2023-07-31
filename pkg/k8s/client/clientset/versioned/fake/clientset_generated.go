@@ -11,6 +11,8 @@ import (
 	fakeciliumv2 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2/fake"
 	ciliumv2alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2alpha1"
 	fakeciliumv2alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2alpha1/fake"
+	isovalentv1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1"
+	fakeisovalentv1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1/fake"
 	isovalentv1alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1"
 	fakeisovalentv1alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -78,6 +80,11 @@ func (c *Clientset) CiliumV2() ciliumv2.CiliumV2Interface {
 // CiliumV2alpha1 retrieves the CiliumV2alpha1Client
 func (c *Clientset) CiliumV2alpha1() ciliumv2alpha1.CiliumV2alpha1Interface {
 	return &fakeciliumv2alpha1.FakeCiliumV2alpha1{Fake: &c.Fake}
+}
+
+// IsovalentV1 retrieves the IsovalentV1Client
+func (c *Clientset) IsovalentV1() isovalentv1.IsovalentV1Interface {
+	return &fakeisovalentv1.FakeIsovalentV1{Fake: &c.Fake}
 }
 
 // IsovalentV1alpha1 retrieves the IsovalentV1alpha1Client

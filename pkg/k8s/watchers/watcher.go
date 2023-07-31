@@ -35,6 +35,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
+	isovalent_v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	k8smetrics "github.com/cilium/cilium/pkg/k8s/metrics"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
@@ -73,6 +74,7 @@ const (
 	k8sAPIGroupCiliumEndpointSliceV2Alpha1      = "cilium/v2alpha1::CiliumEndpointSlice"
 	k8sAPIGroupCiliumClusterwideEnvoyConfigV2   = "cilium/v2::CiliumClusterwideEnvoyConfig"
 	k8sAPIGroupCiliumEnvoyConfigV2              = "cilium/v2::CiliumEnvoyConfig"
+	k8sAPIGroupIsovalentEgressGatewayPolicyV1   = "isovalent/v1::IsovalentEgressGatewayPolicy"
 
 	metricKNP            = "NetworkPolicy"
 	metricNS             = "Namespace"
@@ -433,6 +435,7 @@ var ciliumResourceToGroupMapping = map[string]watcherInfo{
 	synced.CRDResourceName(v2alpha1.CCGName):            {start, k8sAPIGroupCiliumCIDRGroupV2Alpha1},
 	synced.CRDResourceName(v2alpha1.L2AnnouncementName): {skip, ""}, // Handled by L2 announcement directly
 	synced.CRDResourceName(v2alpha1.CPIPName):           {skip, ""}, // Handled by multi-pool IPAM allocator
+	synced.CRDResourceName(isovalent_v1.IEGPName):       {start, k8sAPIGroupIsovalentEgressGatewayPolicyV1},
 }
 
 // resourceGroups are all of the core Kubernetes and Cilium resource groups

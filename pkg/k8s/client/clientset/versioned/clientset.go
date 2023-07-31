@@ -11,6 +11,7 @@ import (
 
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2"
 	ciliumv2alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/cilium.io/v2alpha1"
+	isovalentv1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1"
 	isovalentv1alpha1 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned/typed/isovalent.com/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
@@ -21,6 +22,7 @@ type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	CiliumV2() ciliumv2.CiliumV2Interface
 	CiliumV2alpha1() ciliumv2alpha1.CiliumV2alpha1Interface
+	IsovalentV1() isovalentv1.IsovalentV1Interface
 	IsovalentV1alpha1() isovalentv1alpha1.IsovalentV1alpha1Interface
 }
 
@@ -29,6 +31,7 @@ type Clientset struct {
 	*discovery.DiscoveryClient
 	ciliumV2          *ciliumv2.CiliumV2Client
 	ciliumV2alpha1    *ciliumv2alpha1.CiliumV2alpha1Client
+	isovalentV1       *isovalentv1.IsovalentV1Client
 	isovalentV1alpha1 *isovalentv1alpha1.IsovalentV1alpha1Client
 }
 
@@ -40,6 +43,11 @@ func (c *Clientset) CiliumV2() ciliumv2.CiliumV2Interface {
 // CiliumV2alpha1 retrieves the CiliumV2alpha1Client
 func (c *Clientset) CiliumV2alpha1() ciliumv2alpha1.CiliumV2alpha1Interface {
 	return c.ciliumV2alpha1
+}
+
+// IsovalentV1 retrieves the IsovalentV1Client
+func (c *Clientset) IsovalentV1() isovalentv1.IsovalentV1Interface {
+	return c.isovalentV1
 }
 
 // IsovalentV1alpha1 retrieves the IsovalentV1alpha1Client
@@ -99,6 +107,10 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 	if err != nil {
 		return nil, err
 	}
+	cs.isovalentV1, err = isovalentv1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	if err != nil {
+		return nil, err
+	}
 	cs.isovalentV1alpha1, err = isovalentv1alpha1.NewForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
 		return nil, err
@@ -126,6 +138,7 @@ func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.ciliumV2 = ciliumv2.New(c)
 	cs.ciliumV2alpha1 = ciliumv2alpha1.New(c)
+	cs.isovalentV1 = isovalentv1.New(c)
 	cs.isovalentV1alpha1 = isovalentv1alpha1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)

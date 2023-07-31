@@ -226,10 +226,12 @@ GIT_VERSION: force
 CRD_OPTIONS ?= "crd:crdVersions=v1"
 CRD_PATHS := "$(PWD)/pkg/k8s/apis/cilium.io/v2;\
               $(PWD)/pkg/k8s/apis/cilium.io/v2alpha1;\
+              $(PWD)/pkg/k8s/apis/isovalent.com/v1;\
               $(PWD)/pkg/k8s/apis/isovalent.com/v1alpha1"
 CRDS_CILIUM_PATHS := $(PWD)/pkg/k8s/apis/cilium.io/client/crds/v2\
                      $(PWD)/pkg/k8s/apis/cilium.io/client/crds/v2alpha1
-CRDS_ISOVALENT_PATHS := $(PWD)/pkg/k8s/apis/isovalent.com/client/crds/v1alpha1
+CRDS_ISOVALENT_PATHS := $(PWD)/pkg/k8s/apis/isovalent.com/client/crds/v1\
+                        $(PWD)/pkg/k8s/apis/isovalent.com/client/crds/v1alpha1
 CRDS_CILIUM_V2 := ciliumnetworkpolicies \
                   ciliumclusterwidenetworkpolicies \
                   ciliumendpoints \
@@ -248,6 +250,7 @@ CRDS_CILIUM_V2ALPHA1 := ciliumendpointslices \
                         ciliuml2announcementpolicies \
                         ciliumpodippools
 CRDS_ISOVALENT_V1ALPHA1 := isovalentfqdngroups
+CRDS_ISOVALENT_V1 := isovalentegressgatewaypolicies
 manifests: ## Generate K8s manifests e.g. CRD, RBAC etc.
 	$(eval TMPDIR := $(shell mktemp -d -t cilium.tmpXXXXXXXX))
 	$(QUIET)$(GO) run sigs.k8s.io/controller-tools/cmd/controller-gen $(CRD_OPTIONS) paths=$(CRD_PATHS) output:crd:artifacts:config="$(TMPDIR)"
@@ -259,6 +262,7 @@ manifests: ## Generate K8s manifests e.g. CRD, RBAC etc.
 
 	for file in $(CRDS_CILIUM_V2); do mv ${TMPDIR}/cilium.io_$${file}.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2/$${file}.yaml; done
 	for file in $(CRDS_CILIUM_V2ALPHA1); do mv ${TMPDIR}/cilium.io_$${file}.yaml ./pkg/k8s/apis/cilium.io/client/crds/v2alpha1/$${file}.yaml; done
+	for file in $(CRDS_ISOVALENT_V1); do mv ${TMPDIR}/isovalent.com_$${file}.yaml ./pkg/k8s/apis/isovalent.com/client/crds/v1/$${file}.yaml; done
 	for file in $(CRDS_ISOVALENT_V1ALPHA1); do mv ${TMPDIR}/isovalent.com_$${file}.yaml ./pkg/k8s/apis/isovalent.com/client/crds/v1alpha1/$${file}.yaml; done
 	rm -rf $(TMPDIR)
 
@@ -372,6 +376,7 @@ endef
 
 GEN_CRD_GROUPS := "cilium.io:v2\
                    cilium.io:v2alpha1\
+                   isovalent.com:v1\
                    isovalent.com:v1alpha1"
 generate-k8s-api: ## Generate Cilium k8s API client, deepcopy and deepequal Go sources.
 	$(ASSERT_CILIUM_MODULE)

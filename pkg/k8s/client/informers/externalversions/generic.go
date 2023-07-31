@@ -10,6 +10,7 @@ import (
 
 	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	v2alpha1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
+	v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
@@ -78,6 +79,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Cilium().V2alpha1().CiliumNodeConfigs().Informer()}, nil
 	case v2alpha1.SchemeGroupVersion.WithResource("ciliumpodippools"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Cilium().V2alpha1().CiliumPodIPPools().Informer()}, nil
+
+		// Group=isovalent.com, Version=v1
+	case v1.SchemeGroupVersion.WithResource("isovalentegressgatewaypolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Isovalent().V1().IsovalentEgressGatewayPolicies().Informer()}, nil
 
 		// Group=isovalent.com, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("isovalentfqdngroups"):
