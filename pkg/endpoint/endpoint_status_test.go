@@ -373,7 +373,7 @@ func (s *EndpointSuite) TestgetEndpointPolicyMapState(c *check.C) {
 			name: "World shadows CIDR ingress",
 			args: []args{
 				{uint32(identity.ReservedIdentityWorld), 0, 0, trafficdirection.Ingress},
-				{uint32(identity.LocalIdentityFlag), 0, 0, trafficdirection.Ingress},
+				{uint32(identity.IdentityScopeLocal), 0, 0, trafficdirection.Ingress},
 			},
 			ingressResult: []apiResult{
 				{"reserved:world", uint64(identity.ReservedIdentityWorld), 0, 0},
@@ -384,7 +384,7 @@ func (s *EndpointSuite) TestgetEndpointPolicyMapState(c *check.C) {
 			name: "World shadows CIDR egress",
 			args: []args{
 				{uint32(identity.ReservedIdentityWorld), 0, 0, trafficdirection.Egress},
-				{uint32(identity.LocalIdentityFlag), 0, 0, trafficdirection.Egress},
+				{uint32(identity.IdentityScopeLocal), 0, 0, trafficdirection.Egress},
 			},
 			ingressResult: nil,
 			egressResult: []apiResult{

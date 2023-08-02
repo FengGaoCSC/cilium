@@ -199,8 +199,8 @@ func TestUpdateLocalNode(t *testing.T) {
 	injectLabels(inClusterPrefix)
 
 	// Verify that .4 now has just kube-apiserver and CIDRs
-	idIs(inClusterPrefix, identity.LocalIdentityFlag) // the first CIDR identity
-	id := PolicyHandler.identities[identity.LocalIdentityFlag]
+	idIs(inClusterPrefix, identity.IdentityScopeLocal) // the first CIDR identity
+	id := PolicyHandler.identities[identity.IdentityScopeLocal]
 	assert.True(t, id.Has("reserved.kube-apiserver"))
 	assert.True(t, id.Has("cidr."+inClusterPrefix.String()))
 
@@ -397,7 +397,7 @@ func TestRemoveLabelsFromIPs(t *testing.T) {
 	assert.Len(t, remaining, 0)
 	id := IPIdentityCache.IdentityAllocator.LookupIdentityByID(
 		context.TODO(),
-		identity.LocalIdentityFlag, // we assume first local ID
+		identity.IdentityScopeLocal, // we assume first local ID
 	)
 	assert.NotNil(t, id)
 	assert.Equal(t, 1, id.ReferenceCount)
