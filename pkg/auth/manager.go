@@ -27,10 +27,11 @@ func (key signalAuthKey) String() string {
 }
 
 type authManager struct {
-	logger        logrus.FieldLogger
-	nodeIDHandler types.NodeIDHandler
-	authHandlers  map[policy.AuthType]authHandler
-	authmap       authMap
+	logger                logrus.FieldLogger
+	nodeIDHandler         types.NodeIDHandler
+	authHandlers          map[policy.AuthType]authHandler
+	authmap               authMapCacher
+	authSignalBackoffTime time.Duration
 
 	mutex                    lock.Mutex
 	pending                  map[authKey]struct{}
@@ -54,7 +55,7 @@ type authResponse struct {
 	expirationTime time.Time
 }
 
-func newAuthManager(logger logrus.FieldLogger, authHandlers []authHandler, authmap authMap, nodeIDHandler types.NodeIDHandler) (*authManager, error) {
+func newAuthManager(logger logrus.FieldLogger, authHandlers []authHandler, authmap authMapCacher, nodeIDHandler types.NodeIDHandler, authSignalBackoffTime time.Duration) (*authManager, error) {
 	ahs := map[policy.AuthType]authHandler{}
 	for _, ah := range authHandlers {
 		if ah == nil {
@@ -73,6 +74,7 @@ func newAuthManager(logger logrus.FieldLogger, authHandlers []authHandler, authm
 		nodeIDHandler:            nodeIDHandler,
 		pending:                  make(map[authKey]struct{}),
 		handleAuthenticationFunc: handleAuthentication,
+		authSignalBackoffTime:    authSignalBackoffTime,
 	}, nil
 }
 
@@ -128,10 +130,15 @@ func handleAuthentication(a *authManager, k authKey, reAuth bool) {
 			// Check if the auth is actually required, as we might have
 			// updated the authmap since the datapath issued the auth
 			// required signal.
-			if i, err := a.authmap.Get(key); err == nil && i.expiration.After(time.Now()) {
+			// If the entry was cached more than authSignalBackoffTime
+			// it will authenticate again, this is to make sure that
+			// we re-authenticate if the authmap was updated by an
+			// external source.
+			if i, err := a.authmap.GetCacheInfo(key); err == nil && i.expiration.After(time.Now()) && time.Now().Before(i.storedAt.Add(a.authSignalBackoffTime)) {
 				a.logger.
 					WithField("key", key).
-					Debug("Already authenticated, skipping authentication")
+					WithField("storedAt", i.storedAt).
+					Debugf("Already authenticated in the past %s, skipping authentication", a.authSignalBackoffTime.String())
 				return
 			}
 		}
