@@ -95,6 +95,10 @@ issues:
     - path: "enterprise((/|_).+)?\\.go$"
       linters:
         - goheader
+    # Skip goheader check on enterprise CRD files
+    - path: "pkg/k8s/apis/isovalent.com/.+\\.go"
+      linters:
+        - goheader
 
 linters:
   disable-all: true
