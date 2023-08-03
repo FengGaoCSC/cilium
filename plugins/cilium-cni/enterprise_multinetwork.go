@@ -20,8 +20,10 @@ import (
 	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/pkg/client"
 	"github.com/cilium/cilium/pkg/datapath/connector"
+	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
+	"github.com/cilium/cilium/pkg/defaults"
 	iputil "github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -82,6 +84,58 @@ func additionalRoutes(routes []*models.NetworkAttachmentRoute, doIPv6 bool, mtu 
 	}
 
 	return result, nil
+}
+
+func installMultiNetworkSourceRoutes(networkNumber int, networkInterface string, routeMTU int, ipam *models.IPAMResponse) error {
+	// This is shouldn't conflict with the main routing table IDs (253-255) because we don't
+	// expect more than 243 (253-10) networks being used at the same time.
+	tableID := linux_defaults.RouteTableInterfacesOffset + networkNumber
+
+	if ipv4IsEnabled(ipam) {
+		err := route.Upsert(route.Route{
+			Prefix: defaults.IPv4DefaultRoute,
+			Device: networkInterface,
+			MTU:    routeMTU,
+			Table:  tableID,
+		})
+		if err != nil {
+			return err
+		}
+
+		rule := route.Rule{
+			From:     iputil.IPToPrefix(net.ParseIP(ipam.Address.IPV4)),
+			Table:    tableID,
+			Protocol: linux_defaults.RTProto,
+		}
+		err = route.ReplaceRule(rule)
+		if err != nil {
+			return err
+		}
+	}
+
+	if ipv6IsEnabled(ipam) {
+		err := route.Upsert(route.Route{
+			Prefix: defaults.IPv6DefaultRoute,
+			Device: networkInterface,
+			MTU:    routeMTU,
+			Table:  tableID,
+		})
+		if err != nil {
+			return err
+		}
+
+		rule := route.Rule{
+			From:     iputil.IPToPrefix(net.ParseIP(ipam.Address.IPV6)),
+			Table:    tableID,
+			Protocol: linux_defaults.RTProto,
+		}
+		err = route.ReplaceRuleIPv6(rule)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func multiNetworkCmdAdd(
@@ -261,6 +315,12 @@ func multiNetworkCmdAdd(
 			macAddrStr, err = configureIface(ipam, ifName, &state)
 			if err != nil {
 				return err
+			}
+
+			if len(networks.Attachments) > 1 {
+				if err := installMultiNetworkSourceRoutes(i, ifName, int(conf.RouteMTU), ipam); err != nil {
+					return err
+				}
 			}
 
 			return nil
