@@ -1615,6 +1615,11 @@ type daemonParams struct {
 	L7Proxy              *proxy.Proxy
 	DB                   statedb.DB
 	SRv6Manager          *srv6.Manager `optional:"true"`
+
+	// Grab the GC object so that we can start the CT/NAT map garbage collection.
+	// This is currently necessary because these maps have not yet been modularized,
+	// and because it depends on parameters which are not provided through hive.
+	CTNATMapGC gc.Enabler
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
@@ -1678,9 +1683,7 @@ func runDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daem
 
 	bootstrapStats.enableConntrack.Start()
 	log.Info("Starting connection tracking garbage collector")
-	gc.Enable(option.Config.EnableIPv4, option.Config.EnableIPv6,
-		restoredEndpoints.restored, d.endpointManager,
-		d.datapath.LocalNodeAddressing())
+	params.CTNATMapGC.Enable(restoredEndpoints.restored)
 	bootstrapStats.enableConntrack.End(true)
 
 	bootstrapStats.k8sInit.Start()
