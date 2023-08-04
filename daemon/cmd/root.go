@@ -33,7 +33,7 @@ var (
 		},
 	}
 
-	agentHive = hive.New(Agent)
+	agentHive = hive.New(EnterpriseAgent)
 )
 
 func init() {
