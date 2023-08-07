@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package egressmap
+package egressmapha
 
 import "github.com/cilium/cilium/pkg/hive/cell"
 

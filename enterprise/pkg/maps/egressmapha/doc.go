@@ -2,4 +2,4 @@
 // Copyright Authors of Cilium
 
 // +groupName=maps
-package egressmap
+package egressmapha

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package egressgateway
+package egressgatewayha
 
 import (
 	"bytes"
@@ -41,7 +41,7 @@ import (
 )
 
 var (
-	log = logging.DefaultLogger.WithField(logfields.LogSubsys, "egressgateway")
+	log = logging.DefaultLogger.WithField(logfields.LogSubsys, "egressgateway-ha")
 	// GatewayNotFoundIPv4 is a special IP value used as gatewayIP in the BPF policy
 	// map to indicate no gateway was found for the given policy
 	GatewayNotFoundIPv4 = net.ParseIP("0.0.0.0")
