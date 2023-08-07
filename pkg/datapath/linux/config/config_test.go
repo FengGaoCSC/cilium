@@ -50,6 +50,7 @@ func setup(tb testing.TB) {
 	tb.Helper()
 
 	require.NoError(tb, rlimit.RemoveMemlock(), "Failed to remove memory limits")
+	option.Config.EnableHostLegacyRouting = true // Disable obtaining direct routing device.
 
 	node.SetTestLocalNodeStore()
 	node.InitDefaultPrefix("")
