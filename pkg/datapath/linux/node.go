@@ -1234,13 +1234,13 @@ func (n *linuxNodeHandler) nodeUpdate(oldNode, newNode *nodeTypes.Node, firstAdd
 		)
 
 		if oldNode != nil {
-			oldPrefixCluster4 = cmtypes.PrefixClusterFromCIDR(oldIP4Cidr, 0)
-			oldPrefixCluster6 = cmtypes.PrefixClusterFromCIDR(oldIP6Cidr, 0)
+			oldPrefixCluster4 = cmtypes.PrefixClusterFromCIDR(oldIP4Cidr)
+			oldPrefixCluster6 = cmtypes.PrefixClusterFromCIDR(oldIP6Cidr)
 		}
 
 		if newNode != nil {
-			newPrefixCluster4 = cmtypes.PrefixClusterFromCIDR(newNode.IPv4AllocCIDR, 0)
-			newPrefixCluster6 = cmtypes.PrefixClusterFromCIDR(newNode.IPv6AllocCIDR, 0)
+			newPrefixCluster4 = cmtypes.PrefixClusterFromCIDR(newNode.IPv4AllocCIDR)
+			newPrefixCluster6 = cmtypes.PrefixClusterFromCIDR(newNode.IPv6AllocCIDR)
 		}
 
 		// Update the tunnel mapping of the node. In case the
@@ -1303,8 +1303,8 @@ func (n *linuxNodeHandler) nodeDelete(oldNode *nodeTypes.Node) error {
 	}
 
 	if n.nodeConfig.EnableEncapsulation {
-		oldPrefix4 := cmtypes.PrefixClusterFromCIDR(oldNode.IPv4AllocCIDR, 0)
-		oldPrefix6 := cmtypes.PrefixClusterFromCIDR(oldNode.IPv6AllocCIDR, 0)
+		oldPrefix4 := cmtypes.PrefixClusterFromCIDR(oldNode.IPv4AllocCIDR)
+		oldPrefix6 := cmtypes.PrefixClusterFromCIDR(oldNode.IPv6AllocCIDR)
 		deleteTunnelMapping(oldPrefix4, false)
 		deleteTunnelMapping(oldPrefix6, false)
 
