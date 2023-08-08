@@ -36,6 +36,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/tunnel"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/node"
+	"github.com/cilium/cilium/pkg/node/types"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 )
@@ -79,6 +80,8 @@ type linuxNodeHandler struct {
 
 	ipsecMetricCollector prometheus.Collector
 	ipsecMetricOnce      sync.Once
+
+	prefixClusterMutatorFn func(node *types.Node) []cmtypes.PrefixClusterOpts
 }
 
 var (
@@ -104,6 +107,7 @@ func NewNodeHandler(datapathConfig DatapathConfiguration, nodeAddressing datapat
 		nodeIDsByIPs:           map[string]uint16{},
 		nodeIPsByIDs:           map[uint16]string{},
 		ipsecMetricCollector:   ipsec.NewXFRMCollector(),
+		prefixClusterMutatorFn: func(node *nodeTypes.Node) []cmtypes.PrefixClusterOpts { return nil },
 	}
 }
 
@@ -1161,7 +1165,6 @@ func (n *linuxNodeHandler) subnetEncryption() bool {
 // Must be called with linuxNodeHandler.mutex held.
 func (n *linuxNodeHandler) nodeUpdate(oldNode, newNode *nodeTypes.Node, firstAddition bool) error {
 	var (
-		oldIP4Cidr, oldIP6Cidr                   *cidr.CIDR
 		oldAllIP4AllocCidrs, oldAllIP6AllocCidrs []*cidr.CIDR
 		newAllIP4AllocCidrs                      = newNode.GetIPv4AllocCIDRs()
 		newAllIP6AllocCidrs                      = newNode.GetIPv6AllocCIDRs()
@@ -1174,8 +1177,6 @@ func (n *linuxNodeHandler) nodeUpdate(oldNode, newNode *nodeTypes.Node, firstAdd
 	)
 
 	if oldNode != nil {
-		oldIP4Cidr = oldNode.IPv4AllocCIDR
-		oldIP6Cidr = oldNode.IPv6AllocCIDR
 		oldAllIP4AllocCidrs = oldNode.GetIPv4AllocCIDRs()
 		oldAllIP6AllocCidrs = oldNode.GetIPv6AllocCIDRs()
 		oldIP4 = oldNode.GetNodeIP(false)
@@ -1234,13 +1235,13 @@ func (n *linuxNodeHandler) nodeUpdate(oldNode, newNode *nodeTypes.Node, firstAdd
 		)
 
 		if oldNode != nil {
-			oldPrefixCluster4 = cmtypes.PrefixClusterFromCIDR(oldIP4Cidr)
-			oldPrefixCluster6 = cmtypes.PrefixClusterFromCIDR(oldIP6Cidr)
+			oldPrefixCluster4 = cmtypes.PrefixClusterFromCIDR(oldNode.IPv4AllocCIDR, n.prefixClusterMutatorFn(oldNode)...)
+			oldPrefixCluster6 = cmtypes.PrefixClusterFromCIDR(oldNode.IPv6AllocCIDR, n.prefixClusterMutatorFn(oldNode)...)
 		}
 
 		if newNode != nil {
-			newPrefixCluster4 = cmtypes.PrefixClusterFromCIDR(newNode.IPv4AllocCIDR)
-			newPrefixCluster6 = cmtypes.PrefixClusterFromCIDR(newNode.IPv6AllocCIDR)
+			newPrefixCluster4 = cmtypes.PrefixClusterFromCIDR(newNode.IPv4AllocCIDR, n.prefixClusterMutatorFn(newNode)...)
+			newPrefixCluster6 = cmtypes.PrefixClusterFromCIDR(newNode.IPv6AllocCIDR, n.prefixClusterMutatorFn(newNode)...)
 		}
 
 		// Update the tunnel mapping of the node. In case the
@@ -1303,8 +1304,8 @@ func (n *linuxNodeHandler) nodeDelete(oldNode *nodeTypes.Node) error {
 	}
 
 	if n.nodeConfig.EnableEncapsulation {
-		oldPrefix4 := cmtypes.PrefixClusterFromCIDR(oldNode.IPv4AllocCIDR)
-		oldPrefix6 := cmtypes.PrefixClusterFromCIDR(oldNode.IPv6AllocCIDR)
+		oldPrefix4 := cmtypes.PrefixClusterFromCIDR(oldNode.IPv4AllocCIDR, n.prefixClusterMutatorFn(oldNode)...)
+		oldPrefix6 := cmtypes.PrefixClusterFromCIDR(oldNode.IPv6AllocCIDR, n.prefixClusterMutatorFn(oldNode)...)
 		deleteTunnelMapping(oldPrefix4, false)
 		deleteTunnelMapping(oldPrefix6, false)
 
@@ -2093,4 +2094,8 @@ func NodeEnsureLocalIPRule() error {
 	}
 
 	return nil
+}
+
+func (n *linuxNodeHandler) SetPrefixClusterMutatorFn(mutator func(*nodeTypes.Node) []cmtypes.PrefixClusterOpts) {
+	n.prefixClusterMutatorFn = mutator
 }
