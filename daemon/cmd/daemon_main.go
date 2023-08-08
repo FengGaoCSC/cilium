@@ -1890,6 +1890,7 @@ func (d *Daemon) instantiateAPI(swaggerSpec *server.Spec) *restapi.CiliumAPIAPI 
 	if option.Config.DatapathMode != datapathOption.DatapathModeLBOnly {
 		// /endpoint/
 		restAPI.EndpointGetEndpointHandler = NewGetEndpointHandler(d)
+		restAPI.EndpointDeleteEndpointHandler = NewDeleteEndpointHandler(d)
 
 		// /endpoint/{id}
 		restAPI.EndpointGetEndpointIDHandler = NewGetEndpointIDHandler(d)
