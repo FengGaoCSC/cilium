@@ -103,9 +103,16 @@ rules:
   - isovalent.com
   resources:
   - isovalentegressgatewaypolicies
+  - isovalentsrv6sidmanagers
   verbs:
   - list
   - watch
+- apiGroups:
+  - isovalent.com
+  resources:
+  - isovalentsrv6sidmanagers/status
+  verbs:
+  - patch
 - apiGroups:
   - cilium.io
   resources:
