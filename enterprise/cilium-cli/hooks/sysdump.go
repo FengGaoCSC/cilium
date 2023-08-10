@@ -207,6 +207,26 @@ func addSysdumpTasks(collector *sysdump.Collector) error {
 				return nil
 			},
 		},
+		{
+			Description: "Collecting IsovalentSRv6SIDManager",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				sidManagers := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentsrv6sidmanager",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, sidManagers, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 SID Managers: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-isovalentsrv6sidmanagers-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 SID Managers: %w", err)
+				}
+				return nil
+			},
+		},
 	})
 
 	return nil
