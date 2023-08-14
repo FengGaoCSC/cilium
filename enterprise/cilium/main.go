@@ -5,6 +5,7 @@ package main
 
 import (
 	"github.com/cilium/cilium/cilium/cmd"
+	_ "github.com/cilium/cilium/enterprise/cilium/cmd"
 )
 
 func main() {

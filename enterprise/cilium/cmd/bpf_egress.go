@@ -5,6 +5,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+
+	"github.com/cilium/cilium/cilium/cmd"
 )
 
 // BPFEgressCmd represents the bpf command
@@ -14,5 +16,5 @@ var BPFEgressCmd = &cobra.Command{
 }
 
 func init() {
-	BPFCmd.AddCommand(BPFEgressCmd)
+	cmd.BPFCmd.AddCommand(BPFEgressCmd)
 }
