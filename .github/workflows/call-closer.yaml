@@ -1,0 +1,17 @@
+---
+name: Call closer
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - v1.14-ce
+jobs:
+  call-closer:
+    if: github.event.pull_request.merged == true
+    uses: isovalent/cilium/.github/workflows/close-fixed-issues.yaml@main-ce
+    with:
+      pr-number: ${{ github.event.pull_request.number }}
+      pr-body: ${{ github.event.pull_request.body }}
+      remove-label: enterprise-backport-pending/1.14
+    secrets: inherit
