@@ -156,7 +156,7 @@ func (f *AggregatableFlow) DropReasonInt() uint32 {
 
 // IsReply returns true if the flow represents a reply
 func (f *AggregatableFlow) IsReply() bool {
-	return f.Flow.GetIsReply().Value
+	return f.Flow.GetIsReply().GetValue()
 }
 
 // State returns the flow state
