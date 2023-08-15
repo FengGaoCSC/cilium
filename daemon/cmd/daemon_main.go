@@ -1121,6 +1121,9 @@ func initializeFlags() {
 	flags.MarkHidden(option.EnableK8sNetworkPolicy)
 	option.BindEnv(Vp, option.EnableK8sNetworkPolicy)
 
+	flags.StringSlice(option.PolicyCIDRMatchMode, defaults.PolicyCIDRMatchMode, "The entities that can be selected by CIDR policy. Supported values: 'nodes'")
+	option.BindEnv(Vp, option.PolicyCIDRMatchMode)
+
 	if err := Vp.BindPFlags(flags); err != nil {
 		log.Fatalf("BindPFlags failed: %s", err)
 	}
