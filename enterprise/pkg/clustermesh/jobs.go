@@ -60,7 +60,9 @@ func registerJobs(params jobParams) {
 
 func cleanupStalePerClusterMapsJobFn(params jobParams) job.OneShotFunc {
 	return func(ctx context.Context) error {
-		if err := params.ClusterMesh.ClustersSynced(ctx); err != nil {
+		// We don't actually care that services are synchronized here, but we need
+		// to know that all ClusterIDs for existing clusters have been reserved.
+		if err := params.ClusterMesh.ServicesSynced(ctx); err != nil {
 			return err
 		}
 
