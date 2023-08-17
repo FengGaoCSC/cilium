@@ -522,7 +522,6 @@ Helm Options
 * Value ``disableEndpointCRD`` is now a boolean type instead of a string. Instead of using "true"
   or "false" as values, you should remove the quotes. For example in helm command, instead of
   ``--set-string disableEndpointCRD="true"``, it should be replaced by ``--set disableEndpointCRD=true``.
-
 .. _upgrade_cilium_cli_helm_mode:
 
 Cilium CLI
@@ -539,6 +538,11 @@ use Cilium CLI in Helm mode to manage classic mode installations, and vice versa
 To migrate a classic mode Cilium installation to Helm mode, you need to
 uninstall Cilium using classic mode Cilium CLI, and then re-install Cilium
 using Helm mode Cilium CLI.
+
+Added Metrics
+~~~~~~~~~~~~~
+
+* ``cilium_ipam_capacity``
 
 .. _earlier_upgrade_notes:
 

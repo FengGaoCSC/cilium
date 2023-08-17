@@ -104,6 +104,10 @@ type fakeIPAMAllocator struct {
 	sid net.IP
 }
 
+func (fa *fakeIPAMAllocator) Capacity() uint64 {
+	return uint64(0)
+}
+
 func (fa *fakeIPAMAllocator) Allocate(ip net.IP, owner string, pool ipam.Pool) (*ipam.AllocationResult, error) {
 	return nil, nil
 }
