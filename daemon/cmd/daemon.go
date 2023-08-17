@@ -1222,7 +1222,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	if d.multiNetworkManager != nil {
-		params.MultiNetworkManager.StartRoutingController(d.nodeDiscovery)
+		params.MultiNetworkManager.StartRoutingController(d.nodeDiscovery, d.k8sWatcher.CiliumNodeChain)
 	}
 
 	return &d, restoredEndpoints, nil

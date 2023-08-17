@@ -18,6 +18,7 @@ import (
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_core_v1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
+	"github.com/cilium/cilium/pkg/k8s/watchers/subscriber"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -165,7 +166,12 @@ func (m *Manager) GetNetworksForPod(ctx context.Context, podNamespace, podName s
 // StartRoutingController implements a multi-network aware version of auto-direct-node-routes.
 // We currently duplicate this logic here because the routing logic in the open-source linuxNodeHandler
 // is not multi-network aware, but the goal is to eventually upstream this.
-func (m *Manager) StartRoutingController(nodeDiscovery *nodediscovery.NodeDiscovery) {
+// The routing logic is split into two components:
+// The localNetworkIPCollector auto-detects the secondary node IPs of the local node (based on network routes)
+// and announces them in the CiliumNode object via NodeDiscovery.
+// The remoteNodeRouteManager part subscribes to all remote CiliumNode objects, correlates pod CIDRs with
+// the remote node's secondary IP, and then installs a route for each pod CIDR.
+func (m *Manager) StartRoutingController(nodeDiscovery *nodediscovery.NodeDiscovery, ciliumNodeChain *subscriber.CiliumNodeChain) {
 	if !m.config.MultiNetworkAutoDirectNodeRoutes || m.networkStore == nil {
 		return
 	}
@@ -190,4 +196,20 @@ func (m *Manager) StartRoutingController(nodeDiscovery *nodediscovery.NodeDiscov
 	})
 	// Announces IPs in nodeIPByNetworkName in CiliumNode via NodeDiscovery
 	nodeDiscovery.WithAdditionalNodeAddressSource(localIP)
+
+	// remoteNodeRouteManager is responsible for managing multi-network auto direct node routes
+	remoteNodes := &remoteNodeRouteManager{
+		networkStore: m.networkStore,
+		mutex:        lock.Mutex{},
+		nodes:        make(map[string]*remoteNode),
+	}
+
+	// Collects podCIDRs from remote nodes and install routes
+	ciliumNodeChain.Register(remoteNodes)
+
+	// Regularly reinstall all routes in case networks have changed or routes have been manually removed
+	controllerMgr.UpdateController(remoteRouteController, controller.ControllerParams{
+		DoFunc:      remoteNodes.resyncNodes,
+		RunInterval: 1 * time.Minute,
+	})
 }
