@@ -12,6 +12,7 @@ triggers:
     - conformance-gke.yaml
     - conformance-ingress.yaml
     - conformance-runtime.yaml
+    - enterprise-clustermesh-overlapping-podcidr.yaml
     - integration-test.yaml
     - tests-datapath-verifier.yaml
     - tests-l4lb.yaml
@@ -24,6 +25,7 @@ triggers:
   /ci-clustermesh:
     workflows:
     - conformance-clustermesh.yaml
+    - enterprise-clustermesh-overlapping-podcidr.yaml
   /ci-e2e:
     workflows:
     - conformance-e2e.yaml
@@ -72,6 +74,8 @@ workflows:
     paths-ignore-regex: (test|Documentation)/
   conformance-runtime.yaml:
     paths-ignore-regex: Documentation/
+  enterprise-clustermesh-overlapping-podcidr.yaml:
+    paths-ignore-regex: (test|Documentation)/
   integration-test.yaml:
     paths-ignore-regex: Documentation/
   tests-datapath-verifier.yaml:
