@@ -152,3 +152,101 @@ func TestNewSID(t *testing.T) {
 		})
 	}
 }
+
+func TestTranspose(t *testing.T) {
+	addr := netip.MustParseAddr("fd00:1234:5678:9abc:deff:edcb:a987:6543")
+	structure := MustNewSIDStructure(40, 24, 16, 0)
+	sid := MustNewSID(addr, structure)
+
+	tt := []struct {
+		name          string
+		offset        uint8
+		length        uint8
+		expectedLabel uint32
+		expectedSID   []byte
+	}{
+		{
+			name:          "IOS-XR Default (LB: 40, LN: 24, F: 16, A: 0, TO: 64, TL: 16)",
+			offset:        64,
+			length:        16,
+			expectedLabel: 0xdeff0,
+			expectedSID: func() []byte {
+				sid := addr.AsSlice()
+				sid[8] = 0
+				sid[9] = 0
+				return sid
+			}(),
+		},
+		{
+			name:          "IOS-XR F3216 (LB: 32, LN: 16, F: 16, A: 0, TO: 48, TL: 16)",
+			offset:        48,
+			length:        16,
+			expectedLabel: 0x9abc0,
+			expectedSID: func() []byte {
+				sid := addr.AsSlice()
+				sid[6] = 0
+				sid[7] = 0
+				return sid
+			}(),
+		},
+		{
+			name:          "Non-byte-aligned transposition length and offset",
+			offset:        60,
+			length:        20,
+			expectedLabel: 0xcdeff,
+			expectedSID: func() []byte {
+				sid := addr.AsSlice()
+				sid[7] = 0xb0
+				sid[8] = 0x00
+				sid[9] = 0x00
+				return sid
+			}(),
+		},
+		{
+			name:          "Non-4bit-aligned transposition length and offset",
+			offset:        63,
+			length:        18,
+			expectedLabel: 0x6f7fc,
+			expectedSID: func() []byte {
+				sid := addr.AsSlice()
+				sid[7] = 0xbc
+				sid[8] = 0x00
+				sid[9] = 0x00
+				sid[10] = 0x6d
+				return sid
+			}(),
+		},
+		{
+			name:          "Less than 1byte transposition length",
+			offset:        64,
+			length:        7,
+			expectedLabel: 0x1bc000,
+			expectedSID: func() []byte {
+				sid := addr.AsSlice()
+				sid[8] = 0x00
+				return sid
+			}(),
+		},
+		{
+			name:          "1byte transposition crosses the byte boundary",
+			offset:        60,
+			length:        8,
+			expectedLabel: 0xcd000,
+			expectedSID: func() []byte {
+				sid := addr.AsSlice()
+				sid[7] = 0xb0
+				sid[8] = 0x0e
+				return sid
+			}(),
+		},
+	}
+
+	for _, test := range tt {
+		t.Run(test.name, func(t *testing.T) {
+			label, transposedSID, err := sid.Transpose(test.offset, test.length)
+			require.Nil(t, err)
+			require.Equal(t, test.expectedLabel, label)
+			require.Equal(t, test.expectedSID, transposedSID)
+		})
+	}
+}

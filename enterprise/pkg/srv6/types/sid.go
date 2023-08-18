@@ -187,6 +187,67 @@ func (s *SID) String() string {
 	return s.Addr.String() + s.structure.String()
 }
 
+// Transpose transposes the given SID as defined in the RFC9252 Section 4 and
+// returns MPLS label value and the SID that transposed bits are filled with
+// zero.
+func (s *SID) Transpose(offsetBits, lengthBits uint8) (uint32, []byte, error) {
+	transposedSID := s.AsSlice()
+
+	if offsetBits > 128 {
+		return 0, nil, fmt.Errorf("offset (%d) is larger than 128", offsetBits)
+	}
+
+	if lengthBits > 20 {
+		return 0, nil, fmt.Errorf("length (%d) is exceeding MPLS label length", lengthBits)
+	}
+
+	if int(offsetBits+lengthBits) > len(transposedSID)*8 {
+		return 0, nil, fmt.Errorf("offset + length is exceeding SID length")
+	}
+
+	// MPLS label is 20bit, but we'll encode it to uint32 here.
+	// Lower 20bits will be filled with label value.
+	var label uint32
+
+	//
+	// This is a diagram that visually helps understanding the algorithm.
+	//       startI                                             endI
+	// |      [7]        |      [8]        |        [9]      |  [10]
+	// | 0 1 0 1 0 1 0 1 | 1 1 1 1 1 1 1 1 | 1 0 1 0 1 0 1 0 | 1 1 1 1
+	// --------------> |---------------------------------------|
+	//  Offset(63)                Length (18)
+	//
+	startI := offsetBits / 8
+	endI := (offsetBits + lengthBits) / 8
+	for i := startI; i <= endI; i++ {
+		mask := byte(0)
+		if i == startI {
+			// An initial byte may contain non-byte-aligned bits
+			bitI := offsetBits % 8
+			mask = ^byte(0) >> bitI
+			label |= uint32(transposedSID[i] & mask)
+		} else if i == endI {
+			// An end byte may contain non-byte-aligned bits
+			bitI := (offsetBits + lengthBits) % 8
+			mask = ^(^byte(0) >> bitI)
+			label <<= bitI
+			label |= uint32(transposedSID[i]&mask) >> (8 - bitI)
+		} else {
+			// For middle bytes, we can simply copy bytes
+			mask = ^byte(0)
+			label <<= 8
+			label |= uint32(transposedSID[i] & mask)
+		}
+		// Put zeros to transposed bits
+		transposedSID[i] &= ^mask
+	}
+
+	// Zero pad lower bits
+	label <<= (20 - lengthBits)
+
+	return label, transposedSID, nil
+}
+
 // This is private and must be accessed through SIDStructure interface
 type SIDStructure struct {
 	// Locator Block length as described in RFC8986.
