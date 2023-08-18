@@ -30,8 +30,10 @@ rules:
   - get
   - list
   - watch
+{{- if or .Values.enterprise.srv6.locatorPoolEnabled }}
   - create
   - update
   - delete
   - patch
+{{- end }}
 {{- end }}

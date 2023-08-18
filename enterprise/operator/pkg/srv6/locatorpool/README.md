@@ -8,13 +8,13 @@ Locator Pool Manager.
 
 SID Locator Pool Manager is enabled by setting this flag
 ```
-    srv6-locator-pool-enabled=true
+  --srv6-locator-pool-enabled=true
 ```
 
 Corresponding helm values can be specified as following.
 
 ```
-operator:
+enterprise:
   srv6:
     locatorPoolEnabled: true
 ```

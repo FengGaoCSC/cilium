@@ -964,10 +964,10 @@
      - Update ENI Adapter limits from the EC2 API
      - bool
      - ``true``
-   * - :spelling:ignore:`enterprise`
-     - 
-     - string
-     - ``nil``
+   * - :spelling:ignore:`enterprise.srv6.locatorPoolEnabled`
+     - Enables custom SRv6 SID locator pool operator support.
+     - bool
+     - ``false``
    * - :spelling:ignore:`envoy.affinity`
      - Affinity for cilium-envoy.
      - object

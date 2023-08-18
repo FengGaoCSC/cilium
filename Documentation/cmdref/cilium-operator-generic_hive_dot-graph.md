@@ -42,6 +42,7 @@ cilium-operator-generic hive dot-graph [flags]
       --operator-pprof-address string                        Address that pprof listens on (default "localhost")
       --operator-pprof-port uint16                           Port that pprof listens on (default 6061)
       --skip-crd-creation                                    When true, Kubernetes Custom Resource Definitions will not be created
+      --srv6-locator-pool-enabled                            Enable SRv6 locator pool in Cilium
 ```
 
 ### SEE ALSO
