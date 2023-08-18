@@ -13,6 +13,7 @@ package sidmanager
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"strings"
@@ -269,11 +270,14 @@ func (m *sidManager) runSpecReconciler(ctx context.Context) {
 
 	defer m.wg.Done()
 
-	isFirst := true
+	restorationDone := false
 	for ev := range m.resource.Events(ctx) {
 		switch ev.Kind {
 		case resource.Sync:
-			smLog.Info("Initial sync of IsovalentSRv6SIDManager resource is done")
+			// At this point, we're ready for accepting ManageSID
+			// or Subscribe call.
+			m.resolver.Resolve(m)
+			restorationDone = true
 		case resource.Delete:
 			smLog.Info("IsovalentSRv6SIDManager resource deleted")
 			// Resource deleted. This shouldn't happen in practice
@@ -284,12 +288,6 @@ func (m *sidManager) runSpecReconciler(ctx context.Context) {
 			// called. The possible cases are the buggy operator or
 			// the user manually deletes the resource.
 			m.deleteAllAllocators(ev.Object)
-
-			// Resource may be restored later. In that case, we
-			// need to handle existing allocation. This is useful
-			// for the scenario like user accidentally deletes the
-			// resource and restore later from backup.
-			isFirst = true
 		case resource.Upsert:
 			// This reconciliation creates SID allocators from the
 			// locator allocations on the spec. After this
@@ -301,17 +299,14 @@ func (m *sidManager) runSpecReconciler(ctx context.Context) {
 				continue
 			}
 
-			// On the initial upsert after agent restart, we may
-			// have existing allocations on k8s resource status.
-			// Before schedule the initial state sync, try to
-			// allocate existing SIDs from SID allocators, so that
-			// we can retain same SIDs over agent restart.
-			if isFirst {
-				if err := m.restoreAllocations(ctx, ev.Object); err != nil {
-					ev.Done(err)
-					continue
-				}
-				isFirst = false
+			if !restorationDone {
+				// On the initial upsert after agent restart, we may
+				// have existing allocations on k8s resource status.
+				// Before schedule the initial state sync, try to
+				// allocate existing SIDs from SID allocators, so that
+				// we can retain same SIDs over agent restart.
+				m.restoreAllocations(ctx, ev.Object)
+				restorationDone = true
 				needsSync = true
 			}
 
@@ -416,15 +411,17 @@ func (m *sidManager) onDeleteLocator(poolRef string, oldAllocator SIDAllocator) 
 }
 
 // Restore existing allocations from k8s resource status
-func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.IsovalentSRv6SIDManager) error {
+func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.IsovalentSRv6SIDManager) {
 	var (
 		restoredSIDs = 0
 		staleSIDs    = 0
+		errorSIDs    = 0
+		errs         error
 	)
 
 	// No existing allocation
 	if r.Status == nil {
-		return nil
+		return
 	}
 
 	smLog.Info("Restoring existing SID allocations")
@@ -437,7 +434,9 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 			for _, sid := range sa.SIDs {
 				addr, err := netip.ParseAddr(sid.SID.Addr)
 				if err != nil {
-					return fmt.Errorf("cannot parse SID on the status: %w", err)
+					errorSIDs++
+					errs = errors.Join(errs, fmt.Errorf("cannot parse SID on the status: %w", err))
+					continue
 				}
 
 				structure, err := types.NewSIDStructure(
@@ -447,12 +446,16 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 					sid.SID.Structure.ArgumentLenBits,
 				)
 				if err != nil {
-					return fmt.Errorf("cannot parse SID Structure on the status: %w", err)
+					errorSIDs++
+					errs = errors.Join(errs, fmt.Errorf("cannot parse SID Structure on the status: %w", err))
+					continue
 				}
 
 				s, err := types.NewSID(addr, structure)
 				if err != nil {
-					return fmt.Errorf("cannot create SID from SID and SID Structure on the status: %w", err)
+					errorSIDs++
+					errs = errors.Join(errs, fmt.Errorf("cannot create SID from SID and SID Structure on the status: %w", err))
+					continue
 				}
 
 				// Check locator and SID structure mismatch. If
@@ -469,7 +472,9 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 					// At this point, all allocator should be empty. So, this shouldn't
 					// happen. The only case this happens is the case that we have a
 					// duplicated allocations which is an error.
-					return fmt.Errorf("duplicated allocation found on the status: %w", err)
+					errorSIDs++
+					errs = errors.Join(errs, fmt.Errorf("duplicated allocation found on the status: %w", err))
+					continue
 				}
 				restoredSIDs++
 			}
@@ -483,9 +488,10 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 		}
 	}
 
-	smLog.Infof("Successfully restored SIDs (restored: %d, stale: %d)", restoredSIDs, staleSIDs)
-
-	return nil
+	smLog.Infof("Finish restoring existing SID allocations (restored: %d, stale: %d, error: %d)", restoredSIDs, staleSIDs, errorSIDs)
+	if errs != nil {
+		smLog.WithError(errs).Warn("Error occurred while restoring")
+	}
 }
 
 // Delete all allocators. We don't have to schedule sync here since we don't
@@ -516,7 +522,6 @@ func (m *sidManager) runStatusReconciler(ctx context.Context) error {
 		Max: 90 * time.Minute,
 	}
 
-	isFirst := true
 	retrying := false
 	for {
 		select {
@@ -546,13 +551,6 @@ func (m *sidManager) runStatusReconciler(ctx context.Context) error {
 				if retrying {
 					retrying = false
 					backoff.Reset()
-				}
-				if isFirst {
-					// Once the initial sync is done, we're ready to accept
-					// subscribers, ManageSID* functions, etc.
-					m.resolver.Resolve(m)
-					isFirst = false
-					smLog.Info("Initial status reconciliation done")
 				}
 			}
 		case <-ctx.Done():
