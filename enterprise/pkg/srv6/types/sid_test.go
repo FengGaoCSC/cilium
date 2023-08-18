@@ -33,19 +33,9 @@ func TestNewSIDStructure(t *testing.T) {
 			structure: SIDStructure{32, 16, 16, 0},
 		},
 		{
-			name: "ZeroLocatorBlock",
-			lb:   0, ln: 16, f: 16, a: 0,
-			errorStr: "zero locator length is not supported",
-		},
-		{
-			name: "ZeroLocatorNode",
-			lb:   32, ln: 0, f: 16, a: 0,
-			errorStr: "zero locator length is not supported",
-		},
-		{
-			name: "ZeroFunction",
-			lb:   32, ln: 16, f: 0, a: 0,
-			errorStr: "zero function length is not supported",
+			name: "ValidStructureCiliumLegacy",
+			lb:   128, ln: 0, f: 0, a: 0,
+			structure: SIDStructure{128, 0, 0, 0},
 		},
 		{
 			name: "NonByteAlignedLocatorBlock",
@@ -72,6 +62,7 @@ func TestNewSIDStructure(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ss, err := NewSIDStructure(test.lb, test.ln, test.f, test.a)
 			if test.errorStr != "" {
+				require.Error(t, err)
 				require.Equal(t, test.errorStr, err.Error())
 			} else {
 				require.NoError(t, err)

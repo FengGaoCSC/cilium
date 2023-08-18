@@ -209,22 +209,6 @@ type SIDStructure struct {
 func NewSIDStructure(lb uint8, ln uint8, f uint8, a uint8) (*SIDStructure, error) {
 	// Implementation-specific
 	//
-	// Zero locator length is valid in RFC8986, but in Cilium's context, it
-	// is useless.
-	if lb == 0 || ln == 0 {
-		return nil, fmt.Errorf("zero locator length is not supported")
-	}
-
-	// Implementation-specific
-	//
-	// Zero function length is valid in RFC8986, but in Cilium's context,
-	// it is useless.
-	if f == 0 {
-		return nil, fmt.Errorf("zero function length is not supported")
-	}
-
-	// Implementation-specific
-	//
 	// In RFC standard, it is valid to have non-byte-aligned SID structure.
 	// However, here we intentionally make such SID structure invalid. This makes
 	// SID allocation and datapath processing simpler. This is a practical limitation
