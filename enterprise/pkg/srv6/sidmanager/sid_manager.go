@@ -200,9 +200,16 @@ func (m *sidManager) Subscribe(subscriberName string, subscriber SIDManagerSubsc
 
 	// Do initial sync in-place
 	m.allocatorsLock.RLock()
+
 	for poolName, allocator := range m.allocators {
 		subscriber.OnAddLocator(poolName, allocator)
 	}
+
+	if len(m.allocators) != 0 {
+		// Subscriber may change allocation state in above OnAddLocator
+		m.scheduleStateSync()
+	}
+
 	m.allocatorsLock.RUnlock()
 }
 
