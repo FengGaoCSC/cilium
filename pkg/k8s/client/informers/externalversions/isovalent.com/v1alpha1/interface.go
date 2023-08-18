@@ -15,6 +15,8 @@ type Interface interface {
 	IsovalentFQDNGroups() IsovalentFQDNGroupInformer
 	// IsovalentPodNetworks returns a IsovalentPodNetworkInformer.
 	IsovalentPodNetworks() IsovalentPodNetworkInformer
+	// IsovalentSRv6LocatorPools returns a IsovalentSRv6LocatorPoolInformer.
+	IsovalentSRv6LocatorPools() IsovalentSRv6LocatorPoolInformer
 	// IsovalentSRv6SIDManagers returns a IsovalentSRv6SIDManagerInformer.
 	IsovalentSRv6SIDManagers() IsovalentSRv6SIDManagerInformer
 }
@@ -38,6 +40,11 @@ func (v *version) IsovalentFQDNGroups() IsovalentFQDNGroupInformer {
 // IsovalentPodNetworks returns a IsovalentPodNetworkInformer.
 func (v *version) IsovalentPodNetworks() IsovalentPodNetworkInformer {
 	return &isovalentPodNetworkInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IsovalentSRv6LocatorPools returns a IsovalentSRv6LocatorPoolInformer.
+func (v *version) IsovalentSRv6LocatorPools() IsovalentSRv6LocatorPoolInformer {
+	return &isovalentSRv6LocatorPoolInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // IsovalentSRv6SIDManagers returns a IsovalentSRv6SIDManagerInformer.

@@ -17,6 +17,7 @@ type IsovalentV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	IsovalentFQDNGroupsGetter
 	IsovalentPodNetworksGetter
+	IsovalentSRv6LocatorPoolsGetter
 	IsovalentSRv6SIDManagersGetter
 }
 
@@ -31,6 +32,10 @@ func (c *IsovalentV1alpha1Client) IsovalentFQDNGroups() IsovalentFQDNGroupInterf
 
 func (c *IsovalentV1alpha1Client) IsovalentPodNetworks() IsovalentPodNetworkInterface {
 	return newIsovalentPodNetworks(c)
+}
+
+func (c *IsovalentV1alpha1Client) IsovalentSRv6LocatorPools() IsovalentSRv6LocatorPoolInterface {
+	return newIsovalentSRv6LocatorPools(c)
 }
 
 func (c *IsovalentV1alpha1Client) IsovalentSRv6SIDManagers() IsovalentSRv6SIDManagerInterface {

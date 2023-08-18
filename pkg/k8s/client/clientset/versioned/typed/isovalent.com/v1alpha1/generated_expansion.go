@@ -9,4 +9,6 @@ type IsovalentFQDNGroupExpansion interface{}
 
 type IsovalentPodNetworkExpansion interface{}
 
+type IsovalentSRv6LocatorPoolExpansion interface{}
+
 type IsovalentSRv6SIDManagerExpansion interface{}

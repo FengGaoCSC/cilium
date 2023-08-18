@@ -167,3 +167,51 @@ type IsovalentSRv6SIDStructure struct {
 	// +kubebuilder:validation:Maximum=128
 	ArgumentLenBits uint8 `json:"argumentLenBits"`
 }
+
+// +genclient
+// +kubebuilder:object:root=true
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:categories={cilium,isovalent},singular="isovalentsrv6locatorpool",path="isovalentsrv6locatorpools",scope="Cluster",shortName={locatorpool}
+// +kubebuilder:storageversion
+
+// IsovalentSRv6LocatorPool is a custom resource which is used to
+// define a SID prefix and format which will be used to allocate
+// SID address blocks per node.
+type IsovalentSRv6LocatorPool struct {
+	// +deepequal-gen=false
+	metav1.TypeMeta `json:",inline"`
+
+	// +deepequal-gen=false
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec is a spec of the Locator Pool.
+	//
+	// +kubebuilder:validation:Required
+	Spec IsovalentSRv6LocatorPoolSpec `json:"spec"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+// +deepequal-gen=false
+type IsovalentSRv6LocatorPoolList struct {
+	// +deepequal-gen=false
+	metav1.TypeMeta `json:",inline"`
+	// +deepequal-gen=false
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []IsovalentSRv6LocatorPool `json:"items"`
+}
+
+type IsovalentSRv6LocatorPoolSpec struct {
+	// Prefix is a locator block prefix.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern="^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))/([0-9]|[0-9][0-9]|1[0-1][0-9]|12[0-8])$"
+	Prefix string `json:"prefix"`
+
+	// Structure is a structure of the SID.
+	//
+	// +kubebuilder:validation:Required
+	Structure IsovalentSRv6SIDStructure `json:"structure"`
+}

@@ -13,6 +13,10 @@ type IsovalentFQDNGroupListerExpansion interface{}
 // IsovalentPodNetworkLister.
 type IsovalentPodNetworkListerExpansion interface{}
 
+// IsovalentSRv6LocatorPoolListerExpansion allows custom methods to be added to
+// IsovalentSRv6LocatorPoolLister.
+type IsovalentSRv6LocatorPoolListerExpansion interface{}
+
 // IsovalentSRv6SIDManagerListerExpansion allows custom methods to be added to
 // IsovalentSRv6SIDManagerLister.
 type IsovalentSRv6SIDManagerListerExpansion interface{}

@@ -1,0 +1,93 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.4
+  creationTimestamp: null
+  name: isovalentsrv6locatorpools.isovalent.com
+spec:
+  group: isovalent.com
+  names:
+    categories:
+    - cilium
+    - isovalent
+    kind: IsovalentSRv6LocatorPool
+    listKind: IsovalentSRv6LocatorPoolList
+    plural: isovalentsrv6locatorpools
+    shortNames:
+    - locatorpool
+    singular: isovalentsrv6locatorpool
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: IsovalentSRv6LocatorPool is a custom resource which is used to
+          define a SID prefix and format which will be used to allocate SID address
+          blocks per node.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Spec is a spec of the Locator Pool.
+            properties:
+              prefix:
+                description: Prefix is a locator block prefix.
+                pattern: ^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))/([0-9]|[0-9][0-9]|1[0-1][0-9]|12[0-8])$
+                type: string
+              structure:
+                description: Structure is a structure of the SID.
+                properties:
+                  argumentLenBits:
+                    description: Argument length as described in RFC8986.
+                    maximum: 128
+                    minimum: 0
+                    type: integer
+                  functionLenBits:
+                    description: Function length as described in RFC8986.
+                    maximum: 128
+                    minimum: 0
+                    type: integer
+                  locatorBlockLenBits:
+                    description: Locator Block length as described in RFC8986.
+                    maximum: 128
+                    minimum: 0
+                    type: integer
+                  locatorNodeLenBits:
+                    description: Locator Node length as described in RFC8986.
+                    maximum: 128
+                    minimum: 0
+                    type: integer
+                required:
+                - argumentLenBits
+                - functionLenBits
+                - locatorBlockLenBits
+                - locatorNodeLenBits
+                type: object
+            required:
+            - prefix
+            - structure
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

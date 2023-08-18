@@ -45,6 +45,9 @@ const (
 
 	// IPNCRDName is the full name of the IsovalentPodNetwork CRD.
 	IPNCRDName = k8sconstv1alpha1.IPNKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
+
+	// SRv6LocatorPoolName is the full name of the SRv6LocatorPool CRD.
+	SRv6LocatorPoolName = k8sconstv1alpha1.SRv6LocatorPoolKindDefinition + "/" + k8sconstv1alpha1.CustomResourceDefinitionVersion
 )
 
 var (
@@ -62,10 +65,11 @@ func CreateCustomResourceDefinitions(clientset apiextensionsclient.Interface) er
 	g, _ := errgroup.WithContext(context.Background())
 
 	resourceToCreateFnMapping := map[string]crdCreationFn{
-		synced.CRDResourceName(k8sconstv1alpha1.IFGName):            createIFGCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName): createSRv6SIDManagerCRD,
-		synced.CRDResourceName(k8sconstv1.IEGPName):                 createIEGPCRD,
-		synced.CRDResourceName(k8sconstv1alpha1.IPNName):            createIPNCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IFGName):             createIFGCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6SIDManagerName):  createSRv6SIDManagerCRD,
+		synced.CRDResourceName(k8sconstv1.IEGPName):                  createIEGPCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.IPNName):             createIPNCRD,
+		synced.CRDResourceName(k8sconstv1alpha1.SRv6LocatorPoolName): createSRv6LocatorPoolCRD,
 	}
 	for _, r := range synced.AllIsovalentCRDResourceNames() {
 		fn, ok := resourceToCreateFnMapping[r]
@@ -86,6 +90,9 @@ var (
 
 	//go:embed crds/v1alpha1/isovalentsrv6sidmanagers.yaml
 	crdsv1Alpha1IsovalentSRv6SIDManagers []byte
+
+	//go:embed crds/v1alpha1/isovalentsrv6locatorpools.yaml
+	crdsv1Alpha1IsovalentSRv6LocatorPools []byte
 
 	//go:embed crds/v1/isovalentegressgatewaypolicies.yaml
 	crdsv1IsovalentEgressGatewayPolicies []byte
@@ -111,6 +118,8 @@ func GetPregeneratedCRD(crdName string) apiextensionsv1.CustomResourceDefinition
 		crdBytes = crdsv1Alpha1IsovalentFQDNGroups
 	case SRv6SIDManagerName:
 		crdBytes = crdsv1Alpha1IsovalentSRv6SIDManagers
+	case SRv6LocatorPoolName:
+		crdBytes = crdsv1Alpha1IsovalentSRv6LocatorPools
 	case IEGPCRDName:
 		crdBytes = crdsv1IsovalentEgressGatewayPolicies
 	case IPNCRDName:
@@ -168,6 +177,17 @@ func createIPNCRD(clientset apiextensionsclient.Interface) error {
 	return createUpdateCRD(
 		clientset,
 		constructV1CRD(k8sconstv1alpha1.IPNName, ciliumCRD),
+		newDefaultPoller(),
+	)
+}
+
+// createSRv6LocatorPoolCRD creates and updates the IsovalentSRv6LocatorPool CRD.
+func createSRv6LocatorPoolCRD(clientset apiextensionsclient.Interface) error {
+	ciliumCRD := GetPregeneratedCRD(SRv6LocatorPoolName)
+
+	return createUpdateCRD(
+		clientset,
+		constructV1CRD(k8sconstv1alpha1.SRv6LocatorPoolName, ciliumCRD),
 		newDefaultPoller(),
 	)
 }
