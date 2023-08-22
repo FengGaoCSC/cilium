@@ -32,6 +32,11 @@ jobs:
           # required for git describe
           fetch-depth: 0
 
+      - name: Install Go
+        uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
+        with:
+          go-version-file: 'enterprise/cilium-cli/go.mod'
+
       - name: Set up job variables
         id: vars
         run: |
