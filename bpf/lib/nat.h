@@ -23,6 +23,20 @@
 #include "nat_46x64.h"
 #include "stubs.h"
 
+static __always_inline bool lb_is_svc_proto(__u8 proto)
+{
+	switch (proto) {
+	case IPPROTO_TCP:
+	case IPPROTO_UDP:
+#ifdef ENABLE_SCTP
+	case IPPROTO_SCTP:
+#endif /* ENABLE_SCTP */
+		return true;
+	default:
+		return false;
+	}
+}
+
 enum  nat_dir {
 	NAT_DIR_EGRESS  = TUPLE_F_OUT,
 	NAT_DIR_INGRESS = TUPLE_F_IN,
@@ -750,6 +764,7 @@ static __always_inline bool snat_v4_prepare_state(struct __ctx_buff *ctx,
      * This checks whether bpf_host is running on the direct routing device.
      */
 	if (DIRECT_ROUTING_DEV_IFINDEX == NATIVE_DEV_IFINDEX &&
+	    lb_is_svc_proto(ip4->protocol) &&
 	    ip4->saddr == IPV4_DIRECT_ROUTING) {
 		target->addr = IPV4_DIRECT_ROUTING;
 		return true;
