@@ -26,11 +26,14 @@ type SIDAllocator interface {
 	// Locator returns a Locator associated with this allocator
 	Locator() *types.Locator
 
+	// BehaviorType returns a type of the behavior for the locator
+	BehaviorType() types.BehaviorType
+
 	// Allocate tries to allocate specified SID from this allocator. It returns error if it is already used.
-	Allocate(sid netip.Addr, owner string, metadata string, behavior types.Behavior) (*types.SID, error)
+	Allocate(sid netip.Addr, owner string, metadata string, behavior types.Behavior) (*SIDInfo, error)
 
 	// AllocateNext allocates next available SID from this allocator
-	AllocateNext(owner string, metadata string, behavior types.Behavior) (*types.SID, error)
+	AllocateNext(owner string, metadata string, behavior types.Behavior) (*SIDInfo, error)
 
 	// Release releases SID allocated from this allocator
 	Release(sid netip.Addr) error
@@ -41,10 +44,11 @@ type SIDAllocator interface {
 }
 
 type SIDInfo struct {
-	Owner    string
-	MetaData string
-	SID      *types.SID
-	Behavior types.Behavior
+	Owner        string
+	MetaData     string
+	SID          *types.SID
+	BehaviorType types.BehaviorType
+	Behavior     types.Behavior
 }
 
 // StructuredSIDAllocator is an SRv6 SID allocator that allocates structured SIDs
@@ -53,7 +57,10 @@ type StructuredSIDAllocator struct {
 	// SID is allocated from this locator prefix
 	locator types.Locator
 
-	// Allocator to manage the allocation of function part
+	// Type of the behavior which should be bounded to SIDs allocated from this allocator
+	behaviorType types.BehaviorType
+
+	// Allocator to manage the allocation of function part.
 	allocator *allocator.AllocationBitmap
 
 	// Function part => SID allocation mappings
@@ -63,11 +70,15 @@ type StructuredSIDAllocator struct {
 	allocatedSIDsLock lock.Mutex
 }
 
-func NewStructuredSIDAllocator(locator *types.Locator) (SIDAllocator, error) {
+func NewStructuredSIDAllocator(locator *types.Locator, behaviorType types.BehaviorType) (SIDAllocator, error) {
 	structure := locator.Structure()
 
 	if structure.ArgumentLenBits() != 0 {
 		return nil, fmt.Errorf("argument length must be zero")
+	}
+
+	if behaviorType == types.BehaviorTypeUnknown {
+		return nil, fmt.Errorf("unknown behavior type")
 	}
 
 	// Cap the maximum number of allocations regardless of the function length.
@@ -89,6 +100,7 @@ func NewStructuredSIDAllocator(locator *types.Locator) (SIDAllocator, error) {
 
 	return &StructuredSIDAllocator{
 		locator:       *locator,
+		behaviorType:  behaviorType,
 		allocator:     allocator,
 		allocatedSIDs: make(map[int]*SIDInfo),
 	}, nil
@@ -96,6 +108,10 @@ func NewStructuredSIDAllocator(locator *types.Locator) (SIDAllocator, error) {
 
 func (a *StructuredSIDAllocator) Locator() *types.Locator {
 	return &a.locator
+}
+
+func (a *StructuredSIDAllocator) BehaviorType() types.BehaviorType {
+	return a.behaviorType
 }
 
 // Create full SID by encoding function part into the locator.
@@ -165,9 +181,13 @@ func (a *StructuredSIDAllocator) delSIDInfo(f int) {
 	delete(a.allocatedSIDs, f)
 }
 
-func (a *StructuredSIDAllocator) Allocate(addr netip.Addr, owner string, metadata string, behavior types.Behavior) (*types.SID, error) {
+func (a *StructuredSIDAllocator) Allocate(addr netip.Addr, owner string, metadata string, behavior types.Behavior) (*SIDInfo, error) {
 	if owner == "" {
 		return nil, fmt.Errorf("empty owner")
+	}
+
+	if types.BehaviorTypeFromBehavior(behavior) != a.BehaviorType() {
+		return nil, fmt.Errorf("behavior type and behavior are mismatched")
 	}
 
 	sid, err := types.NewSID(addr, a.locator.Structure())
@@ -213,19 +233,26 @@ func (a *StructuredSIDAllocator) Allocate(addr netip.Addr, owner string, metadat
 		return nil, fmt.Errorf("SID %s is not available", addr.String())
 	}
 
-	a.addSIDInfo(f, &SIDInfo{
-		Owner:    owner,
-		MetaData: metadata,
-		SID:      sid,
-		Behavior: behavior,
-	})
+	info := &SIDInfo{
+		Owner:        owner,
+		MetaData:     metadata,
+		SID:          sid,
+		BehaviorType: a.BehaviorType(),
+		Behavior:     behavior,
+	}
 
-	return sid, nil
+	a.addSIDInfo(f, info)
+
+	return info, nil
 }
 
-func (a *StructuredSIDAllocator) AllocateNext(owner string, metadata string, behavior types.Behavior) (*types.SID, error) {
+func (a *StructuredSIDAllocator) AllocateNext(owner string, metadata string, behavior types.Behavior) (*SIDInfo, error) {
 	if owner == "" {
 		return nil, fmt.Errorf("empty owner")
+	}
+
+	if types.BehaviorTypeFromBehavior(behavior) != a.BehaviorType() {
+		return nil, fmt.Errorf("behavior type and behavior are mismatched")
 	}
 
 	f, allocated, err := a.allocator.AllocateNext()
@@ -238,14 +265,17 @@ func (a *StructuredSIDAllocator) AllocateNext(owner string, metadata string, beh
 		return nil, fmt.Errorf("failed to encode SID: %w", err)
 	}
 
-	a.addSIDInfo(f, &SIDInfo{
-		Owner:    owner,
-		MetaData: metadata,
-		SID:      sid,
-		Behavior: behavior,
-	})
+	info := &SIDInfo{
+		Owner:        owner,
+		MetaData:     metadata,
+		SID:          sid,
+		BehaviorType: a.BehaviorType(),
+		Behavior:     behavior,
+	}
 
-	return sid, nil
+	a.addSIDInfo(f, info)
+
+	return info, nil
 }
 
 func (a *StructuredSIDAllocator) Release(addr netip.Addr) error {

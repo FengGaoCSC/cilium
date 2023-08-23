@@ -26,14 +26,14 @@ func TestStructuredSIDAllocator(t *testing.T) {
 	)
 
 	t.Run("TestAllocate", func(t *testing.T) {
-		allocator, err := NewStructuredSIDAllocator(locator)
+		allocator, err := NewStructuredSIDAllocator(locator, types.BehaviorTypeBase)
 		require.NoError(t, err)
 
 		// Valid allocation
-		sid, err := allocator.Allocate(netip.MustParseAddr("fd00:0:0:0:1::"), "test1", "key1", types.BehaviorEndDT4)
+		info, err := allocator.Allocate(netip.MustParseAddr("fd00:0:0:0:1::"), "test1", "key1", types.BehaviorEndDT4)
 		require.NoError(t, err)
-		require.Equal(t, sid.Addr, netip.MustParseAddr("fd00:0:0:0:1::"))
-		require.Equal(t, *sid.Structure(), *types.MustNewSIDStructure(48, 16, 16, 0))
+		require.Equal(t, info.SID.Addr, netip.MustParseAddr("fd00:0:0:0:1::"))
+		require.Equal(t, *info.SID.Structure(), *types.MustNewSIDStructure(48, 16, 16, 0))
 
 		// Cannot allocate duplicated SID
 		_, err = allocator.Allocate(netip.MustParseAddr("fd00:0:0:0:1::"), "test1", "key2", types.BehaviorEndDT4)
@@ -50,40 +50,48 @@ func TestStructuredSIDAllocator(t *testing.T) {
 		// Non-zero rest part
 		_, err = allocator.Allocate(netip.MustParseAddr("fd00:0:0:0:2::1"), "test1", "key2", types.BehaviorEndDT4)
 		require.Error(t, err)
+
+		// Behavior and BehaviorType mismatched
+		_, err = allocator.Allocate(netip.MustParseAddr("fd00:0:0:0:2::"), "test1", "key2", types.BehaviorUDT4)
+		require.Error(t, err)
 	})
 
 	t.Run("TestAllocateNext", func(t *testing.T) {
-		allocator, err := NewStructuredSIDAllocator(locator)
+		allocator, err := NewStructuredSIDAllocator(locator, types.BehaviorTypeBase)
 		require.NoError(t, err)
 
 		// Valid allocation
-		sid, err := allocator.AllocateNext("test1", "key2", types.BehaviorEndDT4)
+		info, err := allocator.AllocateNext("test1", "key2", types.BehaviorEndDT4)
 		require.NoError(t, err)
-		require.Len(t, sid.Function(), 2)
-		require.NotEqual(t, []byte{0, 0}, sid.Function())
+		require.Len(t, info.SID.Function(), 2)
+		require.NotEqual(t, []byte{0, 0}, info.SID.Function())
+
+		// Behavior and BehaviorType mismatched
+		_, err = allocator.AllocateNext("test1", "key3", types.BehaviorUDT4)
+		require.Error(t, err)
 	})
 
 	t.Run("TestRelease", func(t *testing.T) {
-		allocator, err := NewStructuredSIDAllocator(locator)
+		allocator, err := NewStructuredSIDAllocator(locator, types.BehaviorTypeBase)
 		require.NoError(t, err)
 
 		// Valid release
-		sid, err := allocator.AllocateNext("test1", "key2", types.BehaviorEndDT4)
+		info, err := allocator.AllocateNext("test1", "key2", types.BehaviorEndDT4)
 		require.NoError(t, err)
 
-		err = allocator.Release(sid.Addr)
+		err = allocator.Release(info.SID.Addr)
 		require.NoError(t, err)
 
 		// Released SID should be reallocatable
-		sid, err = allocator.Allocate(sid.Addr, "test1", "key2", types.BehaviorEndDT4)
+		info, err = allocator.Allocate(info.SID.Addr, "test1", "key2", types.BehaviorEndDT4)
 		require.NoError(t, err)
 
-		err = allocator.Release(sid.Addr)
+		err = allocator.Release(info.SID.Addr)
 		require.NoError(t, err)
 	})
 
 	t.Run("TestAllocatedSIDs", func(t *testing.T) {
-		allocator, err := NewStructuredSIDAllocator(locator)
+		allocator, err := NewStructuredSIDAllocator(locator, types.BehaviorTypeBase)
 		require.NoError(t, err)
 
 		// Getting specific owner's SIDs

@@ -12,6 +12,7 @@ package sidmanager
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 	"testing"
 	"time"
@@ -61,6 +62,8 @@ func TestSIDManager(t *testing.T) {
 	structure2 := types.MustNewSIDStructure(32, 16, 24, 0)
 	locator1 := types.MustNewLocator(netip.MustParsePrefix("fd00:1:1::/48"), structure1)
 	locator2 := types.MustNewLocator(netip.MustParsePrefix("fd00:2:1::/48"), structure1)
+	locator3 := types.MustNewLocator(netip.MustParsePrefix("fd00:3:1::/48"), structure1)
+	locator4 := types.MustNewLocator(netip.MustParsePrefix("fd00:3:1::/48"), structure2)
 
 	resourceStructure1 := v1alpha1.IsovalentSRv6SIDStructure{
 		LocatorBlockLenBits: structure1.LocatorBlockLenBits(),
@@ -137,8 +140,9 @@ func TestSIDManager(t *testing.T) {
 								PoolRef: poolName1,
 								Locators: []*v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    locator1.Prefix.String(),
-										Structure: resourceStructure1,
+										BehaviorType: "Base",
+										Prefix:       locator1.Prefix.String(),
+										Structure:    resourceStructure1,
 									},
 								},
 							},
@@ -151,6 +155,120 @@ func TestSIDManager(t *testing.T) {
 			require.Eventually(t, func() bool {
 				if err := manager.ManageSID(poolName1, func(allocator SIDAllocator) (bool, error) {
 					return false, nil
+				}); err != nil {
+					return false
+				}
+				return true
+			}, time.Second*3, time.Millisecond*200, "Spec recociliation didn't happen")
+		})
+
+		t.Run("ChangeLocatorPrefix", func(t *testing.T) {
+			_, err := cs.IsovalentV1alpha1().IsovalentSRv6SIDManagers().Update(
+				context.TODO(),
+				&v1alpha1.IsovalentSRv6SIDManager{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nodetypes.GetName(),
+					},
+					Spec: v1alpha1.IsovalentSRv6SIDManagerSpec{
+						LocatorAllocations: []*v1alpha1.IsovalentSRv6LocatorAllocation{
+							{
+								PoolRef: poolName1,
+								Locators: []*v1alpha1.IsovalentSRv6Locator{
+									{
+										BehaviorType: "Base",
+										Prefix:       locator3.Prefix.String(),
+										Structure:    resourceStructure1,
+									},
+								},
+							},
+						},
+					},
+				},
+				metav1.UpdateOptions{},
+			)
+			require.NoError(t, err)
+			require.Eventually(t, func() bool {
+				if err := manager.ManageSID(poolName1, func(allocator SIDAllocator) (bool, error) {
+					if *allocator.Locator() == *locator3 {
+						return false, nil
+					}
+					return false, fmt.Errorf("still seeing an old locator")
+				}); err != nil {
+					return false
+				}
+				return true
+			}, time.Second*3, time.Millisecond*200, "Spec recociliation didn't happen")
+		})
+
+		t.Run("ChangeLocatorStructure", func(t *testing.T) {
+			_, err := cs.IsovalentV1alpha1().IsovalentSRv6SIDManagers().Update(
+				context.TODO(),
+				&v1alpha1.IsovalentSRv6SIDManager{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nodetypes.GetName(),
+					},
+					Spec: v1alpha1.IsovalentSRv6SIDManagerSpec{
+						LocatorAllocations: []*v1alpha1.IsovalentSRv6LocatorAllocation{
+							{
+								PoolRef: poolName1,
+								Locators: []*v1alpha1.IsovalentSRv6Locator{
+									{
+										BehaviorType: "Base",
+										Prefix:       locator4.Prefix.String(),
+										Structure:    resourceStructure2,
+									},
+								},
+							},
+						},
+					},
+				},
+				metav1.UpdateOptions{},
+			)
+			require.NoError(t, err)
+			require.Eventually(t, func() bool {
+				if err := manager.ManageSID(poolName1, func(allocator SIDAllocator) (bool, error) {
+					if *allocator.Locator() == *locator4 {
+						return false, nil
+					}
+					return false, fmt.Errorf("still seeing an old locator")
+				}); err != nil {
+					return false
+				}
+				return true
+			}, time.Second*3, time.Millisecond*200, "Spec recociliation didn't happen")
+		})
+
+		t.Run("ChangeLocatorBehaviorType", func(t *testing.T) {
+			_, err := cs.IsovalentV1alpha1().IsovalentSRv6SIDManagers().Update(
+				context.TODO(),
+				&v1alpha1.IsovalentSRv6SIDManager{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: nodetypes.GetName(),
+					},
+					Spec: v1alpha1.IsovalentSRv6SIDManagerSpec{
+						LocatorAllocations: []*v1alpha1.IsovalentSRv6LocatorAllocation{
+							{
+								PoolRef: poolName1,
+								Locators: []*v1alpha1.IsovalentSRv6Locator{
+									{
+										BehaviorType: "uSID",
+										Prefix:       locator4.Prefix.String(),
+										Structure:    resourceStructure2,
+									},
+								},
+							},
+						},
+					},
+				},
+				metav1.UpdateOptions{},
+			)
+			require.NoError(t, err)
+			require.Eventually(t, func() bool {
+				if err := manager.ManageSID(poolName1, func(allocator SIDAllocator) (bool, error) {
+					if *allocator.Locator() == *locator4 && allocator.BehaviorType() == types.BehaviorTypeUSID {
+						return false, nil
+					}
+					return false, fmt.Errorf("still seeing an old locator")
 				}); err != nil {
 					return false
 				}
@@ -171,8 +289,9 @@ func TestSIDManager(t *testing.T) {
 								PoolRef: poolName1,
 								Locators: []*v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    locator1.Prefix.String(),
-										Structure: resourceStructure1,
+										BehaviorType: "Base",
+										Prefix:       locator1.Prefix.String(),
+										Structure:    resourceStructure1,
 									},
 								},
 							},
@@ -180,8 +299,9 @@ func TestSIDManager(t *testing.T) {
 								PoolRef: poolName2,
 								Locators: []*v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    locator2.Prefix.String(),
-										Structure: resourceStructure1,
+										BehaviorType: "Base",
+										Prefix:       locator2.Prefix.String(),
+										Structure:    resourceStructure1,
 									},
 								},
 							},
@@ -239,8 +359,9 @@ func TestSIDManager(t *testing.T) {
 						PoolRef: poolName1,
 						Locators: []*v1alpha1.IsovalentSRv6Locator{
 							{
-								Prefix:    locator1.Prefix.String(),
-								Structure: resourceStructure1,
+								BehaviorType: "Base",
+								Prefix:       locator1.Prefix.String(),
+								Structure:    resourceStructure1,
 							},
 						},
 					},
@@ -249,7 +370,7 @@ func TestSIDManager(t *testing.T) {
 		})
 
 		t.Run("AllocateSIDWithManageSID", func(t *testing.T) {
-			var allocatedSID *types.SID
+			var allocatedSID *SIDInfo
 			require.NoError(t, manager.ManageSID(poolName1, func(allocator SIDAllocator) (bool, error) {
 				sid, err := allocator.Allocate(netip.MustParseAddr("fd00:1:1:1::"), "test", "test", types.BehaviorEndDT4)
 				require.NoError(t, err)
@@ -265,7 +386,7 @@ func TestSIDManager(t *testing.T) {
 				}
 				require.Equal(t, poolName1, r.Status.SIDAllocations[0].PoolRef, "Pool name mismatched between status and allocation")
 				require.Len(t, r.Status.SIDAllocations[0].SIDs, 1, "More than one SID is on status")
-				require.Equal(t, allocatedSID.Addr.String(), r.Status.SIDAllocations[0].SIDs[0].SID.Addr, "SID mismatched between status and allocation")
+				require.Equal(t, allocatedSID.SID.Addr.String(), r.Status.SIDAllocations[0].SIDs[0].SID.Addr, "SID mismatched between status and allocation")
 				return true
 			}, time.Second*3, time.Millisecond*200, "Status reconciliation didn't happen")
 		})
@@ -311,8 +432,9 @@ func TestSIDManager(t *testing.T) {
 							PoolRef: poolName1,
 							Locators: []*v1alpha1.IsovalentSRv6Locator{
 								{
-									Prefix:    locator1.Prefix.String(),
-									Structure: resourceStructure1,
+									BehaviorType: "Base",
+									Prefix:       locator1.Prefix.String(),
+									Structure:    resourceStructure1,
 								},
 							},
 						},
@@ -333,9 +455,10 @@ func TestSIDManager(t *testing.T) {
 											ArgumentLenBits:     0,
 										},
 									},
-									Owner:    "test",
-									MetaData: "test1",
-									Behavior: "End.DT4",
+									Owner:        "test",
+									MetaData:     "test1",
+									BehaviorType: "Base",
+									Behavior:     "End.DT4",
 								},
 							},
 						},
@@ -353,7 +476,7 @@ func TestSIDManager(t *testing.T) {
 			})
 		})
 
-		t.Run("StaleSID", func(t *testing.T) {
+		t.Run("StaleSIDStructureMismatch", func(t *testing.T) {
 			manager, store, _ := createManager(t, &v1alpha1.IsovalentSRv6SIDManager{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nodetypes.GetName(),
@@ -364,8 +487,9 @@ func TestSIDManager(t *testing.T) {
 							PoolRef: poolName1,
 							Locators: []*v1alpha1.IsovalentSRv6Locator{
 								{
-									Prefix:    locator1.Prefix.String(),
-									Structure: resourceStructure1,
+									BehaviorType: "Base",
+									Prefix:       locator1.Prefix.String(),
+									Structure:    resourceStructure1,
 								},
 							},
 						},
@@ -386,9 +510,70 @@ func TestSIDManager(t *testing.T) {
 											ArgumentLenBits:     0,
 										},
 									},
-									Owner:    "test",
-									MetaData: "test1",
-									Behavior: "End.DT4",
+									Owner:        "test",
+									MetaData:     "test1",
+									BehaviorType: "Base",
+									Behavior:     "End.DT4",
+								},
+							},
+						},
+					},
+				},
+			})
+			manager.ManageSID(poolName1, func(allocator SIDAllocator) (bool, error) {
+				sids := allocator.AllocatedSIDs("test")
+				require.Len(t, sids, 0, "Stale allocation restored to the allocator")
+				return false, nil
+			})
+			require.Eventually(t, func() bool {
+				r, exists, err := store.GetByKey(resource.Key{Name: nodetypes.GetName()})
+				require.NoError(t, err)
+				require.True(t, exists)
+				if r.Status == nil {
+					return false
+				}
+				return len(r.Status.SIDAllocations) == 0
+			}, time.Second*3, time.Millisecond*200, "Stale allocation restored to the status")
+		})
+
+		t.Run("StaleSIDBehaviorTypeMismatch", func(t *testing.T) {
+			manager, store, _ := createManager(t, &v1alpha1.IsovalentSRv6SIDManager{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodetypes.GetName(),
+				},
+				Spec: v1alpha1.IsovalentSRv6SIDManagerSpec{
+					LocatorAllocations: []*v1alpha1.IsovalentSRv6LocatorAllocation{
+						{
+							PoolRef: poolName1,
+							Locators: []*v1alpha1.IsovalentSRv6Locator{
+								{
+									BehaviorType: "Base",
+									Prefix:       locator1.Prefix.String(),
+									Structure:    resourceStructure1,
+								},
+							},
+						},
+					},
+				},
+				Status: &v1alpha1.IsovalentSRv6SIDManagerStatus{
+					SIDAllocations: []*v1alpha1.IsovalentSRv6SIDAllocation{
+						{
+							PoolRef: poolName1,
+							SIDs: []*v1alpha1.IsovalentSRv6SIDInfo{
+								{
+									SID: v1alpha1.IsovalentSRv6SID{
+										Addr: "fd00:1:1:1::",
+										Structure: v1alpha1.IsovalentSRv6SIDStructure{
+											LocatorBlockLenBits: 32,
+											LocatorNodeLenBits:  16,
+											FunctionLenBits:     16,
+											ArgumentLenBits:     0,
+										},
+									},
+									Owner:        "test",
+									MetaData:     "test1",
+									BehaviorType: "uSID",
+									Behavior:     "uDT4",
 								},
 							},
 						},
@@ -423,8 +608,9 @@ func TestSIDManager(t *testing.T) {
 						PoolRef: poolName1,
 						Locators: []*v1alpha1.IsovalentSRv6Locator{
 							{
-								Prefix:    locator1.Prefix.String(),
-								Structure: resourceStructure1,
+								BehaviorType: "Base",
+								Prefix:       locator1.Prefix.String(),
+								Structure:    resourceStructure1,
 							},
 						},
 					},
@@ -454,8 +640,9 @@ func TestSIDManager(t *testing.T) {
 								PoolRef: poolName1,
 								Locators: []*v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    locator1.Prefix.String(),
-										Structure: resourceStructure1,
+										BehaviorType: "Base",
+										Prefix:       locator1.Prefix.String(),
+										Structure:    resourceStructure1,
 									},
 								},
 							},
@@ -463,8 +650,9 @@ func TestSIDManager(t *testing.T) {
 								PoolRef: poolName2,
 								Locators: []*v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    locator2.Prefix.String(),
-										Structure: resourceStructure1,
+										BehaviorType: "Base",
+										Prefix:       locator2.Prefix.String(),
+										Structure:    resourceStructure1,
 									},
 								},
 							},
@@ -493,8 +681,9 @@ func TestSIDManager(t *testing.T) {
 								PoolRef: poolName1,
 								Locators: []*v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    locator1.Prefix.String(),
-										Structure: resourceStructure1,
+										BehaviorType: "Base",
+										Prefix:       locator1.Prefix.String(),
+										Structure:    resourceStructure1,
 									},
 								},
 							},
@@ -502,8 +691,9 @@ func TestSIDManager(t *testing.T) {
 								PoolRef: poolName2,
 								Locators: []*v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    locator2.Prefix.String(),
-										Structure: resourceStructure2,
+										BehaviorType: "Base",
+										Prefix:       locator2.Prefix.String(),
+										Structure:    resourceStructure2,
 									},
 								},
 							},

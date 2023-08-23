@@ -340,13 +340,17 @@ func (m *sidManager) reconcileSpec(r *v1alpha1.IsovalentSRv6SIDManager) (bool, e
 			return false, fmt.Errorf("multiple locator from same pool is not supported yet")
 		}
 
-		l, err := m.locatorFromResource(la.Locators[0])
+		locator := la.Locators[0]
+
+		l, err := m.locatorFromResource(locator)
 		if err != nil {
 			return false, fmt.Errorf("failed to create locator: %w", err)
 		}
 
+		behaviorType := types.BehaviorTypeFromString(locator.BehaviorType)
+
 		if oldAllocator, ok := m.allocators[la.PoolRef]; !ok {
-			newAllocator, err := NewStructuredSIDAllocator(l)
+			newAllocator, err := NewStructuredSIDAllocator(l, behaviorType)
 			if err != nil {
 				return false, fmt.Errorf("failed to create new SID allocator: %w", err)
 			}
@@ -354,10 +358,10 @@ func (m *sidManager) reconcileSpec(r *v1alpha1.IsovalentSRv6SIDManager) (bool, e
 			needsSync = true
 		} else {
 			// No change to the spec, skip update
-			if *oldAllocator.Locator() == *l {
+			if *oldAllocator.Locator() == *l && oldAllocator.BehaviorType() == behaviorType {
 				continue
 			}
-			newAllocator, err := NewStructuredSIDAllocator(l)
+			newAllocator, err := NewStructuredSIDAllocator(l, behaviorType)
 			if err != nil {
 				return false, fmt.Errorf("failed to create new SID allocator: %w", err)
 			}
@@ -458,22 +462,20 @@ func (m *sidManager) restoreAllocations(ctx context.Context, r *v1alpha1.Isovale
 					continue
 				}
 
-				// Check locator and SID structure mismatch. If
-				// there's a mismatch, maybe an old pool
-				// updated while Cilium is stopping. We can
-				// ignore this here. So that it will be deleted
-				// from the status in the next sync.
-				if s.AsLocator() != *allocator.Locator() {
+				// Check locator, SID structure and behavior
+				// type mismatch. If there's a mismatch, maybe
+				// an old pool updated while Cilium is
+				// stopping. We can ignore this here. So that
+				// it will be deleted from the status in the
+				// next sync.
+				if s.AsLocator() != *allocator.Locator() || types.BehaviorTypeFromString(sid.BehaviorType) != allocator.BehaviorType() {
 					staleSIDs++
 					continue
 				}
 
 				if _, err = allocator.Allocate(addr, sid.Owner, sid.MetaData, types.BehaviorFromString(sid.Behavior)); err != nil {
-					// At this point, all allocator should be empty. So, this shouldn't
-					// happen. The only case this happens is the case that we have a
-					// duplicated allocations which is an error.
 					errorSIDs++
-					errs = errors.Join(errs, fmt.Errorf("duplicated allocation found on the status: %w", err))
+					errs = errors.Join(errs, fmt.Errorf("allocation error: %w", err))
 					continue
 				}
 				restoredSIDs++
@@ -657,10 +659,11 @@ func (m *sidManager) sidInfoToResource(si *SIDInfo) *v1alpha1.IsovalentSRv6SIDIn
 		},
 	}
 	return &v1alpha1.IsovalentSRv6SIDInfo{
-		Owner:    si.Owner,
-		MetaData: si.MetaData,
-		SID:      sid,
-		Behavior: si.Behavior.String(),
+		Owner:        si.Owner,
+		MetaData:     si.MetaData,
+		SID:          sid,
+		BehaviorType: si.BehaviorType.String(),
+		Behavior:     si.Behavior.String(),
 	}
 }
 
