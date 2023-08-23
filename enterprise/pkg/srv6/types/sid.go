@@ -299,6 +299,9 @@ const (
 	BehaviorEndDT6  Behavior = 0x0012
 	BehaviorEndDT4  Behavior = 0x0013
 	BehaviorEndDT46 Behavior = 0x0014
+	BehaviorUDT6    Behavior = 0x003E
+	BehaviorUDT4    Behavior = 0x003F
+	BehaviorUDT46   Behavior = 0x0040
 )
 
 // BehaviorFromString RFC8986-compliant string of SRv6 behavior to Behavior constant
@@ -310,6 +313,12 @@ func BehaviorFromString(s string) Behavior {
 		return BehaviorEndDT4
 	case "End.DT46":
 		return BehaviorEndDT46
+	case "uDT6":
+		return BehaviorUDT6
+	case "uDT4":
+		return BehaviorUDT4
+	case "uDT46":
+		return BehaviorUDT46
 	default:
 		return BehaviorUnknown
 	}
@@ -324,6 +333,53 @@ func (b Behavior) String() string {
 		return "End.DT4"
 	case BehaviorEndDT46:
 		return "End.DT46"
+	case BehaviorUDT6:
+		return "uDT6"
+	case BehaviorUDT4:
+		return "uDT4"
+	case BehaviorUDT46:
+		return "uDT46"
+	default:
+		return "Unknown"
+	}
+}
+
+type BehaviorType uint16
+
+const (
+	BehaviorTypeUnknown BehaviorType = iota
+	BehaviorTypeBase
+	BehaviorTypeUSID
+)
+
+func BehaviorTypeFromString(s string) BehaviorType {
+	switch s {
+	case "Base":
+		return BehaviorTypeBase
+	case "uSID":
+		return BehaviorTypeUSID
+	default:
+		return BehaviorTypeUnknown
+	}
+}
+
+func BehaviorTypeFromBehavior(b Behavior) BehaviorType {
+	switch b {
+	case BehaviorEndDT6, BehaviorEndDT4, BehaviorEndDT46:
+		return BehaviorTypeBase
+	case BehaviorUDT6, BehaviorUDT4, BehaviorUDT46:
+		return BehaviorTypeUSID
+	default:
+		return BehaviorTypeUnknown
+	}
+}
+
+func (k BehaviorType) String() string {
+	switch k {
+	case BehaviorTypeBase:
+		return "Base"
+	case BehaviorTypeUSID:
+		return "uSID"
 	default:
 		return "Unknown"
 	}
