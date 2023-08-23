@@ -247,6 +247,26 @@ func addSysdumpTasks(collector *sysdump.Collector) error {
 				return nil
 			},
 		},
+		{
+			Description: "Collecting IsovalentSRv6LocatorPool",
+			Quick:       true,
+			Task: func(ctx context.Context) error {
+				locatorPools := schema.GroupVersionResource{
+					Group:    "isovalent.com",
+					Resource: "isovalentsrv6locatorpool",
+					Version:  "v1alpha1",
+				}
+				n := corev1.NamespaceAll
+				v, err := collector.Client.ListUnstructured(ctx, locatorPools, &n, metav1.ListOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 Locator Pools: %w", err)
+				}
+				if err := collector.WriteYAML("cilium-enterprise-isovalentsrv6locatorpools-<ts>.yaml", v); err != nil {
+					return fmt.Errorf("failed to collect Isovalent SRv6 Locator Pools: %w", err)
+				}
+				return nil
+			},
+		},
 	})
 
 	return nil
