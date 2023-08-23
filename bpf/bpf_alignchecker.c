@@ -85,3 +85,7 @@ add_type(struct tunnel_key);
 add_type(struct tunnel_value);
 add_type(struct auth_key);
 add_type(struct auth_info);
+add_type(struct egress_gw_ha_ct_entry);
+add_type(struct egress_gw_ha_policy_key);
+add_type(struct egress_gw_ha_policy_entry);
+

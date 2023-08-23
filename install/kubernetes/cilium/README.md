@@ -292,6 +292,9 @@ contributors across the globe, there is almost always someone available to help.
 | eni.subnetTagsFilter | list | `[]` | Filter via tags (k=v) which will dictate which subnets are going to be used to create new ENIs Important note: This requires that each instance has an ENI with a matching subnet attached when Cilium is deployed. If you only want to control subnets for ENIs attached by Cilium, use the CNI configuration file settings (cni.customConf) instead. |
 | eni.updateEC2AdapterLimitViaAPI | bool | `true` | Update ENI Adapter limits from the EC2 API |
 | enterprise.clustermesh.enableOverlappingPodCIDRSupport | bool | `false` | Enable overlapping PodCIDR support |
+| enterprise.egressGatewayHA | object | `{"enabled":false,"installRoutes":false,"reconciliationTriggerInterval":"1s"}` | Enables egress gateway HA |
+| enterprise.egressGatewayHA.installRoutes | bool | `false` | Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface |
+| enterprise.egressGatewayHA.reconciliationTriggerInterval | string | `"1s"` | Time between triggers of egress gateway state reconciliations |
 | enterprise.multiNetwork | object | `{"autoCreateDefaultPodNetwork":true,"autoDirectNodeRoutes":true,"enabled":false}` | Multi-network support (preview feature) |
 | enterprise.multiNetwork.autoCreateDefaultPodNetwork | bool | `true` | Automatically creates a "default" IsovalentPodNetwork on operator startup |
 | enterprise.multiNetwork.autoDirectNodeRoutes | bool | `true` | Enable multi-network aware automatic L2 routing between nodes |

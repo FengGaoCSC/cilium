@@ -18,6 +18,20 @@ enterprise:
     # -- Enable overlapping PodCIDR support
     enableOverlappingPodCIDRSupport: false
 
+  # -- Enables egress gateway HA
+  egressGatewayHA:
+    enabled: false
+    # -- Install egress gateway IP rules and routes in order to properly steer
+    # egress gateway traffic to the correct ENI interface
+    installRoutes: false
+    # -- Time between triggers of egress gateway state reconciliations
+    reconciliationTriggerInterval: 1s
+    # -- Maximum number of entries in egress gateway policy map
+    # maxPolicyEntries: 16384
+    # -- Healthcheck timeout after which an egress gateway is marked not healthy.
+    # This also configures the frequency of probes to a value of healthcheckTimeout / 2
+    # healthcheckTimeout: 2s
+
 # upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation
 # This is flag is not required for new installations.

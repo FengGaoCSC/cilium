@@ -968,6 +968,18 @@
      - Enable overlapping PodCIDR support
      - bool
      - ``false``
+   * - :spelling:ignore:`enterprise.egressGatewayHA`
+     - Enables egress gateway HA
+     - object
+     - ``{"enabled":false,"installRoutes":false,"reconciliationTriggerInterval":"1s"}``
+   * - :spelling:ignore:`enterprise.egressGatewayHA.installRoutes`
+     - Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface
+     - bool
+     - ``false``
+   * - :spelling:ignore:`enterprise.egressGatewayHA.reconciliationTriggerInterval`
+     - Time between triggers of egress gateway state reconciliations
+     - string
+     - ``"1s"``
    * - :spelling:ignore:`enterprise.multiNetwork`
      - Multi-network support (preview feature)
      - object

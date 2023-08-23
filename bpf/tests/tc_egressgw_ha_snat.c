@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 /* Copyright Authors of Cilium */
 
+#define HAVE_LPM_TRIE_MAP_TYPE
 #include "common.h"
 
 #include <bpf/ctx/skb.h>
@@ -13,7 +14,7 @@
 /* Enable code paths under test */
 #define ENABLE_IPV4
 #define ENABLE_NODEPORT
-#define ENABLE_EGRESS_GATEWAY
+#define ENABLE_EGRESS_GATEWAY_HA
 #define ENABLE_MASQUERADE_IPV4
 #define ENCAP_IFINDEX		42
 
@@ -27,6 +28,7 @@ mock_ctx_redirect(const struct __sk_buff *ctx __maybe_unused,
 #include "bpf_host.c"
 
 #include "lib/egressgw.h"
+#include "lib/egressgw_ha.h"
 
 static __always_inline __maybe_unused int
 mock_ctx_redirect(const struct __sk_buff *ctx __maybe_unused,
@@ -53,22 +55,23 @@ struct {
 	},
 };
 
+// TODO: What about the snat (no number test)?
+
 /* Test that a packet matching an egress gateway policy on the to-netdev program
  * gets correctly SNATed with the egress IP of the policy.
  */
-PKTGEN("tc", "tc_egressgw_snat1")
-int egressgw_snat1_pktgen(struct __ctx_buff *ctx)
+PKTGEN("tc", "tc_egressgw_ha_snat1")
+int egressgw_ha_snat1_pktgen(struct __ctx_buff *ctx)
 {
 	return egressgw_pktgen(ctx, (struct egressgw_test_ctx) {
-			.test = TEST_SNAT1,
+			.test = TEST_HA_SNAT1,
 		});
 }
 
-SETUP("tc", "tc_egressgw_snat1")
-int egressgw_snat1_setup(struct __ctx_buff *ctx)
+SETUP("tc", "tc_egressgw_ha_snat1")
+int egressgw_ha_snat1_setup(struct __ctx_buff *ctx)
 {
-	add_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24,
-				  GATEWAY_NODE_IP, EGRESS_IP);
+	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24, 1, { GATEWAY_NODE_IP }, EGRESS_IP);
 
 	/* Jump into the entrypoint */
 	tail_call_static(ctx, &entry_call_map, TO_NETDEV);
@@ -76,11 +79,11 @@ int egressgw_snat1_setup(struct __ctx_buff *ctx)
 	return TEST_ERROR;
 }
 
-CHECK("tc", "tc_egressgw_snat1")
-int egressgw_snat1_check(const struct __ctx_buff *ctx)
+CHECK("tc", "tc_egressgw_ha_snat1")
+int egressgw_ha_snat1_check(const struct __ctx_buff *ctx)
 {
 	return egressgw_snat_check(ctx, (struct egressgw_test_ctx) {
-			.test = TEST_SNAT1,
+			.test = TEST_HA_SNAT1,
 			.tx_packets = 1,
 			.rx_packets = 0,
 			.status_code = CTX_ACT_OK
@@ -90,17 +93,17 @@ int egressgw_snat1_check(const struct __ctx_buff *ctx)
 /* Test that a packet matching an egress gateway policy on the from-netdev program
  * gets correctly revSNATed and connection tracked.
  */
-PKTGEN("tc", "tc_egressgw_snat1_2_reply")
-int egressgw_snat1_2_reply_pktgen(struct __ctx_buff *ctx)
+PKTGEN("tc", "tc_egressgw_ha_snat1_2_reply")
+int egressgw_ha_snat1_2_reply_pktgen(struct __ctx_buff *ctx)
 {
 	return egressgw_pktgen(ctx, (struct egressgw_test_ctx) {
-			.test = TEST_SNAT1,
+			.test = TEST_HA_SNAT1,
 			.dir = CT_INGRESS,
 		});
 }
 
-SETUP("tc", "tc_egressgw_snat1_2_reply")
-int egressgw_snat1_2_reply_setup(struct __ctx_buff *ctx)
+SETUP("tc", "tc_egressgw_ha_snat1_2_reply")
+int egressgw_ha_snat1_2_reply_setup(struct __ctx_buff *ctx)
 {
 	/* install ipcache entry for the CLIENT_IP: */
 	struct ipcache_key cache_key = {
@@ -119,11 +122,11 @@ int egressgw_snat1_2_reply_setup(struct __ctx_buff *ctx)
 	return TEST_ERROR;
 }
 
-CHECK("tc", "tc_egressgw_snat1_2_reply")
-int egressgw_snat1_2_reply_check(const struct __ctx_buff *ctx)
+CHECK("tc", "tc_egressgw_ha_snat1_2_reply")
+int egressgw_ha_snat1_2_reply_check(const struct __ctx_buff *ctx)
 {
 	return egressgw_snat_check(ctx, (struct egressgw_test_ctx) {
-			.test = TEST_SNAT1,
+			.test = TEST_HA_SNAT1,
 			.dir = CT_INGRESS,
 			.tx_packets = 1,
 			.rx_packets = 1,
@@ -135,7 +138,7 @@ PKTGEN("tc", "tc_egressgw_snat2")
 int egressgw_snat2_pktgen(struct __ctx_buff *ctx)
 {
 	return egressgw_pktgen(ctx, (struct egressgw_test_ctx) {
-			.test = TEST_SNAT2,
+			.test = TEST_HA_SNAT2,
 		});
 }
 
@@ -152,13 +155,13 @@ CHECK("tc", "tc_egressgw_snat2")
 int egressgw_snat2_check(struct __ctx_buff *ctx)
 {
 	int ret = egressgw_snat_check(ctx, (struct egressgw_test_ctx) {
-			.test = TEST_SNAT2,
+			.test = TEST_HA_SNAT2,
 			.tx_packets = 1,
 			.rx_packets = 0,
 			.status_code = CTX_ACT_OK
 		});
 
-	del_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0Xffffff, 24);
+	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0Xffffff, 24);
 
 	return ret;
 }
@@ -166,20 +169,19 @@ int egressgw_snat2_check(struct __ctx_buff *ctx)
 /* Test that a packet matching an excluded CIDR egress gateway policy on the
  * to-netdev program does not get SNATed with the egress IP of the policy.
  */
-PKTGEN("tc", "tc_egressgw_skip_excluded_cidr_snat")
-int egressgw_skip_excluded_cidr_snat_pktgen(struct __ctx_buff *ctx)
+PKTGEN("tc", "tc_egressgw_ha_skip_excluded_cidr_snat")
+int egressgw_ha_skip_excluded_cidr_snat_pktgen(struct __ctx_buff *ctx)
 {
 	return egressgw_pktgen(ctx, (struct egressgw_test_ctx) {
-			.test = TEST_SNAT_EXCL_CIDR,
+			.test = TEST_HA_SNAT_EXCL_CIDR,
 		});
 }
 
-SETUP("tc", "tc_egressgw_skip_excluded_cidr_snat")
-int egressgw_skip_excluded_cidr_snat_setup(struct __ctx_buff *ctx)
+SETUP("tc", "tc_egressgw_ha_skip_excluded_cidr_snat")
+int egressgw_ha_skip_excluded_cidr_snat_setup(struct __ctx_buff *ctx)
 {
-
-	add_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24, GATEWAY_NODE_IP, 0);
-	add_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32, EGRESS_GATEWAY_EXCLUDED_CIDR, 0);
+	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24, 1, { GATEWAY_NODE_IP }, 0);
+	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32, 1, { EGRESS_GATEWAY_EXCLUDED_CIDR }, 0);
 
 	/* Jump into the entrypoint */
 	tail_call_static(ctx, &entry_call_map, TO_NETDEV);
@@ -187,8 +189,8 @@ int egressgw_skip_excluded_cidr_snat_setup(struct __ctx_buff *ctx)
 	return TEST_ERROR;
 }
 
-CHECK("tc", "tc_egressgw_skip_excluded_cidr_snat")
-int egressgw_skip_excluded_cidr_snat_check(const struct __ctx_buff *ctx)
+CHECK("tc", "tc_egressgw_ha_skip_excluded_cidr_snat")
+int egressgw_ha_skip_excluded_cidr_snat_check(const struct __ctx_buff *ctx)
 {
 	void *data, *data_end;
 	__u32 *status_code;
@@ -198,7 +200,7 @@ int egressgw_skip_excluded_cidr_snat_check(const struct __ctx_buff *ctx)
 
 	test_init();
 
-	del_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32);
+	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32);
 
 	data = (void *)(long)ctx_data(ctx);
 	data_end = (void *)(long)ctx->data_end;
@@ -233,7 +235,7 @@ int egressgw_skip_excluded_cidr_snat_check(const struct __ctx_buff *ctx)
 	if (l3->daddr != EXTERNAL_SVC_IP)
 		test_fatal("dst IP has changed");
 
-	if (l4->source != client_port(TEST_SNAT_EXCL_CIDR))
+	if (l4->source != client_port(TEST_HA_SNAT_EXCL_CIDR))
 		test_fatal("src TCP port has changed");
 
 	if (l4->dest != EXTERNAL_SVC_PORT)

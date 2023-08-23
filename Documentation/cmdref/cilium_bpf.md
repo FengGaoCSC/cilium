@@ -26,6 +26,7 @@ Direct access to local BPF maps
 * [cilium bpf config](cilium_bpf_config.md)	 - Manage runtime config
 * [cilium bpf ct](cilium_bpf_ct.md)	 - Connection tracking tables
 * [cilium bpf egress](cilium_bpf_egress.md)	 - Manage the egress routing rules
+* [cilium bpf egress-ha](cilium_bpf_egress-ha.md)	 - Manage the egress gateway HA rules
 * [cilium bpf endpoint](cilium_bpf_endpoint.md)	 - Local endpoint map
 * [cilium bpf fs](cilium_bpf_fs.md)	 - BPF filesystem mount
 * [cilium bpf ipcache](cilium_bpf_ipcache.md)	 - Manage the IPCache mappings for IP/CIDR <-> Identity

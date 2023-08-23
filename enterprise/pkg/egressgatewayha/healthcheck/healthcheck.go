@@ -40,17 +40,15 @@ var Cell = cell.Module(
 type Config struct {
 	// Healthcheck timeout after which an egress gateway is marked not healthy.
 	// This also configures the frequency of probes to a value of healthcheckTimeout / 2
-	EgressGatewayHealthcheckTimeout time.Duration
+	EgressGatewayHAHealthcheckTimeout time.Duration
 }
 
 var defaultConfig = Config{
-	EgressGatewayHealthcheckTimeout: 2 * time.Second,
+	EgressGatewayHAHealthcheckTimeout: 2 * time.Second,
 }
 
 func (def Config) Flags(flags *pflag.FlagSet) {
-	flags.Duration("egress-gateway-healthcheck-timeout", def.EgressGatewayHealthcheckTimeout, "")
-	flags.MarkDeprecated("egress-gateway-healthcheck-timeout", "This option is deprecated. Please use --egress-gateway-ha-healthcheck-timeout instead.")
-	flags.Duration("egress-gateway-ha-healthcheck-timeout", def.EgressGatewayHealthcheckTimeout, "Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2")
+	flags.Duration("egress-gateway-ha-healthcheck-timeout", def.EgressGatewayHAHealthcheckTimeout, "Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2")
 }
 
 // Event represents a healthchecking event such as a node becoming healthy/unhealthy
@@ -88,7 +86,7 @@ func NewHealthchecker(config Config) Healthchecker {
 	return &healthchecker{
 		nodes:    make(map[string]nodeTypes.Node),
 		statuses: make(map[string]*nodeStatus),
-		timeout:  config.EgressGatewayHealthcheckTimeout,
+		timeout:  config.EgressGatewayHAHealthcheckTimeout,
 		events:   make(chan Event),
 	}
 }

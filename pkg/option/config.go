@@ -1393,6 +1393,8 @@ func LogRegisteredOptions(vp *viper.Viper, entry *logrus.Entry) {
 
 // DaemonConfig is the configuration used by Daemon.
 type DaemonConfig struct {
+	EnterpriseDaemonConfig
+
 	CreationTime        time.Time
 	BpfDir              string       // BPF template files directory
 	LibDir              string       // Cilium library files directory
@@ -2713,7 +2715,7 @@ func (c *DaemonConfig) K8sGatewayAPIEnabled() bool {
 // EgressGatewayCommonEnabled returns true if at least one egress gateway implementation
 // is enabled.
 func (c *DaemonConfig) EgressGatewayCommonEnabled() bool {
-	return c.EnableIPv4EgressGateway
+	return c.EnableIPv4EgressGateway || c.EnableIPv4EgressGatewayHA
 }
 
 // DirectRoutingDeviceRequired return whether the Direct Routing Device is needed under
@@ -2953,6 +2955,8 @@ func (c *DaemonConfig) parseExcludedLocalAddresses(s []string) error {
 // Populate sets all options with the values from viper
 func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	var err error
+
+	c.EnterpriseDaemonConfig.Populate(vp)
 
 	c.AgentHealthPort = vp.GetInt(AgentHealthPort)
 	c.ClusterHealthPort = vp.GetInt(ClusterHealthPort)

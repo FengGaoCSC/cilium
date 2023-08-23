@@ -51,6 +51,7 @@
 #include "lib/trace.h"
 #include "lib/csum.h"
 #include "lib/egress_gateway.h"
+#include "lib/egress_gateway_ha.h"
 #include "lib/egress_policies.h"
 #include "lib/encap.h"
 #include "lib/eps.h"
@@ -1090,7 +1091,8 @@ ct_recreate4:
 		if (identity_is_cluster(*dst_sec_identity))
 			goto skip_egress_gateway;
 
-		if (egress_gw_request_needs_redirect(tuple, ct_status, &tunnel_endpoint)) {
+		if (egress_gw_request_needs_redirect(tuple, ct_status, &tunnel_endpoint) ||
+		    egress_gw_ha_request_needs_redirect(tuple, ct_status, &tunnel_endpoint)) {
 			if (tunnel_endpoint == EGRESS_GATEWAY_NO_GATEWAY) {
 				/* Special case for no gateway to drop the traffic */
 				return DROP_NO_EGRESS_GATEWAY;

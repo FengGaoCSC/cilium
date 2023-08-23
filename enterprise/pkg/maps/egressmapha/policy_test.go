@@ -4,7 +4,6 @@
 package egressmapha
 
 import (
-	"errors"
 	"net"
 	"testing"
 
@@ -21,7 +20,7 @@ func TestPolicyMap(t *testing.T) {
 	testutils.PrivilegedTest(t)
 
 	bpf.CheckOrMountFS("")
-	assert.Nil(t, rlimit.RemoveMemlock())
+	assert.NoError(t, rlimit.RemoveMemlock())
 
 	egressPolicyMap := createPolicyMap(hivetest.Lifecycle(t), DefaultPolicyConfig, ebpf.PinNone)
 
@@ -29,40 +28,75 @@ func TestPolicyMap(t *testing.T) {
 	sourceIP2 := net.ParseIP("1.1.1.2")
 
 	_, destCIDR1, err := net.ParseCIDR("2.2.1.0/24")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	_, destCIDR2, err := net.ParseCIDR("2.2.2.0/24")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	egressIP1 := net.ParseIP("3.3.3.1")
 	egressIP2 := net.ParseIP("3.3.3.2")
 
-	err = egressPolicyMap.Update(sourceIP1, *destCIDR1, egressIP1, egressIP1)
-	assert.Nil(t, err)
+	gatewayIP1 := net.ParseIP("4.4.4.1")
+	gatewayIP2 := net.ParseIP("4.4.4.2")
 
-	err = egressPolicyMap.Update(sourceIP2, *destCIDR2, egressIP2, egressIP2)
-	assert.Nil(t, err)
+	// This will create 2 policies, respectively with 2 and 1 egress GWs:
+	//
+	// Source IP   Destination CIDR   Egress IP   Gateway
+	// 1.1.1.1     2.2.1.0/24         3.3.3.1     0 => 4.4.4.1
+	//                                            1 => 4.4.4.2
+	// 1.1.1.2     2.2.2.0/24         3.3.3.2     0 => 4.4.4.1
+
+	err = ApplyEgressPolicy(egressPolicyMap, sourceIP1, *destCIDR1, egressIP1, []net.IP{gatewayIP1, gatewayIP2})
+	assert.NoError(t, err)
+
+	defer RemoveEgressPolicy(egressPolicyMap, sourceIP1, *destCIDR1)
+
+	err = ApplyEgressPolicy(egressPolicyMap, sourceIP2, *destCIDR2, egressIP2, []net.IP{gatewayIP1})
+	assert.NoError(t, err)
+
+	defer RemoveEgressPolicy(egressPolicyMap, sourceIP2, *destCIDR2)
 
 	val, err := egressPolicyMap.Lookup(sourceIP1, *destCIDR1)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
+	assert.EqualValues(t, val.Size, uint32(2))
 	assert.True(t, val.EgressIP.IP().Equal(egressIP1))
-	assert.True(t, val.GatewayIP.IP().Equal(egressIP1))
+	assert.True(t, val.GatewayIPs[0].IP().Equal(gatewayIP1))
+	assert.True(t, val.GatewayIPs[1].IP().Equal(gatewayIP2))
 
 	val, err = egressPolicyMap.Lookup(sourceIP2, *destCIDR2)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
+	assert.EqualValues(t, val.Size, uint32(1))
 	assert.True(t, val.EgressIP.IP().Equal(egressIP2))
-	assert.True(t, val.GatewayIP.IP().Equal(egressIP2))
+	assert.True(t, val.GatewayIPs[0].IP().Equal(gatewayIP1))
 
-	err = egressPolicyMap.Delete(sourceIP2, *destCIDR2)
-	assert.Nil(t, err)
+	// Adding a policy with too many gateways should result in an error
+	gatewayIPs := make([]net.IP, maxGatewayNodes+1)
+	err = ApplyEgressPolicy(egressPolicyMap, sourceIP1, *destCIDR1, egressIP1, gatewayIPs)
+	assert.ErrorContains(t, err, "cannot apply egress policy: too many gateways")
 
-	val, err = egressPolicyMap.Lookup(sourceIP1, *destCIDR1)
-	assert.Nil(t, err)
+	// Update the first policy:
+	//
+	// - remove gatewayIP1 from the list of active gateways (by applying a
+	//   new policy with just gatewayIP2)
+	// - remove gatewayIP1 also from the list of healthy gateways
+	err = ApplyEgressPolicy(egressPolicyMap, sourceIP1, *destCIDR1, egressIP1, []net.IP{gatewayIP2})
+	assert.NoError(t, err)
 
-	assert.True(t, val.EgressIP.IP().Equal(egressIP1))
-	assert.True(t, val.GatewayIP.IP().Equal(egressIP1))
+	// Update the first policy:
+	//
+	// - change the active gateway from gatewayIP2 -> gatewayIP1
+	//-  keep gatewayIP2 in the list of healthy gateways
+	err = ApplyEgressPolicy(egressPolicyMap, sourceIP1, *destCIDR1, egressIP1, []net.IP{gatewayIP1})
+	assert.NoError(t, err)
 
-	_, err = egressPolicyMap.Lookup(sourceIP2, *destCIDR2)
-	assert.True(t, errors.Is(err, ebpf.ErrKeyNotExist))
+	// Update the first policy:
+	//
+	//-  Remove gatewayIP2 from the list of healthy gateways
+	err = ApplyEgressPolicy(egressPolicyMap, sourceIP1, *destCIDR1, egressIP1, []net.IP{gatewayIP1})
+	assert.NoError(t, err)
+
+	// Remove the second policy
+	err = RemoveEgressPolicy(egressPolicyMap, sourceIP2, *destCIDR2)
+	assert.NoError(t, err)
 }

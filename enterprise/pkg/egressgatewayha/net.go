@@ -1,5 +1,12 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright Authors of Cilium
+//  Copyright (C) Isovalent, Inc. - All Rights Reserved.
+//
+//  NOTICE: All information contained herein is, and remains the property of
+//  Isovalent Inc and its suppliers, if any. The intellectual and technical
+//  concepts contained herein are proprietary to Isovalent Inc and its suppliers
+//  and may be covered by U.S. and Foreign Patents, patents in process, and are
+//  protected by trade secret or copyright law.  Dissemination of this information
+//  or reproduction of this material is strictly forbidden unless prior written
+//  permission is obtained from Isovalent Inc.
 
 package egressgatewayha
 
@@ -62,7 +69,7 @@ func getIfaceWithIPv4Address(ip net.IP) (string, int, net.IPMask, error) {
 // should be used to install the egress gateway routing rules for a given
 // interface
 func egressGatewayRoutingTableIdx(ifaceIdx int) int {
-	return linux_defaults.RouteTableEgressGatewayInterfacesOffset + ifaceIdx
+	return linux_defaults.RouteTableEgressGatewayHAInterfacesOffset + ifaceIdx
 }
 
 // listEgressIpRules returns a slice with all the IP rules installed by egress
@@ -73,7 +80,7 @@ func egressGatewayRoutingTableIdx(ifaceIdx int) int {
 // simplify the comparison with other IPNet objects
 func listEgressIpRules() ([]netlink.Rule, error) {
 	filter := route.Rule{
-		Priority: linux_defaults.RulePriorityEgressGateway,
+		Priority: linux_defaults.RulePriorityEgressGatewayHA,
 	}
 
 	return listFilteredEgressIpRules(&filter)
@@ -81,7 +88,7 @@ func listEgressIpRules() ([]netlink.Rule, error) {
 
 func listEgressIpRulesForRoutingTable(RoutingTableIdx int) ([]netlink.Rule, error) {
 	filter := route.Rule{
-		Priority: linux_defaults.RulePriorityEgressGateway,
+		Priority: linux_defaults.RulePriorityEgressGatewayHA,
 		Table:    RoutingTableIdx,
 	}
 
@@ -108,7 +115,7 @@ func newEgressIpRule(endpointIP net.IP, dstCIDR *net.IPNet, routingTableIdx int)
 
 	rule.Family = netlink.FAMILY_V4
 	rule.Table = routingTableIdx
-	rule.Priority = linux_defaults.RulePriorityEgressGateway
+	rule.Priority = linux_defaults.RulePriorityEgressGatewayHA
 	rule.Src = &net.IPNet{IP: endpointIP, Mask: net.CIDRMask(32, 32)}
 	rule.Dst = dstCIDR
 	rule.Protocol = linux_defaults.RTProto
@@ -159,7 +166,7 @@ func deleteIpRule(ipRule netlink.Rule) {
 	logger.Debug("Removing IP rule")
 	route.DeleteRule(netlink.FAMILY_V4,
 		route.Rule{
-			Priority: linux_defaults.RulePriorityEgressGateway,
+			Priority: linux_defaults.RulePriorityEgressGatewayHA,
 			From:     ipRule.Src,
 			To:       ipRule.Dst,
 			Table:    ipRule.Table,

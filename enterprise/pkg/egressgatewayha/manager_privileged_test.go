@@ -11,10 +11,13 @@ import (
 	"time"
 
 	. "github.com/cilium/checkmate"
+	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
 
+	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
+	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/hive"
@@ -25,17 +28,18 @@ import (
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
-	"github.com/cilium/cilium/pkg/maps/egressmap"
 	"github.com/cilium/cilium/pkg/node/addressing"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/testutils"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
+	"github.com/cilium/cilium/pkg/tuple"
+	"github.com/cilium/cilium/pkg/u8proto"
 )
 
 const (
-	testInterface1 = "cilium_egw1"
-	testInterface2 = "cilium_egw2"
+	testInterface1 = "cilium_egwha1"
+	testInterface2 = "cilium_egwha2"
 
 	node1 = "k8s1"
 	node2 = "k8s2"
@@ -47,12 +51,15 @@ const (
 	ep2IP = "10.0.0.2"
 
 	destCIDR        = "1.1.1.0/24"
+	destIP          = "1.1.1.1"
 	allZeroDestCIDR = "0.0.0.0/0"
 	excludedCIDR1   = "1.1.1.22/32"
 	excludedCIDR2   = "1.1.1.240/30"
+	excludedCIDR3   = "1.1.1.0/28"
 
 	egressIP1   = "192.168.101.1"
 	egressCIDR1 = "192.168.101.1/24"
+
 	egressIP2   = "192.168.102.1"
 	egressCIDR2 = "192.168.102.1/24"
 
@@ -69,9 +76,10 @@ var (
 
 	identityAllocator = testidentity.NewMockIdentityAllocator(nil)
 
-	nodeGroupNotFoundLabels = map[string]string{"label1": "notfound"}
-	nodeGroup1Labels        = map[string]string{"label1": "1"}
-	nodeGroup2Labels        = map[string]string{"label2": "2"}
+	noNodeGroup       = map[string]string{}
+	nodeGroup1Labels  = map[string]string{"label1": "1"}
+	nodeGroup2Labels  = map[string]string{"label2": "2"}
+	nodeGroup12Labels = map[string]string{"label1": "1", "label2": "2"}
 )
 
 type ipRule struct {
@@ -102,11 +110,57 @@ type parsedEgressRule struct {
 	gatewayIP net.IP
 }
 
+type egressCtEntry struct {
+	// ignoring sport, dport, etc for now
+	sourceIP  string
+	destIP    string
+	gatewayIP string
+}
+
+type parsedEgressCtEntry struct {
+	sourceIP  net.IP
+	destIP    net.IP
+	gatewayIP net.IP
+}
+
+type healthcheckerMock struct {
+	nodes  map[string]struct{}
+	events chan healthcheck.Event
+}
+
+func (h *healthcheckerMock) UpdateNodeList(nodes map[string]nodeTypes.Node) {
+}
+
+func (h *healthcheckerMock) NodeIsHealthy(nodeName string) bool {
+	_, ok := h.nodes[nodeName]
+	return ok
+}
+
+func (h *healthcheckerMock) Events() chan healthcheck.Event {
+	return h.events
+}
+
+func (h *healthcheckerMock) healthy(nodeName string) {
+	h.nodes[nodeName] = struct{}{}
+}
+
+func (h *healthcheckerMock) unhealthy(nodeName string) {
+	delete(h.nodes, nodeName)
+}
+
+func newHealthcheckerMock() *healthcheckerMock {
+	return &healthcheckerMock{
+		nodes:  make(map[string]struct{}),
+		events: make(chan healthcheck.Event),
+	}
+}
+
 // Hook up gocheck into the "go test" runner.
 type EgressGatewayTestSuite struct {
 	manager     *Manager
 	policies    fakeResource[*Policy]
 	cacheStatus k8s.CacheStatus
+	healthcheck *healthcheckerMock
 }
 
 var _ = Suite(&EgressGatewayTestSuite{})
@@ -128,9 +182,11 @@ func (k *EgressGatewayTestSuite) SetUpSuite(c *C) {
 func (k *EgressGatewayTestSuite) SetUpTest(c *C) {
 	k.cacheStatus = make(k8s.CacheStatus)
 	k.policies = make(fakeResource[*Policy])
+	k.healthcheck = newHealthcheckerMock()
 
 	lc := hivetest.Lifecycle(c)
-	policyMap := egressmap.CreatePrivatePolicyMap(lc, egressmap.DefaultPolicyConfig)
+	policyMap := egressmapha.CreatePrivatePolicyMap(lc, egressmapha.DefaultPolicyConfig)
+	ctMap := egressmapha.CreatePrivateCtMap(lc)
 
 	var err error
 	k.manager, err = newEgressGatewayManager(Params{
@@ -140,19 +196,25 @@ func (k *EgressGatewayTestSuite) SetUpTest(c *C) {
 		CacheStatus:       k.cacheStatus,
 		IdentityAllocator: identityAllocator,
 		PolicyMap:         policyMap,
+		CtMap:             ctMap,
 		Policies:          k.policies,
+		Healthchecker:     k.healthcheck,
 	})
 	c.Assert(err, IsNil)
 	c.Assert(k.manager, NotNil)
 }
 
-func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
+func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	testInterface1Idx := createTestInterface(c, testInterface1, egressCIDR1)
 	testInterface2Idx := createTestInterface(c, testInterface2, egressCIDR2)
 
 	policyMap := k.manager.policyMap
 	egressGatewayManager := k.manager
-	assertIPRules(c, []ipRule{})
+
+	k.healthcheck.nodes = map[string]struct{}{
+		"k8s1": {},
+		"k8s2": {},
+	}
 
 	close(k.cacheStatus)
 	k.policies.sync(c)
@@ -163,12 +225,12 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	egressGatewayManager.OnUpdateNode(node1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
-	node2 := newCiliumNode(node2, node2IP, nodeGroup2Labels)
+	node2 := newCiliumNode(node2, node2IP, nodeGroup1Labels)
 	egressGatewayManager.OnUpdateNode(node2)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	// Create a new policy
-	policy1 := policyParams{
+	policy1 := &policyParams{
 		name:            "policy-1",
 		endpointLabels:  ep1Labels,
 		destinationCIDR: destCIDR,
@@ -176,25 +238,131 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 		iface:           testInterface1,
 	}
 
-	addPolicy(c, k.policies, &policy1)
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{})
 	assertIPRules(c, []ipRule{})
 
-	// Add a new endpoint & ID which matches policy-1
+	// Add a new endpoint which matches policy-1
 	ep1, id1 := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels)
 	egressGatewayManager.OnUpdateEndpoint(&ep1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
+
 	assertIPRules(c, []ipRule{
 		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
-	// Update the endpoint labels in order for it to not be a match
+	// Make k8s1 unhealthy
+	k.healthcheck.unhealthy("k8s1")
+	forceReconcile(k.manager, eventHealthcheck)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Remove k8s1 from node-group-1
+	node1.Labels = noNodeGroup
+	egressGatewayManager.OnUpdateNode(node1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, zeroIP4, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{})
+
+	// Add back node1
+	node1.Labels = nodeGroup1Labels
+	egressGatewayManager.OnUpdateNode(node1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// And make it healthy
+	k.healthcheck.healthy("k8s1")
+	forceReconcile(egressGatewayManager, eventHealthcheck)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Make k8s2 unhealthy
+	k.healthcheck.unhealthy("k8s2")
+	forceReconcile(egressGatewayManager, eventHealthcheck)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Remove k8s2 from node-group-1
+	node2.Labels = noNodeGroup
+	egressGatewayManager.OnUpdateNode(node2)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Add back k8s2
+	node2.Labels = nodeGroup1Labels
+	egressGatewayManager.OnUpdateNode(node2)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// And make it healthy
+	k.healthcheck.healthy("k8s2")
+	forceReconcile(egressGatewayManager, eventHealthcheck)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Update the EP labels in order for it to not be a match
 	id1 = updateEndpointAndIdentity(&ep1, id1, map[string]string{})
 	egressGatewayManager.OnUpdateEndpoint(&ep1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
@@ -202,14 +370,107 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	assertEgressRules(c, policyMap, []egressRule{})
 	assertIPRules(c, []ipRule{})
 
-	// Restore the old endpoint lables in order for it to be a match
+	// Add back the endpoint
 	id1 = updateEndpointAndIdentity(&ep1, id1, ep1Labels)
 	egressGatewayManager.OnUpdateEndpoint(&ep1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Update the policy group config to match node-group-2
+	policy1.nodeLabels = nodeGroup2Labels
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{})
+	assertIPRules(c, []ipRule{})
+
+	// Change it back to node-group-1
+	policy1.nodeLabels = nodeGroup1Labels
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Update the policy group config to allow at most 1 gateway at a time
+	policy1.maxGatewayNodes = 1
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Make k8s1 unhealthy
+	k.healthcheck.unhealthy("k8s1")
+	forceReconcile(egressGatewayManager, eventHealthcheck)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Remove k8s1 from node-group-1
+	node1.Labels = noNodeGroup
+	egressGatewayManager.OnUpdateNode(node1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, zeroIP4, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{})
+
+	// Add back node1
+	node1.Labels = nodeGroup1Labels
+	egressGatewayManager.OnUpdateNode(node1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	// And make it healthy
+	k.healthcheck.healthy("k8s1")
+	forceReconcile(egressGatewayManager, eventHealthcheck)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Clear the maxGatewayNodes policy property
+	policy1.maxGatewayNodes = 0
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
 	assertIPRules(c, []ipRule{
 		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
@@ -218,10 +479,12 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 	// the existing IP rules. Test that the manager is able to
 	// resolve this conflict.
 	policy1.destinationCIDR = allZeroDestCIDR
-	addPolicy(c, k.policies, &policy1)
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, allZeroDestCIDR, egressIP1, node1IP},
+		{ep1IP, allZeroDestCIDR, egressIP1, node2IP},
 	})
 	assertIPRules(c, []ipRule{
 		{ep1IP, allZeroDestCIDR, egressCIDR1, testInterface1Idx},
@@ -229,36 +492,56 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 
 	// Restore old DestCIDR
 	policy1.destinationCIDR = destCIDR
-	addPolicy(c, k.policies, &policy1)
+	addPolicy(c, k.policies, policy1)
 
 	// Create a new policy
-	addPolicy(c, k.policies, &policyParams{
+	policy2 := &policyParams{
 		name:            "policy-2",
 		endpointLabels:  ep2Labels,
 		destinationCIDR: destCIDR,
 		nodeLabels:      nodeGroup2Labels,
-		iface:           testInterface1,
-	})
+		iface:           testInterface2,
+	}
+	addPolicy(c, k.policies, policy2)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
+
 	assertIPRules(c, []ipRule{
 		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
-	// Add a new endpoint and ID which matches policy-2
-	ep2, _ := newEndpointAndIdentity("ep-2", ep2IP, ep2Labels)
+	// Add k8s1 to node-group-2 egress group
+	node1.Labels = nodeGroup12Labels
+	egressGatewayManager.OnUpdateNode(node1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// Add a new endpoint that matches policy-2
+	ep2, id2 := newEndpointAndIdentity("ep-2", ep2IP, ep2Labels)
 	egressGatewayManager.OnUpdateEndpoint(&ep2)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
-		{ep2IP, destCIDR, zeroIP4, node2IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
 	})
+
 	assertIPRules(c, []ipRule{
 		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
 	})
 
 	// Test if disabling the --install-egress-gateway-routes agent option
@@ -277,48 +560,37 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 
 	assertIPRules(c, []ipRule{
 		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
 	})
 
-	/* Changing the selected egress interface should update the IP rules. */
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
-		endpointLabels:  ep1Labels,
-		destinationCIDR: destCIDR,
-		nodeLabels:      nodeGroup1Labels,
-		iface:           testInterface2,
-	})
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR2, testInterface2Idx},
-	})
-
-	/* Restore the selected egress interface. */
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
-		endpointLabels:  ep1Labels,
-		destinationCIDR: destCIDR,
-		nodeLabels:      nodeGroup1Labels,
-		iface:           testInterface1,
-	})
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
-	// Test excluded CIDRs by adding one to policy-1
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
-		endpointLabels:  ep1Labels,
-		destinationCIDR: destCIDR,
-		excludedCIDRs:   []string{excludedCIDR1},
-		nodeLabels:      nodeGroup1Labels,
-		iface:           testInterface1,
-	})
+	// Add also k8s2 to node-group-2 egress group
+	node2.Labels = nodeGroup12Labels
+	egressGatewayManager.OnUpdateNode(node2)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+		{ep2IP, destCIDR, egressIP2, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
+	})
+
+	// Test excluded CIDRs by adding one to policy-1
+	policy1.excludedCIDRs = []string{excludedCIDR1}
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
 		{ep1IP, excludedCIDR1, egressIP1, gatewayExcludedCIDRValue},
-		{ep2IP, destCIDR, zeroIP4, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+		{ep2IP, destCIDR, egressIP2, node2IP},
 	})
 
 	// When an excluded CIDRs is specified, the manager will install
@@ -343,23 +615,22 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 		{ep1IP, "1.1.1.16/30", egressCIDR1, testInterface1Idx},
 		{ep1IP, "1.1.1.20/31", egressCIDR1, testInterface1Idx},
 		{ep1IP, "1.1.1.23/32", egressCIDR1, testInterface1Idx},
+
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
 	})
 
 	// Add a second excluded CIDR to policy-1
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
-		endpointLabels:  ep1Labels,
-		destinationCIDR: destCIDR,
-		excludedCIDRs:   []string{excludedCIDR1, excludedCIDR2},
-		nodeLabels:      nodeGroup1Labels,
-		iface:           testInterface1,
-	})
+	policy1.excludedCIDRs = []string{excludedCIDR1, excludedCIDR2}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
 		{ep1IP, excludedCIDR1, egressIP1, gatewayExcludedCIDRValue},
 		{ep1IP, excludedCIDR2, egressIP1, gatewayExcludedCIDRValue},
-		{ep2IP, destCIDR, zeroIP4, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+		{ep2IP, destCIDR, egressIP2, node2IP},
 	})
 
 	// $ for net in $(netcalc sub 1.1.1.0/24 1.1.1.22/32); do
@@ -390,22 +661,21 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 		{ep1IP, "1.1.1.224/28", egressCIDR1, testInterface1Idx},
 		{ep1IP, "1.1.1.244/30", egressCIDR1, testInterface1Idx},
 		{ep1IP, "1.1.1.248/29", egressCIDR1, testInterface1Idx},
+
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
 	})
 
 	// Remove the first excluded CIDR from policy-1
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
-		endpointLabels:  ep1Labels,
-		destinationCIDR: destCIDR,
-		excludedCIDRs:   []string{excludedCIDR2},
-		nodeLabels:      nodeGroup1Labels,
-		iface:           testInterface1,
-	})
+	policy1.excludedCIDRs = []string{excludedCIDR2}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
 		{ep1IP, excludedCIDR2, egressIP1, gatewayExcludedCIDRValue},
-		{ep2IP, destCIDR, zeroIP4, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+		{ep2IP, destCIDR, egressIP2, node2IP},
 	})
 
 	// $ netcalc sub 1.1.1.0/24 1.1.1.240/30
@@ -422,51 +692,425 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManager(c *C) {
 		{ep1IP, "1.1.1.224/28", egressCIDR1, testInterface1Idx},
 		{ep1IP, "1.1.1.244/30", egressCIDR1, testInterface1Idx},
 		{ep1IP, "1.1.1.248/29", egressCIDR1, testInterface1Idx},
+
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
 	})
 
 	// Remove the second excluded CIDR
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
-		endpointLabels:  ep1Labels,
-		destinationCIDR: destCIDR,
-		nodeLabels:      nodeGroup1Labels,
-		iface:           testInterface1,
-	})
+	policy1.excludedCIDRs = nil
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
-		{ep2IP, destCIDR, zeroIP4, node2IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+		{ep2IP, destCIDR, egressIP2, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
+	})
+
+	// Remove k8s1 from node-group-1 (but keep it in node-group-2)
+	node1.Labels = nodeGroup2Labels
+	egressGatewayManager.OnUpdateNode(node1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep1IP, destCIDR, zeroIP4, node2IP},
+		{ep2IP, destCIDR, egressIP2, node1IP},
+		{ep2IP, destCIDR, egressIP2, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
+	})
+
+	// Update the EP 1 labels in order for it to not be a match
+	_ = updateEndpointAndIdentity(&ep1, id1, map[string]string{})
+	egressGatewayManager.OnUpdateEndpoint(&ep1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{
+		{ep2IP, destCIDR, egressIP2, node1IP},
+		{ep2IP, destCIDR, egressIP2, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
+	})
+
+	// Update the EP 2 labels in order for it to not be a match
+	_ = updateEndpointAndIdentity(&ep2, id2, map[string]string{})
+	egressGatewayManager.OnUpdateEndpoint(&ep2)
+	waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, policyMap, []egressRule{})
+	assertIPRules(c, []ipRule{})
+}
+
+func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
+	testInterface1Idx := createTestInterface(c, testInterface1, egressCIDR1)
+
+	egressGatewayManager := k.manager
+
+	k.healthcheck.nodes = map[string]struct{}{
+		"k8s1": {},
+		"k8s2": {},
+	}
+
+	close(k.cacheStatus)
+	k.policies.sync(c)
+
+	reconciliationEventsCount := egressGatewayManager.reconciliationEventsCount
+
+	node1 := newCiliumNode(node1, node1IP, nodeGroup1Labels)
+	egressGatewayManager.OnUpdateNode(node1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	node2 := newCiliumNode(node2, node2IP, nodeGroup1Labels)
+	egressGatewayManager.OnUpdateNode(node2)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{})
+	assertIPRules(c, []ipRule{})
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	// Create a new HA policy based on a group config
+	policy1 := &policyParams{
+		name:            "policy-1",
+		endpointLabels:  ep1Labels,
+		destinationCIDR: destCIDR,
+		nodeLabels:      nodeGroup1Labels,
+		iface:           testInterface1,
+	}
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{})
+	assertIPRules(c, []ipRule{})
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	// Add a new endpoint which matches policy-1
+	ep1, _ := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels)
+	egressGatewayManager.OnUpdateEndpoint(&ep1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	/* Scenario:
+	 * 1. A gateway becomes unhealthy. Its CT entries should expire.
+	 */
+
+	// pretend that the endpoint also opened a connection via k8s2
+	insertEgressCtEntry(c, k.manager.ctMap, ep1IP, destIP, node2IP)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
 	assertIPRules(c, []ipRule{
 		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
-	// Test matching no gateway
-	addPolicy(c, k.policies, &policyParams{name: "policy-1",
-		endpointLabels:  ep1Labels,
-		destinationCIDR: destCIDR,
-		nodeLabels:      nodeGroupNotFoundLabels,
-		iface:           testInterface1,
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
+		{ep1IP, destIP, node2IP},
 	})
+
+	// Make k8s2 unhealthy
+	k.healthcheck.unhealthy("k8s2")
+	forceReconcile(egressGatewayManager, eventHealthcheck)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, zeroIP4, gatewayNotFoundValue},
-		{ep2IP, destCIDR, zeroIP4, node2IP},
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
 	})
 
-	assertIPRules(c, []ipRule{})
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
 
-	// Update the endpoint labels in order for it to not be a match
-	_ = updateEndpointAndIdentity(&ep1, id1, map[string]string{})
-	egressGatewayManager.OnUpdateEndpoint(&ep1)
+	// CT entry is gone:
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	// Make k8s2 healthy again
+	k.healthcheck.healthy("k8s2")
+	forceReconcile(egressGatewayManager, eventHealthcheck)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	/*
+	 * Scenario:
+	 * 1. A gateway is no longer selected by the policy's labels.
+	 *    Its CT entries should expire.
+	 */
+
+	// pretend that the endpoint also opened a connection via k8s2
+	insertEgressCtEntry(c, k.manager.ctMap, ep1IP, destIP, node2IP)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
+		{ep1IP, destIP, node2IP},
+	})
+
+	// Remove k8s2 from node-group-1
+	node2.Labels = noNodeGroup
+	egressGatewayManager.OnUpdateNode(node2)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// CT entry should now also be gone
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	// Add back k8s2
+	node2.Labels = nodeGroup1Labels
+	egressGatewayManager.OnUpdateNode(node2)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	/*
+	 * Scenario:
+	 * 1. De-activate a gateway that is used by an CT entry.
+	 *    (the CT entry should not expire, as the gateway is healthy and still selected by labels)
+	 * 2. Make the gateway unhealthy.
+	 *    (the CT entry should now expire)
+	 */
+
+	// pretend that the endpoint also opened a connection via k8s2
+	insertEgressCtEntry(c, k.manager.ctMap, ep1IP, destIP, node2IP)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
+		{ep1IP, destIP, node2IP},
+	})
+
+	// Update the policy group config to allow at most 1 gateway at a time (k8s1)
+	policy1.maxGatewayNodes = 1
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// CT entry should still exist, as k8s2 is healthy
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
+		{ep1IP, destIP, node2IP},
+	})
+
+	// Make k8s2 unhealthy
+	k.healthcheck.unhealthy("k8s2")
+	forceReconcile(egressGatewayManager, eventHealthcheck)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// CT entry should now also be gone
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	// Make k8s2 healthy again
+	k.healthcheck.healthy("k8s2")
+	forceReconcile(egressGatewayManager, eventHealthcheck)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	// Update the policy group config to allow all gateways again
+	policy1.maxGatewayNodes = 0
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	/*
+	 * Scenario:
+	 * 1. De-activate a gateway that is used by an CT entry.
+	 *    (the CT entry should not expire, as the gateway is healthy and still selected by labels)
+	 * 2. De-select the gateway from the policy
+	 *    (the CT entry should now expire)
+	 */
+
+	// pretend that the endpoint also opened a connection via k8s2
+	insertEgressCtEntry(c, k.manager.ctMap, ep1IP, destIP, node2IP)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
+		{ep1IP, destIP, node2IP},
+	})
+
+	// Update the policy group config to allow at most 1 gateway at a time (k8s1)
+	policy1.maxGatewayNodes = 1
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// CT entry should still exist, as k8s2 is healthy
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
+		{ep1IP, destIP, node2IP},
+	})
+
+	// Remove k8s2 from node-group-1
+	node2.Labels = noNodeGroup
+	egressGatewayManager.OnUpdateNode(node2)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	// CT entry should now also be gone
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	// Add back k8s2
+	node2.Labels = nodeGroup1Labels
+	egressGatewayManager.OnUpdateNode(node2)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	// Update the policy group config to allow all gateways again
+	policy1.maxGatewayNodes = 0
+	addPolicy(c, k.policies, policy1)
+	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertIPRules(c, []ipRule{
+		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
+	})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
+
+	/*
+	 * Scenario:
+	 * 1. A policy changes and a CT entry is now matched by an excluded CIDR
+	 *    (the CT entry should now expire)
+	 */
+
+	insertEgressCtEntry(c, k.manager.ctMap, ep1IP, destIP, node2IP)
+
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+	})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
+		{ep1IP, destIP, node2IP},
+	})
+
+	// Add the destination IP to the policy excluded CIDRs list
+	policy1.excludedCIDRs = []string{excludedCIDR3}
+	addPolicy(c, k.policies, policy1)
 	waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep2IP, destCIDR, zeroIP4, node2IP},
+	assertEgressRules(c, k.manager.policyMap, []egressRule{
+		{ep1IP, destCIDR, egressIP1, node1IP},
+		{ep1IP, destCIDR, egressIP1, node2IP},
+		{ep1IP, excludedCIDR3, egressIP1, gatewayExcludedCIDRValue},
 	})
-	assertIPRules(c, []ipRule{})
+
+	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 }
 
 func TestCell(t *testing.T) {
@@ -591,6 +1235,7 @@ func parseIPRule(sourceIP, destCIDR, egressIP string, ifaceIndex int) parsedIPRu
 }
 
 func assertIPRules(c *C, rules []ipRule) {
+	c.Helper()
 	err := tryAssertIPRules(rules)
 	c.Assert(err, IsNil)
 }
@@ -610,7 +1255,7 @@ nextRule:
 	for _, rule := range parsedRules {
 		for _, installedRule := range installedRules {
 			if rule.sourceIP.Equal(installedRule.Src.IP) && rule.destCIDR.String() == installedRule.Dst.String() &&
-				rule.ifaceIndex == installedRule.Table-linux_defaults.RouteTableEgressGatewayInterfacesOffset {
+				rule.ifaceIndex == installedRule.Table-linux_defaults.RouteTableEgressGatewayHAInterfacesOffset {
 
 				if err := tryAssertIPRoutes(rule.egressIP, rule.ifaceIndex); err != nil {
 					return err
@@ -627,7 +1272,7 @@ nextInstalledRule:
 	for _, installedRule := range installedRules {
 		for _, rule := range parsedRules {
 			if rule.sourceIP.Equal(installedRule.Src.IP) && rule.destCIDR.String() == installedRule.Dst.String() &&
-				rule.ifaceIndex == installedRule.Table-linux_defaults.RouteTableEgressGatewayInterfacesOffset {
+				rule.ifaceIndex == installedRule.Table-linux_defaults.RouteTableEgressGatewayHAInterfacesOffset {
 				continue nextInstalledRule
 			}
 		}
@@ -694,12 +1339,12 @@ func parseEgressRule(sourceIP, destCIDR, egressIP, gatewayIP string) parsedEgres
 	}
 }
 
-func assertEgressRules(c *C, policyMap egressmap.PolicyMap, rules []egressRule) {
+func assertEgressRules(c *C, policyMap egressmapha.PolicyMap, rules []egressRule) {
 	err := tryAssertEgressRules(policyMap, rules)
 	c.Assert(err, IsNil)
 }
 
-func tryAssertEgressRules(policyMap egressmap.PolicyMap, rules []egressRule) error {
+func tryAssertEgressRules(policyMap egressmapha.PolicyMap, rules []egressRule) error {
 	parsedRules := []parsedEgressRule{}
 	for _, r := range rules {
 		parsedRules = append(parsedRules, parseEgressRule(r.sourceIP, r.destCIDR, r.egressIP, r.gatewayIP))
@@ -712,30 +1357,156 @@ func tryAssertEgressRules(policyMap egressmap.PolicyMap, rules []egressRule) err
 		}
 
 		if !policyVal.GetEgressIP().Equal(r.egressIP) {
-			return fmt.Errorf("mismatched egress IP")
+			return fmt.Errorf("policy egress IP %s doesn't match rule egress IP %s", policyVal.GetEgressIP(), r.egressIP)
 		}
 
-		if !policyVal.GetGatewayIP().Equal(r.gatewayIP) {
-			return fmt.Errorf("mismatched gateway IP")
+		if r.gatewayIP.Equal(net.ParseIP(zeroIP4)) {
+			if policyVal.Size != 0 {
+				return fmt.Errorf("policy size is %d even though no gateway is set", policyVal.Size)
+			}
+		} else {
+			gwFound := false
+			for _, policyGatewayIP := range policyVal.GetGatewayIPs() {
+				if policyGatewayIP.Equal(r.gatewayIP) {
+					gwFound = true
+					break
+				}
+			}
+			if !gwFound {
+				return fmt.Errorf("missing gateway %s in policy", r.gatewayIP)
+			}
 		}
 	}
 
 	untrackedRule := false
 	policyMap.IterateWithCallback(
-		func(key *egressmap.EgressPolicyKey4, val *egressmap.EgressPolicyVal4) {
-			for _, r := range parsedRules {
-				if key.Match(r.sourceIP, &r.destCIDR) && val.Match(r.egressIP, r.gatewayIP) {
-					return
-				}
-			}
+		func(key *egressmapha.EgressPolicyKey4, val *egressmapha.EgressPolicyVal4) {
 
-			untrackedRule = true
-			return
-		})
+		nextPolicyGateway:
+			for _, gatewayIP := range val.GetGatewayIPs() {
+				for _, r := range parsedRules {
+					if key.Match(r.sourceIP, &r.destCIDR) {
+						if val.GetEgressIP().Equal(r.egressIP) && gatewayIP.Equal(r.gatewayIP) {
+							continue nextPolicyGateway
+						}
+					}
+				}
+
+				untrackedRule = true
+				return
+			}
+		},
+	)
 
 	if untrackedRule {
 		return fmt.Errorf("Untracked egress policy")
 	}
 
 	return nil
+}
+
+func parseEgressCtEntry(sourceIP, destIP, gatewayIP string) parsedEgressCtEntry {
+	sip := net.ParseIP(sourceIP)
+	if sip == nil {
+		panic("Invalid source IP")
+	}
+
+	dip := net.ParseIP(destIP)
+	if dip == nil {
+		panic("Invalid destination IP")
+	}
+
+	gip := net.ParseIP(gatewayIP)
+	if gip == nil {
+		panic("Invalid gateway IP")
+	}
+
+	return parsedEgressCtEntry{
+		sourceIP:  sip,
+		destIP:    dip,
+		gatewayIP: gip,
+	}
+}
+
+func assertEgressCtEntries(tb testing.TB, ctMap egressmapha.CtMap, entries []egressCtEntry) {
+	tb.Helper()
+
+	err := tryAssertEgressCtEntries(tb, ctMap, entries)
+	require.NoError(tb, err)
+}
+
+func tryAssertEgressCtEntries(tb testing.TB, ctMap egressmapha.CtMap, entries []egressCtEntry) error {
+	parsedEntries := []parsedEgressCtEntry{}
+	for _, e := range entries {
+		parsedEntries = append(parsedEntries, parseEgressCtEntry(e.sourceIP, e.destIP, e.gatewayIP))
+	}
+
+	for _, e := range parsedEntries {
+		var val egressmapha.EgressCtVal4
+
+		key := &egressmapha.EgressCtKey4{
+			TupleKey4: tuple.TupleKey4{
+				DestPort:   0,
+				SourcePort: 0,
+				NextHeader: u8proto.TCP,
+				Flags:      0,
+			},
+		}
+
+		copy(key.DestAddr[:], e.destIP.To4())
+		copy(key.SourceAddr[:], e.sourceIP.To4())
+
+		err := ctMap.Lookup(key, &val)
+		if err != nil {
+			return err
+		}
+
+		if !val.Gateway.IP().Equal(e.gatewayIP) {
+			return fmt.Errorf("%v doesn't match %v", val.Gateway.IP(), e.gatewayIP)
+		}
+	}
+
+	var err error
+	ctMap.IterateWithCallback(
+		func(key *egressmapha.EgressCtKey4, val *egressmapha.EgressCtVal4) {
+			for _, e := range parsedEntries {
+				if key.DestAddr.IP().Equal(e.destIP) && key.SourceAddr.IP().Equal(e.sourceIP) && val.Gateway.IP().Equal(e.gatewayIP) {
+					return
+				}
+			}
+
+			err = fmt.Errorf("untracked egress CT entry: from %v to %v via %v", key.SourceAddr.IP(), key.DestAddr.IP(), val.Gateway.IP())
+		})
+
+	return err
+}
+
+func insertEgressCtEntry(c *C, ctMap egressmapha.CtMap, sourceIP, destIP, gatewayIP string) {
+	entry := parseEgressCtEntry(sourceIP, destIP, gatewayIP)
+
+	key := &egressmapha.EgressCtKey4{
+		TupleKey4: tuple.TupleKey4{
+			DestPort:   0,
+			SourcePort: 0,
+			NextHeader: u8proto.TCP,
+			Flags:      0,
+		},
+	}
+
+	copy(key.DestAddr[:], entry.destIP.To4())
+	copy(key.SourceAddr[:], entry.sourceIP.To4())
+
+	val := &egressmapha.EgressCtVal4{}
+	copy(val.Gateway[:], entry.gatewayIP.To4())
+
+	err := ctMap.Update(key, val, 0)
+	c.Assert(err, IsNil)
+}
+
+func forceReconcile(manager *Manager, event eventType) {
+	manager.Lock()
+	defer manager.Unlock()
+
+	manager.setEventBitmap(event)
+	manager.reconcileLocked()
 }

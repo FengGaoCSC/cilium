@@ -8,57 +8,57 @@ import (
 	"net"
 	"unsafe"
 
+	"github.com/spf13/pflag"
+
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/maps/egressmap"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/types"
-
-	"github.com/spf13/pflag"
 )
 
 const (
-	PolicyMapName = "cilium_egress_gw_policy_v4"
+	PolicyMapName = "cilium_egress_gw_ha_policy_v4"
 	// PolicyStaticPrefixBits represents the size in bits of the static
 	// prefix part of an egress policy key (i.e. the source IP).
 	PolicyStaticPrefixBits = uint32(unsafe.Sizeof(types.IPv4{}) * 8)
+	MaxPolicyEntries       = 1 << 14
+
+	// This define must be kept in sync with EGRESS_GW_HA_MAX_GATEWAY_NODES in the datapath.
+	maxGatewayNodes = 64
 )
 
 // EgressPolicyKey4 is the key of an egress policy map.
-type EgressPolicyKey4 struct {
-	// PrefixLen is full 32 bits of SourceIP + DestCIDR's mask bits
-	PrefixLen uint32 `align:"lpm_key"`
-
-	SourceIP types.IPv4 `align:"saddr"`
-	DestCIDR types.IPv4 `align:"daddr"`
-}
+type EgressPolicyKey4 = egressmap.EgressPolicyKey4
 
 // EgressPolicyVal4 is the value of an egress policy map.
 type EgressPolicyVal4 struct {
-	EgressIP  types.IPv4 `align:"egress_ip"`
-	GatewayIP types.IPv4 `align:"gateway_ip"`
+	Size       uint32                      `align:"size"`
+	EgressIP   types.IPv4                  `align:"egress_ip"`
+	GatewayIPs [maxGatewayNodes]types.IPv4 `align:"gateway_ips"`
 }
 
 type PolicyConfig struct {
-	// EgressGatewayPolicyMapMax is the maximum number of entries
+	// EgressGatewayHAPolicyMapMax is the maximum number of entries
 	// allowed in the BPF egress gateway policy map.
-	EgressGatewayPolicyMapMax int
+	EgressGatewayHAPolicyMapMax int
 }
 
 var DefaultPolicyConfig = PolicyConfig{
-	EgressGatewayPolicyMapMax: 1 << 14,
+	EgressGatewayHAPolicyMapMax: 1 << 14,
 }
 
 func (def PolicyConfig) Flags(flags *pflag.FlagSet) {
-	flags.Int("egress-gateway-policy-map-max", def.EgressGatewayPolicyMapMax, "Maximum number of entries in egress gateway policy map")
+	flags.Int("egress-gateway-ha-policy-map-max", def.EgressGatewayHAPolicyMapMax, "Maximum number of entries in egress gatewa HA policy map")
 }
 
 // PolicyMap is used to communicate EGW policies to the datapath.
 type PolicyMap interface {
 	Lookup(sourceIP net.IP, destCIDR net.IPNet) (*EgressPolicyVal4, error)
-	Update(sourceIP net.IP, destCIDR net.IPNet, egressIP, gatewayIP net.IP) error
+	Update(sourceIP net.IP, destCIDR net.IPNet, egressIP net.IP, gatewayIPs []net.IP) error
 	Delete(sourceIP net.IP, destCIDR net.IPNet) error
 	IterateWithCallback(EgressPolicyIterateCallback) error
 }
@@ -81,11 +81,11 @@ func createPolicyMapFromDaemonConfig(in struct {
 	defines.NodeOut
 }) {
 	out.NodeDefines = map[string]string{
-		"EGRESS_POLICY_MAP":      PolicyMapName,
-		"EGRESS_POLICY_MAP_SIZE": fmt.Sprint(in.EgressGatewayPolicyMapMax),
+		"EGRESS_GW_HA_POLICY_MAP":      PolicyMapName,
+		"EGRESS_GW_HA_POLICY_MAP_SIZE": fmt.Sprint(in.EgressGatewayHAPolicyMapMax),
 	}
 
-	if !in.EnableIPv4EgressGateway {
+	if !in.EgressGatewayHAEnabled() {
 		return
 	}
 
@@ -106,7 +106,7 @@ func createPolicyMap(lc hive.Lifecycle, cfg PolicyConfig, pinning ebpf.PinType) 
 		Type:       ebpf.LPMTrie,
 		KeySize:    uint32(unsafe.Sizeof(EgressPolicyKey4{})),
 		ValueSize:  uint32(unsafe.Sizeof(EgressPolicyVal4{})),
-		MaxEntries: uint32(cfg.EgressGatewayPolicyMapMax),
+		MaxEntries: uint32(cfg.EgressGatewayHAPolicyMapMax),
 		Pinning:    pinning,
 	})
 
@@ -134,52 +134,42 @@ func OpenPinnedPolicyMap() (PolicyMap, error) {
 // NewEgressPolicyKey4 returns a new EgressPolicyKey4 object representing the
 // (source IP, destination CIDR) tuple.
 func NewEgressPolicyKey4(sourceIP, destIP net.IP, destinationMask net.IPMask) EgressPolicyKey4 {
-	key := EgressPolicyKey4{}
-
-	ones, _ := destinationMask.Size()
-	copy(key.SourceIP[:], sourceIP.To4())
-	copy(key.DestCIDR[:], destIP.To4())
-	key.PrefixLen = PolicyStaticPrefixBits + uint32(ones)
-
-	return key
+	return egressmap.NewEgressPolicyKey4(sourceIP, destIP, destinationMask)
 }
 
 // NewEgressPolicyVal4 returns a new EgressPolicyVal4 object representing for
 // the given egress IP and gateway IPs
-func NewEgressPolicyVal4(egressIP, gatewayIP net.IP) EgressPolicyVal4 {
-	val := EgressPolicyVal4{}
+func NewEgressPolicyVal4(egressIP net.IP, gatewayIPs []net.IP) EgressPolicyVal4 {
+	val := EgressPolicyVal4{
+		Size: uint32(len(gatewayIPs)),
+	}
 
 	copy(val.EgressIP[:], egressIP.To4())
-	copy(val.GatewayIP[:], gatewayIP.To4())
+	for i, gw := range gatewayIPs {
+		copy(val.GatewayIPs[i][:], gw.To4())
+	}
 
 	return val
 }
 
-// Match returns true if the sourceIP and destCIDR parameters match the egress
-// policy key.
-func (k *EgressPolicyKey4) Match(sourceIP net.IP, destCIDR *net.IPNet) bool {
-	return k.GetSourceIP().Equal(sourceIP) &&
-		k.GetDestCIDR().String() == destCIDR.String()
-}
-
-// GetSourceIP returns the egress policy key's source IP.
-func (k *EgressPolicyKey4) GetSourceIP() net.IP {
-	return k.SourceIP.IP()
-}
-
-// GetDestCIDR returns the egress policy key's destination CIDR.
-func (k *EgressPolicyKey4) GetDestCIDR() *net.IPNet {
-	return &net.IPNet{
-		IP:   k.DestCIDR.IP(),
-		Mask: net.CIDRMask(int(k.PrefixLen-PolicyStaticPrefixBits), 32),
-	}
-}
-
-// Match returns true if the egressIP and gatewayIP parameters match the egress
+// Match returns true if the egressIP and gatewayIPs parameters match the egress
 // policy value.
-func (v *EgressPolicyVal4) Match(egressIP, gatewayIP net.IP) bool {
-	return v.GetEgressIP().Equal(egressIP) &&
-		v.GetGatewayIP().Equal(gatewayIP)
+func (v *EgressPolicyVal4) Match(egressIP net.IP, gatewayIPs []net.IP) bool {
+	if !v.GetEgressIP().Equal(egressIP) {
+		return false
+	}
+
+	if v.Size != uint32(len(gatewayIPs)) {
+		return false
+	}
+
+	for i, gwIP := range v.GetGatewayIPs() {
+		if !gwIP.Equal(gatewayIPs[i]) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // GetEgressIP returns the egress policy value's egress IP.
@@ -187,14 +177,20 @@ func (v *EgressPolicyVal4) GetEgressIP() net.IP {
 	return v.EgressIP.IP()
 }
 
-// GetGatewayIP returns the egress policy value's gateway IP.
-func (v *EgressPolicyVal4) GetGatewayIP() net.IP {
-	return v.GatewayIP.IP()
+// GetGatewayIPs returns the egress policy value's gateway IP.
+func (v *EgressPolicyVal4) GetGatewayIPs() []net.IP {
+	gatewayIPs := []net.IP{}
+
+	for i := uint32(0); i < v.Size; i++ {
+		gatewayIPs = append(gatewayIPs, v.GatewayIPs[i].IP())
+	}
+
+	return gatewayIPs
 }
 
 // String returns the string representation of an egress policy value.
 func (v *EgressPolicyVal4) String() string {
-	return fmt.Sprintf("%s %s", v.GetGatewayIP(), v.GetEgressIP())
+	return fmt.Sprintf("%v %s", v.GetGatewayIPs(), v.GetEgressIP())
 }
 
 // Lookup returns the egress policy object associated with the provided (source
@@ -210,9 +206,9 @@ func (m *policyMap) Lookup(sourceIP net.IP, destCIDR net.IPNet) (*EgressPolicyVa
 
 // Update updates the (sourceIP, destCIDR) egress policy entry with the provided
 // egress and gateway IPs.
-func (m *policyMap) Update(sourceIP net.IP, destCIDR net.IPNet, egressIP, gatewayIP net.IP) error {
+func (m *policyMap) Update(sourceIP net.IP, destCIDR net.IPNet, egressIP net.IP, gatewayIPs []net.IP) error {
 	key := NewEgressPolicyKey4(sourceIP, destCIDR.IP, destCIDR.Mask)
-	val := NewEgressPolicyVal4(egressIP, gatewayIP)
+	val := NewEgressPolicyVal4(egressIP, gatewayIPs)
 
 	return m.m.Update(key, val, 0)
 }

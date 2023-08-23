@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 /* Copyright Authors of Cilium */
 
+#define HAVE_LPM_TRIE_MAP_TYPE
 #include "common.h"
 
 #include <bpf/ctx/skb.h>
@@ -15,7 +16,7 @@
 /* Enable code paths under test */
 #define ENABLE_IPV4
 #define ENABLE_NODEPORT
-#define ENABLE_EGRESS_GATEWAY
+#define ENABLE_EGRESS_GATEWAY_HA
 #define ENABLE_MASQUERADE_IPV4
 #define ENCAP_IFINDEX 0
 
@@ -24,6 +25,8 @@
 #include "bpf_lxc.c"
 
 #include "lib/egressgw.h"
+#include "lib/egressgw_ha.h"
+#include "lib/policy.h"
 
 #define FROM_CONTAINER 0
 
@@ -41,18 +44,18 @@ struct {
 /* Test that a packet matching an egress gateway policy on the from-container
  * program gets redirected to the gateway node.
  */
-PKTGEN("tc", "tc_egressgw_redirect")
-int egressgw_redirect_pktgen(struct __ctx_buff *ctx)
+PKTGEN("tc", "tc_egressgw_ha_redirect")
+int egressgw_ha_redirect_pktgen(struct __ctx_buff *ctx)
 {
 	return egressgw_pktgen(ctx, (struct egressgw_test_ctx) {
-			.test = TEST_REDIRECT,
+			.test = TEST_HA_REDIRECT,
 		});
 }
 
-SETUP("tc", "tc_egressgw_redirect")
-int egressgw_redirect_setup(struct __ctx_buff *ctx)
+SETUP("tc", "tc_egressgw_ha_redirect")
+int egressgw_ha_redirect_setup(struct __ctx_buff *ctx)
 {
-	add_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24, GATEWAY_NODE_IP, 0);
+	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24, 1, { GATEWAY_NODE_IP }, 0);
 
 	/* Avoid policy drop */
 	add_allow_all_egress_policy();
@@ -63,15 +66,15 @@ int egressgw_redirect_setup(struct __ctx_buff *ctx)
 	return TEST_ERROR;
 }
 
-CHECK("tc", "tc_egressgw_redirect")
-int egressgw_redirect_check(const struct __ctx_buff *ctx)
+CHECK("tc", "tc_egressgw_ha_redirect")
+int egressgw_ha_redirect_check(const struct __ctx_buff *ctx)
 {
 	int ret = egressgw_status_check(ctx, (struct egressgw_test_ctx) {
 			.status_code = TC_ACT_REDIRECT,
 	});
 
 	del_allow_all_egress_policy();
-	del_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24);
+	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24);
 
 	return ret;
 }
@@ -79,19 +82,19 @@ int egressgw_redirect_check(const struct __ctx_buff *ctx)
 /* Test that a packet matching an excluded CIDR egress gateway policy on the
  * from-container program does not get redirected to the gateway node.
  */
-PKTGEN("tc", "tc_egressgw_skip_excluded_cidr_redirect")
-int egressgw_skip_excluded_cidr_redirect_pktgen(struct __ctx_buff *ctx)
+PKTGEN("tc", "tc_egressgw_ha_skip_excluded_cidr_redirect")
+int egressgw_ha_skip_excluded_cidr_redirect_pktgen(struct __ctx_buff *ctx)
 {
 	return egressgw_pktgen(ctx, (struct egressgw_test_ctx) {
-			.test = TEST_REDIRECT_EXCL_CIDR,
+			.test = TEST_HA_REDIRECT_EXCL_CIDR,
 		});
 }
 
-SETUP("tc", "tc_egressgw_skip_excluded_cidr_redirect")
-int egressgw_skip_excluded_cidr_redirect_setup(struct __ctx_buff *ctx)
+SETUP("tc", "tc_egressgw_ha_skip_excluded_cidr_redirect")
+int egressgw_ha_skip_excluded_cidr_redirect_setup(struct __ctx_buff *ctx)
 {
-	add_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24, GATEWAY_NODE_IP, 0);
-	add_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32, EGRESS_GATEWAY_EXCLUDED_CIDR, 0);
+	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24, 1, { GATEWAY_NODE_IP }, 0);
+	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32, 1, { EGRESS_GATEWAY_EXCLUDED_CIDR }, 0);
 
 	/* Avoid policy drop */
 	add_allow_all_egress_policy();
@@ -102,16 +105,16 @@ int egressgw_skip_excluded_cidr_redirect_setup(struct __ctx_buff *ctx)
 	return TEST_ERROR;
 }
 
-CHECK("tc", "tc_egressgw_skip_excluded_cidr_redirect")
-int egressgw_skip_excluded_cidr_redirect_check(const struct __ctx_buff *ctx)
+CHECK("tc", "tc_egressgw_ha_skip_excluded_cidr_redirect")
+int egressgw_ha_skip_excluded_cidr_redirect_check(const struct __ctx_buff *ctx)
 {
 	int ret = egressgw_status_check(ctx, (struct egressgw_test_ctx) {
 			.status_code = TC_ACT_OK,
 	});
 
 	del_allow_all_egress_policy();
-	del_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24);
-	del_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32);
+	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP & 0xffffff, 24);
+	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32);
 
 	return ret;
 }
@@ -119,19 +122,19 @@ int egressgw_skip_excluded_cidr_redirect_check(const struct __ctx_buff *ctx)
 /* Test that a packet matching an egress gateway policy without a gateway on the
  * from-container program does not get redirected to the gateway node.
  */
-PKTGEN("tc", "tc_egressgw_skip_no_gateway_redirect")
+PKTGEN("tc", "tc_egressgw_ha_skip_no_gateway_redirect")
 int egressgw_skip_no_gateway_redirect_pktgen(struct __ctx_buff *ctx)
 {
 
 	return egressgw_pktgen(ctx, (struct egressgw_test_ctx) {
-			.test = TEST_REDIRECT_SKIP_NO_GATEWAY,
+			.test = TEST_HA_REDIRECT_SKIP_NO_GATEWAY,
 		});
 }
 
-SETUP("tc", "tc_egressgw_skip_no_gateway_redirect")
+SETUP("tc", "tc_egressgw_ha_skip_no_gateway_redirect")
 int egressgw_skip_no_gateway_redirect_setup(struct __ctx_buff *ctx)
 {
-	add_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32, EGRESS_GATEWAY_NO_GATEWAY, 0);
+	add_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32, 0, {}, 0);
 
 	/* Avoid policy drop */
 	add_allow_all_egress_policy();
@@ -142,8 +145,8 @@ int egressgw_skip_no_gateway_redirect_setup(struct __ctx_buff *ctx)
 	return TEST_ERROR;
 }
 
-CHECK("tc", "tc_egressgw_skip_no_gateway_redirect")
-int egressgw_skip_no_gateway_redirect_check(const struct __ctx_buff *ctx)
+CHECK("tc", "tc_egressgw_ha_skip_no_gateway_redirect")
+int egressgw_ha_skip_no_gateway_redirect_check(const struct __ctx_buff *ctx)
 {
 	struct metrics_value *entry = NULL;
 	struct metrics_key key = {};
@@ -164,7 +167,7 @@ int egressgw_skip_no_gateway_redirect_check(const struct __ctx_buff *ctx)
 	assert(entry->count == 1);
 
 	del_allow_all_egress_policy();
-	del_egressgw_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32);
+	del_egressgw_ha_policy_entry(CLIENT_IP, EXTERNAL_SVC_IP, 32);
 
 	test_finish();
 }

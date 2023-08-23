@@ -9,12 +9,11 @@ import (
 	"github.com/cilium/cilium/cilium/cmd"
 )
 
-// BPFEgressCmd represents the bpf command
-var BPFEgressCmd = &cobra.Command{
-	Use:   "egress",
-	Short: "Manage the egress routing rules",
+var bpfEgressCmd = &cobra.Command{
+	Use:   "egress-ha",
+	Short: "Manage the egress gateway HA rules",
 }
 
 func init() {
-	cmd.BPFCmd.AddCommand(BPFEgressCmd)
+	cmd.BPFCmd.AddCommand(bpfEgressCmd)
 }

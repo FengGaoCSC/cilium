@@ -3,11 +3,14 @@
 
 package egressmapha
 
-import "github.com/cilium/cilium/pkg/hive/cell"
+import (
+	"github.com/cilium/cilium/pkg/hive/cell"
+)
 
 var Cell = cell.Module(
-	"egressmaps",
-	"Egressmaps provide access to the egress gateway datapath maps",
+	"egressmhaaps",
+	"Egresshamaps provide access to the egress gateway HA datapath maps",
 	cell.Config(DefaultPolicyConfig),
 	cell.Provide(createPolicyMapFromDaemonConfig),
+	cell.Provide(createCtMapFromDaemonConfig),
 )

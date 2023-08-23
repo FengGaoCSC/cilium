@@ -1,5 +1,12 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright Authors of Cilium
+//  Copyright (C) Isovalent, Inc. - All Rights Reserved.
+//
+//  NOTICE: All information contained herein is, and remains the property of
+//  Isovalent Inc and its suppliers, if any. The intellectual and technical
+//  concepts contained herein are proprietary to Isovalent Inc and its suppliers
+//  and may be covered by U.S. and Foreign Patents, patents in process, and are
+//  protected by trade secret or copyright law.  Dissemination of this information
+//  or reproduction of this material is strictly forbidden unless prior written
+//  permission is obtained from Isovalent Inc.
 
 package egressgatewayha
 
@@ -21,12 +28,15 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
+	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/identity"
 	identityCache "github.com/cilium/cilium/pkg/identity/cache"
+	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
@@ -34,7 +44,6 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	"github.com/cilium/cilium/pkg/maps/egressmap"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/trigger"
@@ -64,6 +73,7 @@ type eventType int
 const (
 	eventNone = eventType(1 << iota)
 	eventK8sSyncDone
+	eventHealthcheck
 	eventAddPolicy
 	eventDeletePolicy
 	eventUpdateNode
@@ -75,21 +85,21 @@ const (
 type Config struct {
 	// Install egress gateway IP rules and routes in order to properly steer
 	// egress gateway traffic to the correct ENI interface
-	InstallEgressGatewayRoutes bool
+	InstallEgressGatewayHARoutes bool
 
 	// Default amount of time between triggers of egress gateway state
 	// reconciliations are invoked
-	EgressGatewayReconciliationTriggerInterval time.Duration
+	EgressGatewayHAReconciliationTriggerInterval time.Duration
 }
 
 var defaultConfig = Config{
-	InstallEgressGatewayRoutes:                 false,
-	EgressGatewayReconciliationTriggerInterval: 1 * time.Second,
+	InstallEgressGatewayHARoutes:                 false,
+	EgressGatewayHAReconciliationTriggerInterval: 1 * time.Second,
 }
 
 func (def Config) Flags(flags *pflag.FlagSet) {
-	flags.Bool("install-egress-gateway-routes", def.InstallEgressGatewayRoutes, "Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface")
-	flags.Duration("egress-gateway-reconciliation-trigger-interval", def.EgressGatewayReconciliationTriggerInterval, "Time between triggers of egress gateway state reconciliations")
+	flags.Bool("install-egress-gateway-ha-routes", def.InstallEgressGatewayHARoutes, "Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface")
+	flags.Duration("egress-gateway-ha-reconciliation-trigger-interval", def.EgressGatewayHAReconciliationTriggerInterval, "Time between triggers of egress gateway state reconciliations")
 }
 
 // The egressgateway manager stores the internal data tracking the node, policy,
@@ -104,6 +114,9 @@ type Manager struct {
 
 	// nodeDataStore stores node name to node mapping
 	nodeDataStore map[string]nodeTypes.Node
+
+	// gatewayNodeDatatStore stores all nodes that are acting as a gateway
+	gatewayNodeDataStore map[string]nodeTypes.Node
 
 	// nodes stores nodes sorted by their name
 	nodes []nodeTypes.Node
@@ -145,7 +158,10 @@ type Manager struct {
 	installRoutes bool
 
 	// policyMap communicates the active policies to the dapath.
-	policyMap egressmap.PolicyMap
+	policyMap egressmapha.PolicyMap
+
+	// ctMap stores EGW specific conntrack entries.
+	ctMap egressmapha.CtMap
 
 	// reconciliationTriggerInterval is the amount of time between triggers
 	// of reconciliations are invoked
@@ -164,6 +180,8 @@ type Manager struct {
 	// reconciliationEventsCount keeps track of how many reconciliation
 	// events have occoured
 	reconciliationEventsCount uint64
+
+	healthchecker healthcheck.Healthchecker
 }
 
 type Params struct {
@@ -173,8 +191,10 @@ type Params struct {
 	DaemonConfig      *option.DaemonConfig
 	CacheStatus       k8s.CacheStatus
 	IdentityAllocator identityCache.IdentityAllocator
-	PolicyMap         egressmap.PolicyMap
+	PolicyMap         egressmapha.PolicyMap
 	Policies          resource.Resource[*Policy]
+	CtMap             egressmapha.CtMap
+	Healthchecker     healthcheck.Healthchecker
 
 	Lifecycle hive.Lifecycle
 }
@@ -187,7 +207,7 @@ func NewEgressGatewayManager(p Params) (out struct {
 }, err error) {
 	dcfg := p.DaemonConfig
 
-	if !dcfg.EnableIPv4EgressGateway {
+	if !dcfg.EgressGatewayHAEnabled() {
 		return out, nil
 	}
 
@@ -215,13 +235,17 @@ func NewEgressGatewayManager(p Params) (out struct {
 				"if the same endpoint is selected both by an egress gateway and a L7 policy, endpoint traffic will not go through egress gateway.", option.EnableL7Proxy)
 	}
 
+	if !p.DaemonConfig.HealthCheckingEnabled() {
+		return out, fmt.Errorf("egress gateway HA requires healthchecking to be enabled")
+	}
+
 	out.Manager, err = newEgressGatewayManager(p)
 	if err != nil {
 		return out, err
 	}
 
 	out.NodeDefines = map[string]string{
-		"ENABLE_EGRESS_GATEWAY": "1",
+		"ENABLE_EGRESS_GATEWAY_HA": "1",
 	}
 
 	return out, nil
@@ -243,15 +267,17 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 		pendingEndpointEvents:         make(map[endpointID]*k8sTypes.CiliumEndpoint),
 		endpointEventsQueue:           endpointEventRetryQueue,
 		identityAllocator:             p.IdentityAllocator,
-		installRoutes:                 p.Config.InstallEgressGatewayRoutes,
-		reconciliationTriggerInterval: p.Config.EgressGatewayReconciliationTriggerInterval,
+		installRoutes:                 p.Config.InstallEgressGatewayHARoutes,
+		reconciliationTriggerInterval: p.Config.EgressGatewayHAReconciliationTriggerInterval,
 		policyMap:                     p.PolicyMap,
 		policies:                      p.Policies,
+		ctMap:                         p.CtMap,
+		healthchecker:                 p.Healthchecker,
 	}
 
 	t, err := trigger.NewTrigger(trigger.Parameters{
-		Name:        "egress_gateway_reconciliation",
-		MinInterval: p.Config.EgressGatewayReconciliationTriggerInterval,
+		Name:        "egress_gateway_ha_reconciliation",
+		MinInterval: p.Config.EgressGatewayHAReconciliationTriggerInterval,
 		TriggerFunc: func(reasons []string) {
 			reason := strings.Join(reasons, ", ")
 			log.WithField(logfields.Reason, reason).Debug("reconciliation triggered")
@@ -279,6 +305,8 @@ func newEgressGatewayManager(p Params) (*Manager, error) {
 
 			go manager.processEvents(ctx, p.CacheStatus)
 			manager.processCiliumEndpoints(ctx, &wg)
+			manager.startHealthcheckingLoop()
+
 			return nil
 		},
 		OnStop: func(hc hive.HookContext) error {
@@ -433,16 +461,30 @@ func (manager *Manager) processCiliumEndpoints(ctx context.Context, wg *sync.Wai
 	}()
 }
 
+// startHealthcheckingLoop spawns a goroutine that periodically checks if the
+// health status of any node has changed, and when that's the case, it re runs
+// the reconciliation.
+func (manager *Manager) startHealthcheckingLoop() {
+	go func() {
+		for range manager.healthchecker.Events() {
+			manager.Lock()
+			manager.setEventBitmap(eventHealthcheck)
+			manager.reconciliationTrigger.TriggerWithReason("healthcheck update")
+			manager.Unlock()
+		}
+	}()
+}
+
 // Event handlers
 
 // onAddEgressPolicy parses the given policy config, and updates internal state
 // with the config fields.
 func (manager *Manager) onAddEgressPolicy(policy *Policy) error {
-	logger := log.WithField(logfields.CiliumEgressGatewayPolicyName, policy.Name)
+	logger := log.WithField(logfields.IsovalentEgressGatewayPolicyName, policy.Name)
 
-	config, err := ParseCEGP(policy)
+	config, err := ParseIEGP(policy)
 	if err != nil {
-		logger.WithError(err).Warn("Failed to parse CiliumEgressGatewayPolicy")
+		logger.WithError(err).Warn("Failed to parse IsovalentEgressGatewayPolicy")
 		return err
 	}
 
@@ -450,9 +492,9 @@ func (manager *Manager) onAddEgressPolicy(policy *Policy) error {
 	defer manager.Unlock()
 
 	if _, ok := manager.policyConfigs[config.id]; !ok {
-		logger.Debug("Added CiliumEgressGatewayPolicy")
+		logger.Debug("Added IsovalentEgressGatewayPolicy")
 	} else {
-		logger.Debug("Updated CiliumEgressGatewayPolicy")
+		logger.Debug("Updated IsovalentEgressGatewayPolicy")
 	}
 
 	config.updateMatchedEndpointIDs(manager.epDataStore)
@@ -467,18 +509,18 @@ func (manager *Manager) onAddEgressPolicy(policy *Policy) error {
 // onDeleteEgressPolicy deletes the internal state associated with the given
 // policy, including egress eBPF map entries.
 func (manager *Manager) onDeleteEgressPolicy(policy *Policy) {
-	configID := ParseCEGPConfigID(policy)
+	configID := ParseIEGPConfigID(policy)
 
 	manager.Lock()
 	defer manager.Unlock()
 
-	logger := log.WithField(logfields.CiliumEgressGatewayPolicyName, configID.Name)
+	logger := log.WithField(logfields.IsovalentEgressGatewayPolicyName, configID.Name)
 
 	if manager.policyConfigs[configID] == nil {
-		logger.Warn("Can't delete CiliumEgressGatewayPolicy: policy not found")
+		logger.Warn("Can't delete IsovalentEgressGatewayPolicy: policy not found")
 	}
 
-	logger.Debug("Deleted CiliumEgressGatewayPolicy")
+	logger.Debug("Deleted IsovalentEgressGatewayPolicy")
 
 	delete(manager.policyConfigs, configID)
 
@@ -624,6 +666,26 @@ func (manager *Manager) updatePoliciesBySourceIP() {
 	}
 }
 
+func (manager *Manager) nodeIsHealthy(nodeName string) bool {
+	return manager.healthchecker.NodeIsHealthy(nodeName)
+}
+
+func (manager *Manager) regenerateGatewayNodesList() {
+	nodes := map[string]nodeTypes.Node{}
+
+	for _, policyConfig := range manager.policyConfigs {
+		for _, gc := range policyConfig.groupConfigs {
+			for _, n := range manager.nodes {
+				if gc.selectsNodeAsGateway(n) {
+					nodes[n.Name] = n
+				}
+			}
+		}
+	}
+
+	manager.gatewayNodeDataStore = nodes
+}
+
 // policyMatches returns true if there exists at least one policy matching the
 // given parameters.
 //
@@ -665,7 +727,6 @@ func (manager *Manager) policyMatches(sourceIP net.IP, f func(net.IP, *net.IPNet
 			}
 		}
 	}
-
 	return false
 }
 
@@ -740,9 +801,9 @@ func (manager *Manager) regenerateGatewayConfigs() {
 		}
 
 		log.WithFields(logrus.Fields{
-			logfields.CiliumEgressGatewayPolicyName: policyConfig.id,
-			logfields.Interface:                     policyConfig.policyGwConfig.iface,
-			logfields.EgressIP:                      policyConfig.policyGwConfig.egressIP,
+			logfields.IsovalentEgressGatewayPolicyName: policyConfig.id,
+			logfields.Interface:                        policyConfig.gatewayConfig.ifaceName,
+			logfields.EgressIP:                         policyConfig.gatewayConfig.egressIP,
 		}).Errorf("Conflict with policy %s: Selects the same egress interface but uses a different egress IP (%s).", currentPolicy.id, currentEgressIP.String())
 	}
 }
@@ -911,22 +972,22 @@ nextIpRule:
 }
 
 func (manager *Manager) addMissingEgressRules() {
-	egressPolicies := map[egressmap.EgressPolicyKey4]egressmap.EgressPolicyVal4{}
+	egressPolicies := map[egressmapha.EgressPolicyKey4]egressmapha.EgressPolicyVal4{}
 	manager.policyMap.IterateWithCallback(
-		func(key *egressmap.EgressPolicyKey4, val *egressmap.EgressPolicyVal4) {
+		func(key *egressmapha.EgressPolicyKey4, val *egressmapha.EgressPolicyVal4) {
 			egressPolicies[*key] = *val
 		})
 
 	addEgressRule := func(endpointIP net.IP, dstCIDR *net.IPNet, excludedCIDR bool, gwc *gatewayConfig) {
-		policyKey := egressmap.NewEgressPolicyKey4(endpointIP, dstCIDR.IP, dstCIDR.Mask)
+		policyKey := egressmapha.NewEgressPolicyKey4(endpointIP, dstCIDR.IP, dstCIDR.Mask)
 		policyVal, policyPresent := egressPolicies[policyKey]
 
-		gatewayIP := gwc.gatewayIP
+		activeGatewayIPs := gwc.activeGatewayIPs
 		if excludedCIDR {
-			gatewayIP = ExcludedCIDRIPv4
+			activeGatewayIPs = []net.IP{ExcludedCIDRIPv4}
 		}
 
-		if policyPresent && policyVal.Match(gwc.egressIP.IP, gatewayIP) {
+		if policyPresent && policyVal.Match(gwc.egressIP.IP, activeGatewayIPs) {
 			return
 		}
 
@@ -934,10 +995,10 @@ func (manager *Manager) addMissingEgressRules() {
 			logfields.SourceIP:        endpointIP,
 			logfields.DestinationCIDR: dstCIDR.String(),
 			logfields.EgressIP:        gwc.egressIP.IP,
-			logfields.GatewayIP:       gatewayIP,
+			logfields.GatewayIPs:      joinStringers(activeGatewayIPs, ","),
 		})
 
-		if err := manager.policyMap.Update(endpointIP, *dstCIDR, gwc.egressIP.IP, gatewayIP); err != nil {
+		if err := egressmapha.ApplyEgressPolicy(manager.policyMap, endpointIP, *dstCIDR, gwc.egressIP.IP, activeGatewayIPs); err != nil {
 			logger.WithError(err).Error("Error applying egress gateway policy")
 		} else {
 			logger.Debug("Egress gateway policy applied")
@@ -950,23 +1011,23 @@ func (manager *Manager) addMissingEgressRules() {
 }
 
 // removeUnusedEgressRules is responsible for removing any entry in the egress policy BPF map which
-// is not baked by an actual k8s CiliumEgressGatewayPolicy.
+// is not baked by an actual k8s IsovalentEgressGatewayPolicy.
 func (manager *Manager) removeUnusedEgressRules() {
-	egressPolicies := map[egressmap.EgressPolicyKey4]egressmap.EgressPolicyVal4{}
+	egressPolicies := map[egressmapha.EgressPolicyKey4]egressmapha.EgressPolicyVal4{}
 	manager.policyMap.IterateWithCallback(
-		func(key *egressmap.EgressPolicyKey4, val *egressmap.EgressPolicyVal4) {
+		func(key *egressmapha.EgressPolicyKey4, val *egressmapha.EgressPolicyVal4) {
 			egressPolicies[*key] = *val
 		})
 
 nextPolicyKey:
 	for policyKey, policyVal := range egressPolicies {
 		matchPolicy := func(endpointIP net.IP, dstCIDR *net.IPNet, excludedCIDR bool, gwc *gatewayConfig) bool {
-			gatewayIP := gwc.gatewayIP
+			activeGatewayIPs := gwc.activeGatewayIPs
 			if excludedCIDR {
-				gatewayIP = ExcludedCIDRIPv4
+				activeGatewayIPs = []net.IP{ExcludedCIDRIPv4}
 			}
 
-			return policyKey.Match(endpointIP, dstCIDR) && policyVal.Match(gwc.egressIP.IP, gatewayIP)
+			return policyKey.Match(endpointIP, dstCIDR) && policyVal.Match(gwc.egressIP.IP, activeGatewayIPs)
 		}
 
 		if manager.policyMatches(policyKey.SourceIP.IP(), matchPolicy) {
@@ -977,13 +1038,66 @@ nextPolicyKey:
 			logfields.SourceIP:        policyKey.GetSourceIP(),
 			logfields.DestinationCIDR: policyKey.GetDestCIDR().String(),
 			logfields.EgressIP:        policyVal.GetEgressIP(),
-			logfields.GatewayIP:       policyVal.GetGatewayIP(),
+			logfields.GatewayIPs:      joinStringers(policyVal.GetGatewayIPs(), ","),
 		})
 
-		if err := manager.policyMap.Delete(policyKey.GetSourceIP(), *policyKey.GetDestCIDR()); err != nil {
+		if err := egressmapha.RemoveEgressPolicy(manager.policyMap, policyKey.GetSourceIP(), *policyKey.GetDestCIDR()); err != nil {
 			logger.WithError(err).Error("Error removing egress gateway policy")
 		} else {
 			logger.Debug("Egress gateway policy removed")
+		}
+	}
+}
+
+func (manager *Manager) removeExpiredCtEntries() {
+	ctEntries := map[egressmapha.EgressCtKey4]egressmapha.EgressCtVal4{}
+	manager.ctMap.IterateWithCallback(
+		func(key *egressmapha.EgressCtKey4, val *egressmapha.EgressCtVal4) {
+			ctEntries[*key] = *val
+		})
+
+	policyMatchesCtEntry := func(policy *PolicyConfig, ctKey *egressmapha.EgressCtKey4, ctVal *egressmapha.EgressCtVal4) bool {
+	nextDstCIDR:
+		for _, dstCIDR := range policy.dstCIDRs {
+			if !dstCIDR.Contains(ctKey.DestAddr.IP()) {
+				continue
+			}
+
+			for _, excludedCIDR := range policy.excludedCIDRs {
+				if excludedCIDR.Contains(ctKey.DestAddr.IP()) {
+					continue nextDstCIDR
+				}
+			}
+
+			// no need to check also endpointIP.Equal(endpointIP) as we are iterating
+			// over the slice of policies returned by the
+			// policyConfigsBySourceIP[ipRule.Src.IP.String()] map
+			if ip.ListContainsIP(policy.gatewayConfig.healthyGatewayIPs, ctVal.Gateway.IP()) {
+				return true
+			}
+		}
+
+		return false
+	}
+
+nextCtKey:
+	for ctKey, ctVal := range ctEntries {
+		for _, policyConfig := range manager.policyConfigsBySourceIP[ctKey.SourceAddr.IP().String()] {
+			if policyMatchesCtEntry(policyConfig, &ctKey, &ctVal) {
+				continue nextCtKey
+			}
+		}
+
+		logger := log.WithFields(logrus.Fields{
+			// TODO log the whole ctKey
+			logfields.SourceIP:  ctKey.SourceAddr.IP(),
+			logfields.GatewayIP: ctVal.Gateway.IP(),
+		})
+
+		if err := manager.ctMap.Delete(&ctKey); err != nil {
+			logger.WithError(err).Error("Error removing egress gateway CT entry")
+		} else {
+			logger.Debug("Egress gateway CT entry removed")
 		}
 	}
 }
@@ -1009,6 +1123,9 @@ func (manager *Manager) reconcileLocked() {
 		manager.updatePoliciesBySourceIP()
 	}
 
+	manager.regenerateGatewayNodesList()
+	manager.healthchecker.UpdateNodeList(manager.gatewayNodeDataStore)
+
 	manager.regenerateGatewayConfigs()
 
 	shouldRetry := manager.addMissingIpRulesAndRoutes(false)
@@ -1025,6 +1142,10 @@ func (manager *Manager) reconcileLocked() {
 
 	// clear the events bitmap
 	manager.eventsBitmap = 0
+
+	// Remove stale CT entries. We keep entries that point at an inactive Gateway node,
+	// as long as the node is healthy.
+	manager.removeExpiredCtEntries()
 
 	manager.reconciliationEventsCount += 1
 }
