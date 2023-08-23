@@ -141,7 +141,7 @@ func NewExportSRv6LocatorPoolReconciler(params exportSRv6LocatorPoolReconcilerPa
 			sm.Subscribe(exportSRv6LocatorPoolReconcilerName, &sidManagerWatcher{
 				logger:   params.Logger,
 				signaler: params.Signaler,
-			})
+			}, func() {})
 
 			// Wait for the initial sync of locator pool store
 			lps, err := params.LocatorPoolResource.Store(ctx)

@@ -46,7 +46,7 @@ func (fsm *fakeSIDManager) ManageSID(poolName string, fn func(allocator sidmanag
 	return nil
 }
 
-func (fsm *fakeSIDManager) Subscribe(subscriberName string, subscriber sidmanager.SIDManagerSubscriber) {
+func (fsm *fakeSIDManager) Subscribe(subscriberName string, subscriber sidmanager.SIDManagerSubscriber, done func()) {
 	return
 }
 

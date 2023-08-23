@@ -622,7 +622,7 @@ func TestSIDManager(t *testing.T) {
 		})
 
 		subscriber := fakeSubscriber{}
-		manager.Subscribe("fakeSubscriber", &subscriber)
+		manager.Subscribe("fakeSubscriber", &subscriber, func() {})
 
 		t.Run("InitialAdd", func(t *testing.T) {
 			defer subscriber.Reset()

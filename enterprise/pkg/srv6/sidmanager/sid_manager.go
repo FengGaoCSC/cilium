@@ -73,8 +73,10 @@ type SIDManager interface {
 	// pool with given poolName. When it registers for the first time, it
 	// iterates over all available pools and calls OnAddLocator callback.
 	// The modifications made for the allocator within the callbacks are
-	// eventually synchronized to the k8s resource state.
-	Subscribe(subscriberName string, subscriber SIDManagerSubscriber)
+	// eventually synchronized to the k8s resource state. The done function
+	// is called after all initial callbacks are called, but before any
+	// further On*Locator callbacks. Note that you can't call ManageSID
+	Subscribe(subscriberName string, subscriber SIDManagerSubscriber, done func())
 }
 
 type SIDManagerSubscriber interface {
@@ -195,7 +197,7 @@ func (m *sidManager) ManageSID(poolName string, fn func(allocator SIDAllocator) 
 	return nil
 }
 
-func (m *sidManager) Subscribe(subscriberName string, subscriber SIDManagerSubscriber) {
+func (m *sidManager) Subscribe(subscriberName string, subscriber SIDManagerSubscriber, done func()) {
 	m.subscribersLock.Lock()
 	if _, ok := m.subscribers[subscriberName]; ok {
 		// Already subscribed
@@ -211,6 +213,9 @@ func (m *sidManager) Subscribe(subscriberName string, subscriber SIDManagerSubsc
 	for poolName, allocator := range m.allocators {
 		subscriber.OnAddLocator(poolName, allocator)
 	}
+
+	// Let caller to handle initial sync done
+	done()
 
 	if len(m.allocators) != 0 {
 		// Subscriber may change allocation state in above OnAddLocator
