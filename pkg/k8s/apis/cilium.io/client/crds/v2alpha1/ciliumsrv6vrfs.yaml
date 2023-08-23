@@ -52,6 +52,10 @@ spec:
                   VRF. It is optional and, if specified, will be used by the BGP manager
                   to know in which VRF to install received routes.
                 type: string
+              locatorPoolRef:
+                description: LocatorPoolRef specifies a name of the locator pool that
+                  the SRv6 SID for this VRF will be allocated from.
+                type: string
               rules:
                 description: Rules describes what traffic is assigned to the VRF.
                   Egress packets are matched against these rules to know to in which
