@@ -88,6 +88,18 @@ type IsovalentSRv6Locator struct {
 	//
 	// +kubebuilder:validation:Required
 	Structure IsovalentSRv6SIDStructure `json:"structure"`
+
+	// BehaviorType specifies the type of the behavior of SID allocated
+	// from this locator. At the moment, only "Base" and "uSID" are
+	// supported. "Base" flavor binds allocated SIDs to base behaviors
+	// (like End.DT4). "uSID" flavor binds allocated SIDs to the behaviors
+	// for uSID (like uDT4) as described in the
+	// draft-filsfils-spring-net-pgm-extension-srv6-usid
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=Base;uSID
+	// +kubebuilder:default=Base
+	BehaviorType string `json:"behaviorType"`
 }
 
 type IsovalentSRv6SIDAllocation struct {
@@ -214,4 +226,16 @@ type IsovalentSRv6LocatorPoolSpec struct {
 	//
 	// +kubebuilder:validation:Required
 	Structure IsovalentSRv6SIDStructure `json:"structure"`
+
+	// BehaviorType specifies the type of the behavior of SID allocated
+	// from this locator. At the moment, only "Base" and "uSID" are
+	// supported. "Base" flavor binds allocated SIDs to base behaviors
+	// (like End.DT4). "uSID" flavor binds allocated SIDs to the behaviors
+	// for uSID (like uDT4) as described in the
+	// draft-filsfils-spring-net-pgm-extension-srv6-usid
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=Base;uSID
+	// +kubebuilder:default=Base
+	BehaviorType string `json:"behaviorType"`
 }

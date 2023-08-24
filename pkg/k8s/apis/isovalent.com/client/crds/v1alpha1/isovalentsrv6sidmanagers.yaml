@@ -50,6 +50,18 @@ spec:
                         pool
                       items:
                         properties:
+                          behaviorType:
+                            default: Base
+                            description: BehaviorType specifies the type of the behavior
+                              of SID allocated from this locator. At the moment, only
+                              "Base" and "uSID" are supported. "Base" flavor binds
+                              allocated SIDs to base behaviors (like End.DT4). "uSID"
+                              flavor binds allocated SIDs to the behaviors for uSID
+                              (like uDT4) as described in the draft-filsfils-spring-net-pgm-extension-srv6-usid
+                            enum:
+                            - Base
+                            - uSID
+                            type: string
                           prefix:
                             description: Prefix is a locator prefix.
                             pattern: ^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))/([0-9]|[0-9][0-9]|1[0-1][0-9]|12[0-8])$
@@ -87,6 +99,7 @@ spec:
                             - locatorNodeLenBits
                             type: object
                         required:
+                        - behaviorType
                         - prefix
                         - structure
                         type: object
