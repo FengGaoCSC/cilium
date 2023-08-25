@@ -91,6 +91,32 @@ func mapVRFToVPNv4Paths(podCIDRs []*net.IPNet, vrf *srv6.VRF) ([]*types.Path, er
 
 	medAttr := bgp.NewPathAttributeMultiExitDisc(0)
 
+	var (
+		label               uint32
+		transposedSID       []byte
+		transpositionOffset uint8
+		transpositionLength uint8
+	)
+
+	sidStructure := vrf.SIDInfo.SID.Structure()
+
+	// In End.DT4/6/46, when we have function length greater than zero, we
+	// can transpose at least part of the function bits into MPLS label.
+	if sidStructure.FunctionLenBits() != 0 {
+		transpositionOffset = sidStructure.LocatorLenBits()
+		transpositionLength = sidStructure.FunctionLenBits()
+		label, transposedSID, err = vrf.SIDInfo.SID.Transpose(transpositionOffset, transpositionLength)
+		if err != nil {
+			return nil, fmt.Errorf("failed to transpose SID: %w", err)
+		}
+	} else {
+		// Fallback to the legacy format
+		label = 4096
+		transposedSID = vrf.SIDInfo.SID.AsSlice()
+		transpositionOffset = 0
+		transpositionLength = 0
+	}
+
 	// The SRv6 SID and endpoint behavior is encoded as a set of nested
 	// TLVs.
 	//
@@ -99,11 +125,16 @@ func mapVRFToVPNv4Paths(podCIDRs []*net.IPNet, vrf *srv6.VRF) ([]*types.Path, er
 
 	// Pack SRv6SIDStructureSubSubTLV details into a SRv6InformationSubTLV
 	SIDInfoTLV := &bgp.SRv6InformationSubTLV{
-		SID:              vrf.SIDInfo.SID.AsSlice(),
-		EndpointBehavior: uint16(bgp.END_DT4),
+		SID:              transposedSID,
+		EndpointBehavior: uint16(vrf.SIDInfo.Behavior),
 		SubSubTLVs: []bgp.PrefixSIDTLVInterface{
 			&bgp.SRv6SIDStructureSubSubTLV{
-				LocatorBlockLength: 128,
+				LocatorBlockLength:  sidStructure.LocatorBlockLenBits(),
+				LocatorNodeLength:   sidStructure.LocatorNodeLenBits(),
+				FunctionLength:      sidStructure.FunctionLenBits(),
+				ArgumentLength:      sidStructure.ArgumentLenBits(),
+				TranspositionOffset: transpositionOffset,
+				TranspositionLength: transpositionLength,
 			},
 		},
 	}
@@ -126,7 +157,7 @@ func mapVRFToVPNv4Paths(podCIDRs []*net.IPNet, vrf *srv6.VRF) ([]*types.Path, er
 	labeledPrefixes := []bgp.AddrPrefixInterface{}
 	for _, podCIDR := range podCIDRs {
 		maskLen, _ := podCIDR.Mask.Size()
-		vpnv4 := bgp.NewLabeledVPNIPAddrPrefix(uint8(maskLen), podCIDR.IP.String(), *bgp.NewMPLSLabelStack(4096), RD)
+		vpnv4 := bgp.NewLabeledVPNIPAddrPrefix(uint8(maskLen), podCIDR.IP.String(), *bgp.NewMPLSLabelStack(label), RD)
 		labeledPrefixes = append(labeledPrefixes, vpnv4)
 	}
 	MpReachAttr := &bgp.PathAttributeMpReachNLRI{

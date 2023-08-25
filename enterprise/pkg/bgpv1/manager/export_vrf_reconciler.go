@@ -100,11 +100,13 @@ func (r *ExportVRFReconciler) Reconcile(ctx context.Context, p manager.Reconcile
 	}
 
 	// record which Advertisements we need to remove since their VRF Export Route
-	// target has changed, or they do not exist.
+	// target or SID has changed, or they do not exist.
 	for _, advert := range p.CurrentServer.SRv6L3VPNAnnouncements {
 		shouldRemove := true
 		for _, v := range vrfs {
-			if (advert.VRF.VRFID == v.VRFID) && (advert.VRF.ExportRouteTarget == v.ExportRouteTarget) {
+			if (advert.VRF.VRFID == v.VRFID) &&
+				(advert.VRF.ExportRouteTarget == v.ExportRouteTarget) &&
+				(advert.VRF.SIDInfo.SIDAndBehaviorEqual(v.SIDInfo)) {
 				shouldRemove = false
 				break
 			}
@@ -119,8 +121,9 @@ func (r *ExportVRFReconciler) Reconcile(ctx context.Context, p manager.Reconcile
 		advert, ok := p.CurrentServer.SRv6L3VPNAnnouncements[v.VRFID]
 		if ok {
 			// if we have an advert, but the incoming VRF has a different
-			// ExportRouteTarget, mark it as create.
-			if v.ExportRouteTarget != advert.VRF.ExportRouteTarget {
+			// ExportRouteTarget or SID, mark it as create.
+			if v.ExportRouteTarget != advert.VRF.ExportRouteTarget ||
+				!v.SIDInfo.SIDAndBehaviorEqual(advert.VRF.SIDInfo) {
 				toCreate = append(toCreate, v)
 			}
 			continue
