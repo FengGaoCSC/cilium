@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
 	v2alpha1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	k8sLabels "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
@@ -31,7 +32,10 @@ type VRF struct {
 	VRFID             uint32
 	ImportRouteTarget string
 	ExportRouteTarget string
-	AllocatedSID      net.IP
+
+	// SID allocation information
+	LocatorPool string
+	SIDInfo     *sidmanager.SIDInfo
 
 	rules []VRFRule
 }
@@ -188,6 +192,7 @@ func ParseVRF(csrvrf *v2alpha1.CiliumSRv6VRF) (*VRF, error) {
 		ImportRouteTarget: csrvrf.Spec.ImportRouteTarget,
 		ExportRouteTarget: csrvrf.Spec.ExportRouteTarget,
 		rules:             rules,
+		LocatorPool:       csrvrf.Spec.LocatorPoolRef,
 	}, nil
 }
 

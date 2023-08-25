@@ -5,11 +5,11 @@ package srv6map
 
 import (
 	"fmt"
-	"net"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
 
+	srv6Types "github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/types"
 )
@@ -37,12 +37,9 @@ func NewSIDKey(sid types.IPv6) SIDKey {
 	return result
 }
 
-func NewSIDKeyFromIP(ip *net.IP) (*SIDKey, error) {
-	if ip.To4() != nil {
-		return nil, fmt.Errorf("ip must be an IPv6 address")
-	}
+func NewSIDKeyFromSID(sid *srv6Types.SID) (*SIDKey, error) {
 	result := &SIDKey{}
-	copy(result.SID[:], []byte(*ip))
+	copy(result.SID[:], sid.Addr.AsSlice())
 	return result, nil
 }
 

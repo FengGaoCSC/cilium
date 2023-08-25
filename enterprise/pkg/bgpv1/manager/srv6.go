@@ -68,6 +68,10 @@ func mapVRFToVPNv4Paths(podCIDRs []*net.IPNet, vrf *srv6.VRF) ([]*types.Path, er
 		return nil, fmt.Errorf("cannot map VRF without an ExportRouteTarget")
 	}
 
+	if vrf.SIDInfo == nil {
+		return nil, fmt.Errorf("cannot map VRF without SID allocation")
+	}
+
 	extComms, err := bgp.ParseRouteTarget(vrf.ExportRouteTarget)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ExportRouteTarget %v into Extended Community: %w", vrf.ExportRouteTarget, err)
@@ -95,7 +99,7 @@ func mapVRFToVPNv4Paths(podCIDRs []*net.IPNet, vrf *srv6.VRF) ([]*types.Path, er
 
 	// Pack SRv6SIDStructureSubSubTLV details into a SRv6InformationSubTLV
 	SIDInfoTLV := &bgp.SRv6InformationSubTLV{
-		SID:              vrf.AllocatedSID.To16(),
+		SID:              vrf.SIDInfo.SID.AsSlice(),
 		EndpointBehavior: uint16(bgp.END_DT4),
 		SubSubTLVs: []bgp.PrefixSIDTLVInterface{
 			&bgp.SRv6SIDStructureSubSubTLV{
