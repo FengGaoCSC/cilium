@@ -143,6 +143,17 @@ spec:
                             - End.DT4
                             - End.DT6
                             - End.DT46
+                            - uDT4
+                            - uDT6
+                            - uDT46
+                            type: string
+                          behaviorType:
+                            default: Base
+                            description: BehaviorType specifies the type of the behavior
+                              of this SID.
+                            enum:
+                            - Base
+                            - uSID
                             type: string
                           metadata:
                             description: MetaData is a metadata associated with the
@@ -197,6 +208,7 @@ spec:
                             type: object
                         required:
                         - behavior
+                        - behaviorType
                         - metadata
                         - owner
                         - sid

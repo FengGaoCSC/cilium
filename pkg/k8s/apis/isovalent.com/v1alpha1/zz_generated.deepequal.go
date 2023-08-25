@@ -216,6 +216,9 @@ func (in *IsovalentSRv6SIDInfo) DeepEqual(other *IsovalentSRv6SIDInfo) bool {
 	if in.MetaData != other.MetaData {
 		return false
 	}
+	if in.BehaviorType != other.BehaviorType {
+		return false
+	}
 	if in.Behavior != other.Behavior {
 		return false
 	}

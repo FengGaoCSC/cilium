@@ -130,10 +130,17 @@ type IsovalentSRv6SIDInfo struct {
 	// +kubebuilder:validation:Required
 	MetaData string `json:"metadata"`
 
+	// BehaviorType specifies the type of the behavior of this SID.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=Base;uSID
+	// +kubebuilder:default=Base
+	BehaviorType string `json:"behaviorType"`
+
 	// Behavior is an SRv6 behavior as defined in RFC8986 associated with the SID
 	//
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=End.DT4;End.DT6;End.DT46
+	// +kubebuilder:validation:Enum=End.DT4;End.DT6;End.DT46;uDT4;uDT6;uDT46
 	Behavior string `json:"behavior"`
 }
 
