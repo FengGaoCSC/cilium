@@ -11,7 +11,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
 	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/k8s/watchers"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/version"
 )
@@ -33,7 +36,13 @@ var (
 		},
 	}
 
-	agentHive = hive.New(EnterpriseAgent)
+	agentHive = hive.New(EnterpriseAgent,
+		cell.Invoke(func(m *egressgatewayha.Manager) {
+			watchers.EgressGatewayHAManagerLock.Lock()
+			watchers.EgressGatewayHAManager = m
+			watchers.EgressGatewayHAManagerLock.Unlock()
+		}),
+	)
 )
 
 func init() {

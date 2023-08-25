@@ -225,9 +225,17 @@ func (k *K8sWatcher) endpointUpdated(oldEndpoint, endpoint *types.CiliumEndpoint
 	if k.egressGatewayManager != nil {
 		k.egressGatewayManager.OnUpdateEndpoint(endpoint)
 	}
+
+	EgressGatewayHAManagerLock.RLock()
+	if EgressGatewayHAManager != nil {
+		EgressGatewayHAManager.OnUpdateEndpoint(endpoint)
+	}
+	EgressGatewayHAManagerLock.RUnlock()
+
 	if option.Config.EnableSRv6 {
 		k.srv6Manager.OnUpdateEndpoint(endpoint)
 	}
+
 }
 
 func (k *K8sWatcher) endpointDeleted(endpoint *types.CiliumEndpoint) {
@@ -256,6 +264,13 @@ func (k *K8sWatcher) endpointDeleted(endpoint *types.CiliumEndpoint) {
 	if k.egressGatewayManager != nil {
 		k.egressGatewayManager.OnDeleteEndpoint(endpoint)
 	}
+
+	EgressGatewayHAManagerLock.RLock()
+	if EgressGatewayHAManager != nil {
+		EgressGatewayHAManager.OnDeleteEndpoint(endpoint)
+	}
+	EgressGatewayHAManagerLock.RUnlock()
+
 	if option.Config.EnableSRv6 {
 		k.srv6Manager.OnDeleteEndpoint(endpoint)
 	}
