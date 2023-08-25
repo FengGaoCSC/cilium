@@ -51,6 +51,40 @@ type SIDInfo struct {
 	Behavior     types.Behavior
 }
 
+func (a *SIDInfo) SIDAndBehaviorEqual(b *SIDInfo) bool {
+	if (a == nil) || (b == nil) {
+		return false
+	}
+	if *a.SID != *b.SID {
+		return false
+	}
+	if a.BehaviorType != b.BehaviorType {
+		return false
+	}
+	if a.Behavior != b.Behavior {
+		return false
+	}
+	return true
+}
+
+func (in *SIDInfo) DeepCopy() *SIDInfo {
+	if in == nil {
+		return nil
+	}
+	out := new(SIDInfo)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *SIDInfo) DeepCopyInto(out *SIDInfo) {
+	out.Owner = in.Owner
+	out.MetaData = in.MetaData
+	out.SID = new(types.SID)
+	*out.SID = *in.SID
+	out.BehaviorType = in.BehaviorType
+	out.Behavior = in.Behavior
+}
+
 // StructuredSIDAllocator is an SRv6 SID allocator that allocates structured SIDs
 // using the SID structure information provided.
 type StructuredSIDAllocator struct {
