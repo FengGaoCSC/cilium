@@ -31,45 +31,60 @@ func Test_PoolCreation(t *testing.T) {
 		{
 			description: "valid pool config",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00:0:1::/48"),
-				structure: types.MustNewSIDStructure(40, 24, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
+				behaviorType: "Base",
 			},
 			expectedPoolErr: nil,
 		},
 		{
+			description: "invalid pool config, invalid behavior type",
+			config: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
+				behaviorType: "invalid",
+			},
+			expectedPoolErr: ErrInvalidBehaviorType,
+		},
+		{
 			description: "invalid pool config, prefix length >= LocB + LocN",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00:0:1::/64"),
-				structure: types.MustNewSIDStructure(40, 24, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/64"),
+				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
+				behaviorType: "Base",
 			},
 			expectedPoolErr: ErrInvalidPrefixAndSIDStruct,
 		},
 		{
 			description: "invalid pool config, prefix length < LocB",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00::/32"),
-				structure: types.MustNewSIDStructure(40, 24, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00::/32"),
+				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
+				behaviorType: "Base",
 			},
 			expectedPoolErr: ErrInvalidPrefixAndSIDStruct,
 		},
 		{
 			description: "invalid pool config, prefix not byte aligned",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00:0:1::/65"),
-				structure: types.MustNewSIDStructure(40, 24, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/65"),
+				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
+				behaviorType: "Base",
 			},
 			expectedPoolErr: ErrPrefixNotByteAligned,
 		},
 		{
 			description: "invalid pool config, not v6 prefix",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("10.10.10.0/24"),
-				structure: types.MustNewSIDStructure(40, 24, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("10.10.10.0/24"),
+				structure:    types.MustNewSIDStructure(40, 24, 16, 0),
+				behaviorType: "Base",
 			},
 			expectedPoolErr: ErrInvalidPrefix,
 		},
@@ -100,9 +115,10 @@ func Test_AllocateNext(t *testing.T) {
 		{
 			description: "valid allocations for pool",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00:0:1::/48"),
-				structure: types.MustNewSIDStructure(40, 16, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
+				behaviorType: "Base",
 			},
 			allocations:  255,
 			expectedFree: 0,
@@ -111,9 +127,10 @@ func Test_AllocateNext(t *testing.T) {
 		{
 			description: "valid allocations for pool, fill half",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00:0:1::/48"),
-				structure: types.MustNewSIDStructure(40, 16, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
+				behaviorType: "Base",
 			},
 			allocations:  128,
 			expectedFree: 127,
@@ -122,9 +139,10 @@ func Test_AllocateNext(t *testing.T) {
 		{
 			description: "exceed allocations for pool",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00:0:1::/48"),
-				structure: types.MustNewSIDStructure(40, 16, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
+				behaviorType: "Base",
 			},
 			allocations:  256,
 			expectedFree: 0,
@@ -161,58 +179,78 @@ func Test_AllocateRelease(t *testing.T) {
 	tests := []struct {
 		description       string
 		config            poolConfig
-		allocatedLocators []*types.Locator
-		releasedLocators  []*types.Locator
+		allocatedLocators []*LocatorInfo
+		releasedLocators  []*LocatorInfo
 		expectedFree      int
 		expectedErr       error
 	}{
 		{
 			description: "allocations",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00:0:1::/48"),
-				structure: types.MustNewSIDStructure(40, 16, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
+				behaviorType: "Base",
 			},
-			allocatedLocators: []*types.Locator{
-				types.MustNewLocator(
-					netip.MustParsePrefix("fd00:0:1:100::/56"),
-					types.MustNewSIDStructure(40, 16, 16, 0),
-				),
-				types.MustNewLocator(
-					netip.MustParsePrefix("fd00:0:1:ff00::/56"),
-					types.MustNewSIDStructure(40, 16, 16, 0),
-				),
+			allocatedLocators: []*LocatorInfo{
+				{
+					Locator: *types.MustNewLocator(
+						netip.MustParsePrefix("fd00:0:1:100::/56"),
+						types.MustNewSIDStructure(40, 16, 16, 0),
+					),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+				{
+					Locator: *types.MustNewLocator(
+						netip.MustParsePrefix("fd00:0:1:ff00::/56"),
+						types.MustNewSIDStructure(40, 16, 16, 0),
+					),
+					BehaviorType: types.BehaviorTypeBase,
+				},
 			},
-			releasedLocators: []*types.Locator{},
+			releasedLocators: []*LocatorInfo{},
 			expectedFree:     253,
 			expectedErr:      nil,
 		},
 		{
 			description: "single allocations and release",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00:0:1::/48"),
-				structure: types.MustNewSIDStructure(40, 16, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
+				behaviorType: "Base",
 			},
-			allocatedLocators: []*types.Locator{
-				types.MustNewLocator(
-					netip.MustParsePrefix("fd00:0:1:100::/56"),
-					types.MustNewSIDStructure(40, 16, 16, 0),
-				),
-				types.MustNewLocator(
-					netip.MustParsePrefix("fd00:0:1:ff00::/56"),
-					types.MustNewSIDStructure(40, 16, 16, 0),
-				),
+			allocatedLocators: []*LocatorInfo{
+				{
+					Locator: *types.MustNewLocator(
+						netip.MustParsePrefix("fd00:0:1:100::/56"),
+						types.MustNewSIDStructure(40, 16, 16, 0),
+					),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+				{
+					Locator: *types.MustNewLocator(
+						netip.MustParsePrefix("fd00:0:1:ff00::/56"),
+						types.MustNewSIDStructure(40, 16, 16, 0),
+					),
+					BehaviorType: types.BehaviorTypeBase,
+				},
 			},
-			releasedLocators: []*types.Locator{
-				types.MustNewLocator(
-					netip.MustParsePrefix("fd00:0:1:100::/56"),
-					types.MustNewSIDStructure(40, 16, 16, 0),
-				),
-				types.MustNewLocator(
-					netip.MustParsePrefix("fd00:0:1:ff00::/56"),
-					types.MustNewSIDStructure(40, 16, 16, 0),
-				),
+			releasedLocators: []*LocatorInfo{
+				{
+					Locator: *types.MustNewLocator(
+						netip.MustParsePrefix("fd00:0:1:100::/56"),
+						types.MustNewSIDStructure(40, 16, 16, 0),
+					),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+				{
+					Locator: *types.MustNewLocator(
+						netip.MustParsePrefix("fd00:0:1:ff00::/56"),
+						types.MustNewSIDStructure(40, 16, 16, 0),
+					),
+					BehaviorType: types.BehaviorTypeBase,
+				},
 			},
 			expectedFree: 255,
 			expectedErr:  nil,
@@ -220,19 +258,26 @@ func Test_AllocateRelease(t *testing.T) {
 		{
 			description: "idempotent release",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00:0:1::/48"),
-				structure: types.MustNewSIDStructure(40, 16, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
+				behaviorType: "Base",
 			},
-			releasedLocators: []*types.Locator{
-				types.MustNewLocator(
-					netip.MustParsePrefix("fd00:0:1:100::/56"),
-					types.MustNewSIDStructure(40, 16, 16, 0),
-				),
-				types.MustNewLocator(
-					netip.MustParsePrefix("fd00:0:1:ff00::/56"),
-					types.MustNewSIDStructure(40, 16, 16, 0),
-				),
+			releasedLocators: []*LocatorInfo{
+				{
+					Locator: *types.MustNewLocator(
+						netip.MustParsePrefix("fd00:0:1:100::/56"),
+						types.MustNewSIDStructure(40, 16, 16, 0),
+					),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+				{
+					Locator: *types.MustNewLocator(
+						netip.MustParsePrefix("fd00:0:1:ff00::/56"),
+						types.MustNewSIDStructure(40, 16, 16, 0),
+					),
+					BehaviorType: types.BehaviorTypeBase,
+				},
 			},
 			expectedFree: 255,
 			expectedErr:  nil,
@@ -240,19 +285,26 @@ func Test_AllocateRelease(t *testing.T) {
 		{
 			description: "idempotent allocate",
 			config: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("fd00:0:1::/48"),
-				structure: types.MustNewSIDStructure(40, 16, 16, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("fd00:0:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 16, 16, 0),
+				behaviorType: "Base",
 			},
-			allocatedLocators: []*types.Locator{
-				types.MustNewLocator(
-					netip.MustParsePrefix("fd00:0:1:100::/56"),
-					types.MustNewSIDStructure(40, 16, 16, 0),
-				),
-				types.MustNewLocator(
-					netip.MustParsePrefix("fd00:0:1:100::/56"),
-					types.MustNewSIDStructure(40, 16, 16, 0),
-				),
+			allocatedLocators: []*LocatorInfo{
+				{
+					Locator: *types.MustNewLocator(
+						netip.MustParsePrefix("fd00:0:1:100::/56"),
+						types.MustNewSIDStructure(40, 16, 16, 0),
+					),
+					BehaviorType: types.BehaviorTypeBase,
+				},
+				{
+					Locator: *types.MustNewLocator(
+						netip.MustParsePrefix("fd00:0:1:100::/56"),
+						types.MustNewSIDStructure(40, 16, 16, 0),
+					),
+					BehaviorType: types.BehaviorTypeBase,
+				},
 			},
 			expectedFree: 254,
 			expectedErr:  nil,
@@ -301,59 +353,92 @@ func Test_AllocateRelease(t *testing.T) {
 func Test_ValidNodeLocator(t *testing.T) {
 	tests := []struct {
 		description string
-		nodeLocator *types.Locator
+		nodeLocator *LocatorInfo
 		poolConfig  poolConfig
 		expectedErr error
 	}{
 		{
 			description: "valid node locator",
-			nodeLocator: types.MustNewLocator(
-				netip.MustParsePrefix("2001:db8:1:1::/64"),
-				types.MustNewSIDStructure(40, 24, 8, 0),
-			),
+			nodeLocator: &LocatorInfo{
+				Locator: *types.MustNewLocator(
+					netip.MustParsePrefix("2001:db8:1:1::/64"),
+					types.MustNewSIDStructure(40, 24, 8, 0),
+				),
+				BehaviorType: types.BehaviorTypeBase,
+			},
 			poolConfig: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("2001:db8:1::/48"),
-				structure: types.MustNewSIDStructure(40, 24, 8, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 24, 8, 0),
+				behaviorType: "Base",
 			},
 			expectedErr: nil,
 		},
 		{
 			description: "invalid node locator, prefix mismatch",
-			nodeLocator: types.MustNewLocator(
-				netip.MustParsePrefix("2002:db8:1:1::/64"),
-				types.MustNewSIDStructure(40, 24, 8, 0),
-			),
+			nodeLocator: &LocatorInfo{
+				Locator: *types.MustNewLocator(
+					netip.MustParsePrefix("2002:db8:1:1::/64"),
+					types.MustNewSIDStructure(40, 24, 8, 0),
+				),
+				BehaviorType: types.BehaviorTypeBase,
+			},
 			poolConfig: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("2001:db8:1::/48"),
-				structure: types.MustNewSIDStructure(40, 24, 8, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 24, 8, 0),
+				behaviorType: "Base",
 			},
 			expectedErr: ErrInvalidLocator,
 		},
 		{
 			description: "invalid node locator, prefix length mismatch",
-			nodeLocator: types.MustNewLocator(
-				netip.MustParsePrefix("2001:db8:1:1::/72"),
-				types.MustNewSIDStructure(40, 32, 8, 0),
-			),
+			nodeLocator: &LocatorInfo{
+				Locator: *types.MustNewLocator(
+					netip.MustParsePrefix("2001:db8:1:1::/72"),
+					types.MustNewSIDStructure(40, 32, 8, 0),
+				),
+				BehaviorType: types.BehaviorTypeBase,
+			},
 			poolConfig: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("2001:db8:1::/48"),
-				structure: types.MustNewSIDStructure(40, 24, 8, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 24, 8, 0),
+				behaviorType: "Base",
 			},
 			expectedErr: ErrInvalidLocator,
 		},
 		{
 			description: "invalid node locator, sid mismatch",
-			nodeLocator: types.MustNewLocator(
-				netip.MustParsePrefix("2001:db8:1:1::/64"),
-				types.MustNewSIDStructure(40, 24, 16, 0),
-			),
+			nodeLocator: &LocatorInfo{
+				Locator: *types.MustNewLocator(
+					netip.MustParsePrefix("2001:db8:1:1::/64"),
+					types.MustNewSIDStructure(40, 24, 16, 0),
+				),
+				BehaviorType: types.BehaviorTypeBase,
+			},
 			poolConfig: poolConfig{
-				name:      "pool-1",
-				prefix:    netip.MustParsePrefix("2001:db8:1::/48"),
-				structure: types.MustNewSIDStructure(40, 24, 8, 0),
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 24, 8, 0),
+				behaviorType: "Base",
+			},
+			expectedErr: ErrInvalidLocator,
+		},
+		{
+			description: "invalid node locator, behavior mismatch",
+			nodeLocator: &LocatorInfo{
+				Locator: *types.MustNewLocator(
+					netip.MustParsePrefix("2001:db8:1:1::/64"),
+					types.MustNewSIDStructure(40, 24, 16, 0),
+				),
+				BehaviorType: types.BehaviorTypeUSID,
+			},
+			poolConfig: poolConfig{
+				name:         "pool-1",
+				prefix:       netip.MustParsePrefix("2001:db8:1::/48"),
+				structure:    types.MustNewSIDStructure(40, 24, 8, 0),
+				behaviorType: "Base",
 			},
 			expectedErr: ErrInvalidLocator,
 		},

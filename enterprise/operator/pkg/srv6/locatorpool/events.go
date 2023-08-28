@@ -122,7 +122,7 @@ func (lpm *LocatorPoolManager) handlePoolEvent(ctx context.Context, event resour
 // addPool handles locator pool upsert events. On update, we overwrite the pool, modifications in SID Structure or prefix result in
 // overwriting of SIDManager resource.
 func (lpm *LocatorPoolManager) addPool(ctx context.Context, pool *isovalent_api_v1alpha1.IsovalentSRv6LocatorPool) error {
-	prefix, sidStructure, err := lpm.parsePool(pool)
+	poolConf, err := lpm.parsePool(pool)
 	if err != nil {
 		return fmt.Errorf("parsePool: %w", err)
 	}
@@ -133,12 +133,12 @@ func (lpm *LocatorPoolManager) addPool(ctx context.Context, pool *isovalent_api_
 			// skip self
 			continue
 		}
-		if p.GetPrefix().Overlaps(prefix) {
+		if p.GetPrefix().Overlaps(poolConf.prefix) {
 			return ErrOverlappingPrefix
 		}
 	}
 
-	p, err := newPool(poolConfig{pool.Name, prefix, sidStructure})
+	p, err := newPool(poolConf)
 	if err != nil {
 		return fmt.Errorf("newPool: %w", err)
 	}
@@ -166,15 +166,15 @@ func (lpm *LocatorPoolManager) addPool(ctx context.Context, pool *isovalent_api_
 	return nil
 }
 
-func (lpm *LocatorPoolManager) parsePool(pool *isovalent_api_v1alpha1.IsovalentSRv6LocatorPool) (prefix netip.Prefix, sidStructure *types.SIDStructure, err error) {
+func (lpm *LocatorPoolManager) parsePool(pool *isovalent_api_v1alpha1.IsovalentSRv6LocatorPool) (conf poolConfig, err error) {
 	// validate prefix
-	prefix, err = netip.ParsePrefix(pool.Spec.Prefix)
+	prefix, err := netip.ParsePrefix(pool.Spec.Prefix)
 	if err != nil {
 		err = fmt.Errorf("prefix %s is invalid: %w", pool.Spec.Prefix, err)
 		return
 	}
 
-	sidStructure, err = types.NewSIDStructure(pool.Spec.Structure.LocatorBlockLenBits,
+	sidStructure, err := types.NewSIDStructure(pool.Spec.Structure.LocatorBlockLenBits,
 		pool.Spec.Structure.LocatorNodeLenBits,
 		pool.Spec.Structure.FunctionLenBits,
 		pool.Spec.Structure.ArgumentLenBits)
@@ -183,7 +183,12 @@ func (lpm *LocatorPoolManager) parsePool(pool *isovalent_api_v1alpha1.IsovalentS
 		return
 	}
 
-	return
+	return poolConfig{
+		name:         pool.Name,
+		prefix:       prefix,
+		structure:    sidStructure,
+		behaviorType: pool.Spec.BehaviorType,
+	}, nil
 }
 
 func (lpm *LocatorPoolManager) deletePool(ctx context.Context, pool *isovalent_api_v1alpha1.IsovalentSRv6LocatorPool) error {

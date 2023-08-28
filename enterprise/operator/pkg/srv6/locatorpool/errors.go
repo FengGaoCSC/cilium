@@ -28,6 +28,9 @@ var (
 	// ErrInvalidPrefixAndSIDStruct is returned when the prefix and SID structure are not valid
 	ErrInvalidPrefixAndSIDStruct = fmt.Errorf("invalid prefix and SID structure combination")
 
+	// ErrInvalidBehaviorType is returned when the behavior type is not valid
+	ErrInvalidBehaviorType = fmt.Errorf("invalid behavior type")
+
 	// ErrInvalidSID is returned when the SID is not valid
 	ErrInvalidSID = fmt.Errorf("invalid SID")
 

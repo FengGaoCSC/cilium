@@ -19,13 +19,19 @@ import (
 	"github.com/cilium/cilium/pkg/ipam/service/allocator"
 )
 
+// LocatorInfo is a combination of Locator and BehaviorType
+type LocatorInfo struct {
+	types.Locator
+	types.BehaviorType
+}
+
 type LocatorPool interface {
 	GetName() string
 	GetPrefix() netip.Prefix
 
-	Allocate(nodeLocator *types.Locator) error
-	AllocateNext() (*types.Locator, error)
-	Release(nodeLocator *types.Locator) error
+	Allocate(nodeLocator *LocatorInfo) error
+	AllocateNext() (*LocatorInfo, error)
+	Release(nodeLocator *LocatorInfo) error
 
 	// Free used only for testing
 	Free() int
@@ -38,9 +44,10 @@ const (
 )
 
 type poolConfig struct {
-	name      string
-	prefix    netip.Prefix
-	structure *types.SIDStructure
+	name         string
+	prefix       netip.Prefix
+	structure    *types.SIDStructure
+	behaviorType string
 }
 
 type pool struct {
@@ -55,7 +62,7 @@ type pool struct {
 }
 
 func newPool(conf poolConfig) (LocatorPool, error) {
-	err := validatePool(conf.prefix, conf.structure)
+	err := validatePool(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -74,27 +81,31 @@ func newPool(conf poolConfig) (LocatorPool, error) {
 	return p, nil
 }
 
-func validatePool(prefix netip.Prefix, structure *types.SIDStructure) error {
+func validatePool(conf poolConfig) error {
 	// validate prefix is IPv6
-	if !prefix.Addr().Is6() {
-		return fmt.Errorf("prefix %q: %s", prefix, ErrInvalidPrefix)
+	if !conf.prefix.Addr().Is6() {
+		return fmt.Errorf("prefix %q: %s", conf.prefix, ErrInvalidPrefix)
 	}
 
 	// Validate prefix is byte aligned, SID structure needs to be byte aligned.
 	// This is implementation limitation.
 	// https://github.com/isovalent/cilium/blob/9eaa0c516b3d44374bf3addd0e23398767f52c3c/enterprise/pkg/srv6/types/sid.go#L226-L237
-	if prefix.Bits()%8 != 0 {
-		return fmt.Errorf("prefix %q: %s", prefix, ErrPrefixNotByteAligned)
+	if conf.prefix.Bits()%8 != 0 {
+		return fmt.Errorf("prefix %q: %s", conf.prefix, ErrPrefixNotByteAligned)
 	}
 
 	// validate  LocB + LocN  > prefix length
-	if structure.LocatorLenBits() <= uint8(prefix.Bits()) {
+	if conf.structure.LocatorLenBits() <= uint8(conf.prefix.Bits()) {
 		return ErrInvalidPrefixAndSIDStruct
 	}
 
 	// validate LocB <= prefix length
-	if structure.LocatorBlockLenBits() > uint8(prefix.Bits()) {
+	if conf.structure.LocatorBlockLenBits() > uint8(conf.prefix.Bits()) {
 		return ErrInvalidPrefixAndSIDStruct
+	}
+
+	if types.BehaviorTypeFromString(conf.behaviorType) == types.BehaviorTypeUnknown {
+		return ErrInvalidBehaviorType
 	}
 
 	return nil
@@ -120,13 +131,17 @@ func (p *pool) GetPrefix() netip.Prefix {
 }
 
 // validNodeLocator validates that node locator was indeed created from this locator pool.
-func (p *pool) validNodeLocator(nodeLoc *types.Locator) bool {
+func (p *pool) validNodeLocator(nodeLoc *LocatorInfo) bool {
 	// validate both sid structures are same
 	if p.config.structure == nil || nodeLoc.Structure() == nil {
 		return false
 	}
 
 	if *p.config.structure != *nodeLoc.Structure() {
+		return false
+	}
+
+	if p.config.behaviorType != nodeLoc.BehaviorType.String() {
 		return false
 	}
 
@@ -148,7 +163,7 @@ func (p *pool) validNodeLocator(nodeLoc *types.Locator) bool {
 }
 
 // Allocate calculates node ID from node locator prefix and allocates it if possible
-func (p *pool) Allocate(nodeLocator *types.Locator) error {
+func (p *pool) Allocate(nodeLocator *LocatorInfo) error {
 	if !p.validNodeLocator(nodeLocator) {
 		return ErrInvalidLocator
 	}
@@ -167,19 +182,27 @@ func (p *pool) Allocate(nodeLocator *types.Locator) error {
 	return nil
 }
 
-func (p *pool) AllocateNext() (*types.Locator, error) {
+func (p *pool) AllocateNext() (*LocatorInfo, error) {
 	nodeID, ok, err := p.allocator.AllocateNext()
 	if err != nil || !ok {
 		return nil, fmt.Errorf("%s: %v", ErrLocatorPoolExhausted, err)
 	}
 
-	return types.NewLocator(
+	loc, err := types.NewLocator(
 		p.encodeNodeID(uint16(nodeID)),
 		p.config.structure,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LocatorInfo{
+		Locator:      *loc,
+		BehaviorType: types.BehaviorTypeFromString(p.config.behaviorType),
+	}, nil
 }
 
-func (p *pool) Release(nodeLocator *types.Locator) error {
+func (p *pool) Release(nodeLocator *LocatorInfo) error {
 	p.allocator.Release(int(p.decodeNodeID(nodeLocator.Prefix)))
 	return nil
 }

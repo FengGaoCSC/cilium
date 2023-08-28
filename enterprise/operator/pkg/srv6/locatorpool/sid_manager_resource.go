@@ -14,7 +14,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	isovalent_api_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
 
 	"github.com/sirupsen/logrus"
@@ -161,7 +160,7 @@ func (lpm *LocatorPoolManager) populateAPISIDManager(sm *isovalent_api_v1alpha1.
 	return resultingPools
 }
 
-func toAPILocator(loc *types.Locator) *isovalent_api_v1alpha1.IsovalentSRv6Locator {
+func toAPILocator(loc *LocatorInfo) *isovalent_api_v1alpha1.IsovalentSRv6Locator {
 	return &isovalent_api_v1alpha1.IsovalentSRv6Locator{
 		Prefix: loc.Prefix.String(),
 		Structure: isovalent_api_v1alpha1.IsovalentSRv6SIDStructure{
@@ -170,5 +169,6 @@ func toAPILocator(loc *types.Locator) *isovalent_api_v1alpha1.IsovalentSRv6Locat
 			FunctionLenBits:     loc.Structure().FunctionLenBits(),
 			ArgumentLenBits:     loc.Structure().ArgumentLenBits(),
 		},
+		BehaviorType: loc.BehaviorType.String(),
 	}
 }

@@ -150,11 +150,26 @@ func Test_PoolValidations(t *testing.T) {
 					Name: "test-locator-pool-1",
 				},
 				Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-					Prefix:    "2001:db8:1::/48",
-					Structure: sid_40_24_16,
+					Prefix:       "2001:db8:1::/48",
+					Structure:    sid_40_24_16,
+					BehaviorType: "Base",
 				},
 			},
 			expectedPoolErr: nil,
+		},
+		{
+			description: "invalid pool behavior",
+			pool: &isovalent_api_v1alpha1.IsovalentSRv6LocatorPool{
+				ObjectMeta: meta_v1.ObjectMeta{
+					Name: "test-locator-pool-1",
+				},
+				Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
+					Prefix:       "2001:db8:1::/48",
+					Structure:    sid_40_24_16,
+					BehaviorType: "invalid",
+				},
+			},
+			expectedPoolErr: ErrInvalidBehaviorType,
 		},
 		{
 			description: "invalid pool prefix",
@@ -163,8 +178,9 @@ func Test_PoolValidations(t *testing.T) {
 					Name: "test-locator-pool-2",
 				},
 				Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-					Prefix:    "10.10.10.0/24",
-					Structure: sid_40_24_16,
+					Prefix:       "10.10.10.0/24",
+					Structure:    sid_40_24_16,
+					BehaviorType: "Base",
 				},
 			},
 			expectedPoolErr: ErrInvalidPrefix,
@@ -176,8 +192,9 @@ func Test_PoolValidations(t *testing.T) {
 					Name: "test-locator-pool-2",
 				},
 				Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-					Prefix:    "2002:db8:1::/64",
-					Structure: sid_40_16_16,
+					Prefix:       "2002:db8:1::/64",
+					Structure:    sid_40_16_16,
+					BehaviorType: "Base",
 				},
 			},
 			expectedPoolErr: ErrInvalidPrefixAndSIDStruct,
@@ -189,8 +206,9 @@ func Test_PoolValidations(t *testing.T) {
 					Name: "test-locator-pool-2",
 				},
 				Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-					Prefix:    "2002:db8:1::/48",
-					Structure: sid_invalid_130,
+					Prefix:       "2002:db8:1::/48",
+					Structure:    sid_invalid_130,
+					BehaviorType: "Base",
 				},
 			},
 			expectedPoolErr: ErrInvalidSID,
@@ -202,8 +220,9 @@ func Test_PoolValidations(t *testing.T) {
 					Name: "test-locator-pool-2",
 				},
 				Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-					Prefix:    "2001:db8:1::/48",
-					Structure: sid_40_24_16,
+					Prefix:       "2001:db8:1::/48",
+					Structure:    sid_40_24_16,
+					BehaviorType: "Base",
 				},
 			},
 			expectedPoolErr: ErrOverlappingPrefix,
@@ -241,8 +260,9 @@ func Test_NodeResourceChanges(t *testing.T) {
 				Name: "test-locator-pool-1",
 			},
 			Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-				Prefix:    "2001:db8:1::/48",
-				Structure: sid_40_24_16,
+				Prefix:       "2001:db8:1::/48",
+				Structure:    sid_40_24_16,
+				BehaviorType: "Base",
 			},
 		},
 		{
@@ -250,8 +270,9 @@ func Test_NodeResourceChanges(t *testing.T) {
 				Name: "test-locator-pool-2",
 			},
 			Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-				Prefix:    "2001:db8:2::/48",
-				Structure: sid_40_24_16,
+				Prefix:       "2001:db8:2::/48",
+				Structure:    sid_40_24_16,
+				BehaviorType: "Base",
 			},
 		},
 	}
@@ -282,8 +303,9 @@ func Test_NodeResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -291,8 +313,9 @@ func Test_NodeResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-2",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:2:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:2:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -333,8 +356,9 @@ func Test_NodeResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -342,8 +366,9 @@ func Test_NodeResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-2",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:2:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:2:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -420,8 +445,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 					Name: "test-locator-pool-1",
 				},
 				Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-					Prefix:    "2001:db8:1::/48",
-					Structure: sid_40_24_16,
+					Prefix:       "2001:db8:1::/48",
+					Structure:    sid_40_24_16,
+					BehaviorType: "Base",
 				},
 			},
 			poolOperation: func(ctx context.Context, pool *isovalent_api_v1alpha1.IsovalentSRv6LocatorPool, client isovalent_client_v1alpha1.IsovalentSRv6LocatorPoolInterface) error {
@@ -441,8 +467,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -462,8 +489,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:2::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:2::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -480,8 +508,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 					Name: "test-locator-pool-2",
 				},
 				Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-					Prefix:    "2001:db8:2::/48",
-					Structure: sid_40_24_16,
+					Prefix:       "2001:db8:2::/48",
+					Structure:    sid_40_24_16,
+					BehaviorType: "Base",
 				},
 			},
 			poolOperation: func(ctx context.Context, pool *isovalent_api_v1alpha1.IsovalentSRv6LocatorPool, client isovalent_client_v1alpha1.IsovalentSRv6LocatorPoolInterface) error {
@@ -501,8 +530,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -510,8 +540,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-2",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:2:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:2:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -531,8 +562,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:2::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:2::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -540,8 +572,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-2",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:2:2::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:2:2::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -558,8 +591,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 					Name: "test-locator-pool-2",
 				},
 				Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-					Prefix:    "2001:db8:aaaa::/48",
-					Structure: sid_40_24_16,
+					Prefix:       "2001:db8:aaaa::/48",
+					Structure:    sid_40_24_16,
+					BehaviorType: "uSID",
 				},
 			},
 			poolOperation: func(ctx context.Context, pool *isovalent_api_v1alpha1.IsovalentSRv6LocatorPool, client isovalent_client_v1alpha1.IsovalentSRv6LocatorPoolInterface) error {
@@ -579,8 +613,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -588,8 +623,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-2",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:aaaa:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:aaaa:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "uSID",
 										},
 									},
 								},
@@ -609,8 +645,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:2::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:2::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -618,8 +655,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-2",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:aaaa:2::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:aaaa:2::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "uSID",
 										},
 									},
 								},
@@ -643,6 +681,7 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 						FunctionLenBits:     16,
 						ArgumentLenBits:     16, // UPDATED
 					},
+					BehaviorType: "uSID",
 				},
 			},
 			poolOperation: func(ctx context.Context, pool *isovalent_api_v1alpha1.IsovalentSRv6LocatorPool, client isovalent_client_v1alpha1.IsovalentSRv6LocatorPoolInterface) error {
@@ -662,8 +701,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -678,6 +718,7 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 												FunctionLenBits:     16,
 												ArgumentLenBits:     16, // UPDATED
 											},
+											BehaviorType: "uSID",
 										},
 									},
 								},
@@ -697,8 +738,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:2::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:2::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -713,6 +755,7 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 												FunctionLenBits:     16,
 												ArgumentLenBits:     16, // UPDATED
 											},
+											BehaviorType: "uSID",
 										},
 									},
 								},
@@ -746,8 +789,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:1::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:1::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -767,8 +811,9 @@ func Test_LocatorPoolResourceChanges(t *testing.T) {
 									PoolRef: "test-locator-pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "2001:db8:1:2::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "2001:db8:1:2::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -934,8 +979,9 @@ func Test_Resync(t *testing.T) {
 							Name: "pool-1",
 						},
 						Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-							Prefix:    "fc00::/48",
-							Structure: sid_40_24_16,
+							Prefix:       "fc00::/48",
+							Structure:    sid_40_24_16,
+							BehaviorType: "Base",
 						},
 					},
 					{
@@ -943,8 +989,9 @@ func Test_Resync(t *testing.T) {
 							Name: "pool-2",
 						},
 						Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-							Prefix:    "fd00::/48",
-							Structure: sid_40_24_16,
+							Prefix:       "fd00::/48",
+							Structure:    sid_40_24_16,
+							BehaviorType: "uSID",
 						},
 					},
 				},
@@ -959,8 +1006,9 @@ func Test_Resync(t *testing.T) {
 									PoolRef: "pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "fc00:0:0:10::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "fc00:0:0:10::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -968,8 +1016,9 @@ func Test_Resync(t *testing.T) {
 									PoolRef: "pool-2",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "fd00:0:0:10::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "fd00:0:0:10::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "uSID",
 										},
 									},
 								},
@@ -986,8 +1035,9 @@ func Test_Resync(t *testing.T) {
 									PoolRef: "pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "fc00:0:0:20::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "fc00:0:0:20::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -995,8 +1045,9 @@ func Test_Resync(t *testing.T) {
 									PoolRef: "pool-2",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "fd00:0:0:20::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "fd00:0:0:20::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "uSID",
 										},
 									},
 								},
@@ -1007,26 +1058,37 @@ func Test_Resync(t *testing.T) {
 			},
 			expectedLocators: map[string]allocations{
 				"node-1": {
-					"pool-1": types.MustNewLocator(
-						netip.MustParsePrefix("fc00:0:0:10::/64"),
-						types_sid_40_24_16,
-					),
+					"pool-1": &LocatorInfo{
+						Locator: *types.MustNewLocator(
+							netip.MustParsePrefix("fc00:0:0:10::/64"),
+							types_sid_40_24_16,
+						),
+						BehaviorType: types.BehaviorTypeBase,
+					},
 
-					"pool-2": types.MustNewLocator(
-						netip.MustParsePrefix("fd00:0:0:10::/64"),
-						types_sid_40_24_16,
-					),
+					"pool-2": &LocatorInfo{
+						Locator: *types.MustNewLocator(
+							netip.MustParsePrefix("fd00:0:0:10::/64"),
+							types_sid_40_24_16,
+						),
+						BehaviorType: types.BehaviorTypeUSID,
+					},
 				},
 				"node-2": {
-					"pool-1": types.MustNewLocator(
-						netip.MustParsePrefix("fc00:0:0:20::/64"),
-						types_sid_40_24_16,
-					),
-
-					"pool-2": types.MustNewLocator(
-						netip.MustParsePrefix("fd00:0:0:20::/64"),
-						types_sid_40_24_16,
-					),
+					"pool-1": &LocatorInfo{
+						Locator: *types.MustNewLocator(
+							netip.MustParsePrefix("fc00:0:0:20::/64"),
+							types_sid_40_24_16,
+						),
+						BehaviorType: types.BehaviorTypeBase,
+					},
+					"pool-2": &LocatorInfo{
+						Locator: *types.MustNewLocator(
+							netip.MustParsePrefix("fd00:0:0:20::/64"),
+							types_sid_40_24_16,
+						),
+						BehaviorType: types.BehaviorTypeUSID,
+					},
 				},
 			},
 			expectedSIDManagers: []*isovalent_api_v1alpha1.IsovalentSRv6SIDManager{
@@ -1040,8 +1102,9 @@ func Test_Resync(t *testing.T) {
 								PoolRef: "pool-1",
 								Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    "fc00:0:0:10::/64",
-										Structure: sid_40_24_16,
+										Prefix:       "fc00:0:0:10::/64",
+										Structure:    sid_40_24_16,
+										BehaviorType: "Base",
 									},
 								},
 							},
@@ -1049,8 +1112,9 @@ func Test_Resync(t *testing.T) {
 								PoolRef: "pool-2",
 								Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    "fd00:0:0:10::/64",
-										Structure: sid_40_24_16,
+										Prefix:       "fd00:0:0:10::/64",
+										Structure:    sid_40_24_16,
+										BehaviorType: "uSID",
 									},
 								},
 							},
@@ -1067,8 +1131,9 @@ func Test_Resync(t *testing.T) {
 								PoolRef: "pool-1",
 								Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    "fc00:0:0:20::/64",
-										Structure: sid_40_24_16,
+										Prefix:       "fc00:0:0:20::/64",
+										Structure:    sid_40_24_16,
+										BehaviorType: "Base",
 									},
 								},
 							},
@@ -1076,8 +1141,9 @@ func Test_Resync(t *testing.T) {
 								PoolRef: "pool-2",
 								Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    "fd00:0:0:20::/64",
-										Structure: sid_40_24_16,
+										Prefix:       "fd00:0:0:20::/64",
+										Structure:    sid_40_24_16,
+										BehaviorType: "uSID",
 									},
 								},
 							},
@@ -1096,8 +1162,9 @@ func Test_Resync(t *testing.T) {
 							Name: "pool-1",
 						},
 						Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-							Prefix:    "fc00::/48",
-							Structure: sid_40_24_16,
+							Prefix:       "fc00::/48",
+							Structure:    sid_40_24_16,
+							BehaviorType: "Base",
 						},
 					},
 				},
@@ -1112,8 +1179,9 @@ func Test_Resync(t *testing.T) {
 									PoolRef: "pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "fc00:0:0:10::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "fc00:0:0:10::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -1121,8 +1189,9 @@ func Test_Resync(t *testing.T) {
 									PoolRef: "pool-2",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "fd00:0:0:10::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "fd00:0:0:10::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "uSID",
 										},
 									},
 								},
@@ -1139,8 +1208,9 @@ func Test_Resync(t *testing.T) {
 									PoolRef: "pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "fc00:0:0:20::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "fc00:0:0:20::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -1148,8 +1218,9 @@ func Test_Resync(t *testing.T) {
 									PoolRef: "pool-2",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "fd00:0:0:20::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "fd00:0:0:20::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "uSID",
 										},
 									},
 								},
@@ -1160,16 +1231,22 @@ func Test_Resync(t *testing.T) {
 			},
 			expectedLocators: map[string]allocations{
 				"node-1": {
-					"pool-1": types.MustNewLocator(
-						netip.MustParsePrefix("fc00:0:0:10::/64"),
-						types_sid_40_24_16,
-					),
+					"pool-1": &LocatorInfo{
+						Locator: *types.MustNewLocator(
+							netip.MustParsePrefix("fc00:0:0:10::/64"),
+							types_sid_40_24_16,
+						),
+						BehaviorType: types.BehaviorTypeBase,
+					},
 				},
 				"node-2": {
-					"pool-1": types.MustNewLocator(
-						netip.MustParsePrefix("fc00:0:0:20::/64"),
-						types_sid_40_24_16,
-					),
+					"pool-1": &LocatorInfo{
+						Locator: *types.MustNewLocator(
+							netip.MustParsePrefix("fc00:0:0:20::/64"),
+							types_sid_40_24_16,
+						),
+						BehaviorType: types.BehaviorTypeBase,
+					},
 				},
 			},
 			expectedSIDManagers: []*isovalent_api_v1alpha1.IsovalentSRv6SIDManager{
@@ -1183,8 +1260,9 @@ func Test_Resync(t *testing.T) {
 								PoolRef: "pool-1",
 								Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    "fc00:0:0:10::/64",
-										Structure: sid_40_24_16,
+										Prefix:       "fc00:0:0:10::/64",
+										Structure:    sid_40_24_16,
+										BehaviorType: "Base",
 									},
 								},
 							},
@@ -1201,8 +1279,9 @@ func Test_Resync(t *testing.T) {
 								PoolRef: "pool-1",
 								Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    "fc00:0:0:20::/64",
-										Structure: sid_40_24_16,
+										Prefix:       "fc00:0:0:20::/64",
+										Structure:    sid_40_24_16,
+										BehaviorType: "Base",
 									},
 								},
 							},
@@ -1221,8 +1300,9 @@ func Test_Resync(t *testing.T) {
 							Name: "pool-1",
 						},
 						Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-							Prefix:    "fc00::/48",
-							Structure: sid_40_24_16,
+							Prefix:       "fc00::/48",
+							Structure:    sid_40_24_16,
+							BehaviorType: "Base",
 						},
 					},
 					{
@@ -1230,8 +1310,9 @@ func Test_Resync(t *testing.T) {
 							Name: "pool-2",
 						},
 						Spec: isovalent_api_v1alpha1.IsovalentSRv6LocatorPoolSpec{
-							Prefix:    "fd00::/48",
-							Structure: sid_40_24_16,
+							Prefix:       "fd00::/48",
+							Structure:    sid_40_24_16,
+							BehaviorType: "uSID",
 						},
 					},
 				},
@@ -1246,8 +1327,9 @@ func Test_Resync(t *testing.T) {
 									PoolRef: "pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "fc00:0:0:10::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "fc00:0:0:10::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -1264,8 +1346,9 @@ func Test_Resync(t *testing.T) {
 									PoolRef: "pool-1",
 									Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 										{
-											Prefix:    "fc00:0:0:20::/64",
-											Structure: sid_40_24_16,
+											Prefix:       "fc00:0:0:20::/64",
+											Structure:    sid_40_24_16,
+											BehaviorType: "Base",
 										},
 									},
 								},
@@ -1277,26 +1360,38 @@ func Test_Resync(t *testing.T) {
 			nondeterministic: true,
 			expectedLocators: map[string]allocations{
 				"node-1": {
-					"pool-1": types.MustNewLocator(
-						netip.MustParsePrefix("fc00:0:0:10::/64"),
-						types_sid_40_24_16,
-					),
+					"pool-1": &LocatorInfo{
+						Locator: *types.MustNewLocator(
+							netip.MustParsePrefix("fc00:0:0:10::/64"),
+							types_sid_40_24_16,
+						),
+						BehaviorType: types.BehaviorTypeBase,
+					},
 
-					"pool-2": types.MustNewLocator(
-						netip.MustParsePrefix("fd00:0:0:0::/64"), // bit map is non-deterministic, so we just check the prefix
-						types_sid_40_24_16,
-					),
+					"pool-2": &LocatorInfo{
+						Locator: *types.MustNewLocator(
+							netip.MustParsePrefix("fd00:0:0:0::/64"), // bit map is non-deterministic, so we just check the prefix
+							types_sid_40_24_16,
+						),
+						BehaviorType: types.BehaviorTypeUSID,
+					},
 				},
 				"node-2": {
-					"pool-1": types.MustNewLocator(
-						netip.MustParsePrefix("fc00:0:0:10::/64"),
-						types_sid_40_24_16,
-					),
+					"pool-1": &LocatorInfo{
+						Locator: *types.MustNewLocator(
+							netip.MustParsePrefix("fc00:0:0:10::/64"),
+							types_sid_40_24_16,
+						),
+						BehaviorType: types.BehaviorTypeBase,
+					},
 
-					"pool-2": types.MustNewLocator(
-						netip.MustParsePrefix("fd00:0:0:0::/64"), // bit map is non-deterministic, so we just check the prefix
-						types_sid_40_24_16,
-					),
+					"pool-2": &LocatorInfo{
+						Locator: *types.MustNewLocator(
+							netip.MustParsePrefix("fd00:0:0:0::/64"), // bit map is non-deterministic, so we just check the prefix
+							types_sid_40_24_16,
+						),
+						BehaviorType: types.BehaviorTypeUSID,
+					},
 				},
 			},
 			expectedSIDManagers: []*isovalent_api_v1alpha1.IsovalentSRv6SIDManager{
@@ -1310,8 +1405,9 @@ func Test_Resync(t *testing.T) {
 								PoolRef: "pool-1",
 								Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    "fc00:0:0:10::/64",
-										Structure: sid_40_24_16,
+										Prefix:       "fc00:0:0:10::/64",
+										Structure:    sid_40_24_16,
+										BehaviorType: "Base",
 									},
 								},
 							},
@@ -1319,8 +1415,9 @@ func Test_Resync(t *testing.T) {
 								PoolRef: "pool-2",
 								Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    "fd00:0:0:0::/64", // bit map is non-deterministic, so we just check the prefix
-										Structure: sid_40_24_16,
+										Prefix:       "fd00:0:0:0::/64", // bit map is non-deterministic, so we just check the prefix
+										Structure:    sid_40_24_16,
+										BehaviorType: "uSID",
 									},
 								},
 							},
@@ -1337,8 +1434,9 @@ func Test_Resync(t *testing.T) {
 								PoolRef: "pool-1",
 								Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    "fc00:0:0:20::/64",
-										Structure: sid_40_24_16,
+										Prefix:       "fc00:0:0:20::/64",
+										Structure:    sid_40_24_16,
+										BehaviorType: "Base",
 									},
 								},
 							},
@@ -1346,8 +1444,9 @@ func Test_Resync(t *testing.T) {
 								PoolRef: "pool-2",
 								Locators: []*isovalent_api_v1alpha1.IsovalentSRv6Locator{
 									{
-										Prefix:    "fd00:0:0:0::/64", // bit map is non-deterministic, so we just check the prefix
-										Structure: sid_40_24_16,
+										Prefix:       "fd00:0:0:0::/64", // bit map is non-deterministic, so we just check the prefix
+										Structure:    sid_40_24_16,
+										BehaviorType: "uSID",
 									},
 								},
 							},
@@ -1464,9 +1563,10 @@ func Test_Resync(t *testing.T) {
 
 func cmpAllocators(req *require.Assertions, locPrefixLen int, i, j []*isovalent_api_v1alpha1.IsovalentSRv6LocatorAllocation) {
 	type data struct {
-		pool   string
-		prefix string
-		sid    isovalent_api_v1alpha1.IsovalentSRv6SIDStructure
+		pool         string
+		prefix       string
+		sid          isovalent_api_v1alpha1.IsovalentSRv6SIDStructure
+		behaviorType string
 	}
 	var (
 		firstPools  []data
@@ -1480,9 +1580,10 @@ func cmpAllocators(req *require.Assertions, locPrefixLen int, i, j []*isovalent_
 		req.NoError(err)
 
 		d := data{
-			pool:   p.PoolRef,
-			prefix: shortPrefix.String(),
-			sid:    p.Locators[0].Structure,
+			pool:         p.PoolRef,
+			prefix:       shortPrefix.String(),
+			sid:          p.Locators[0].Structure,
+			behaviorType: p.Locators[0].BehaviorType,
 		}
 		firstPools = append(firstPools, d)
 	}
@@ -1494,9 +1595,10 @@ func cmpAllocators(req *require.Assertions, locPrefixLen int, i, j []*isovalent_
 		req.NoError(err)
 
 		d := data{
-			pool:   p.PoolRef,
-			prefix: shortPrefix.String(),
-			sid:    p.Locators[0].Structure,
+			pool:         p.PoolRef,
+			prefix:       shortPrefix.String(),
+			sid:          p.Locators[0].Structure,
+			behaviorType: p.Locators[0].BehaviorType,
 		}
 		secondPools = append(secondPools, d)
 	}

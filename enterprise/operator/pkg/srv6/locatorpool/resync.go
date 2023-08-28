@@ -86,12 +86,12 @@ poolEventLoop:
 }
 
 func (lpm *LocatorPoolManager) createPoolAndSyncNodeIDs(pool *isovalent_api_v1alpha1.IsovalentSRv6LocatorPool, sidManagers []*isovalent_api_v1alpha1.IsovalentSRv6SIDManager) error {
-	prefix, sidStructure, err := lpm.parsePool(pool)
+	poolConf, err := lpm.parsePool(pool)
 	if err != nil {
 		return fmt.Errorf("parsePool: %w", err)
 	}
 
-	p, err := newPool(poolConfig{pool.Name, prefix, sidStructure})
+	p, err := newPool(poolConf)
 	if err != nil {
 		return fmt.Errorf("newPool: %w", err)
 	}
@@ -141,7 +141,7 @@ func (lpm *LocatorPoolManager) syncPoolWithAPI(p LocatorPool, nodeRef string, no
 	return nil
 }
 
-func fromAPILocator(loc *isovalent_api_v1alpha1.IsovalentSRv6Locator) (*types.Locator, error) {
+func fromAPILocator(loc *isovalent_api_v1alpha1.IsovalentSRv6Locator) (*LocatorInfo, error) {
 	nodeSIDPrefix, err := netip.ParsePrefix(loc.Prefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse prefix of existing SID Manager %s: %w", loc.Prefix, err)
@@ -155,7 +155,19 @@ func fromAPILocator(loc *isovalent_api_v1alpha1.IsovalentSRv6Locator) (*types.Lo
 		return nil, fmt.Errorf("failed to parse SID structure of existing SID Manager %v: %w", loc.Structure, err)
 	}
 
-	return types.NewLocator(nodeSIDPrefix, nodeSIDStructure)
+	locInfo, err := types.NewLocator(nodeSIDPrefix, nodeSIDStructure)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create locator from existing SID Manager %v: %w", loc, err)
+	}
+
+	if types.BehaviorTypeFromString(loc.BehaviorType) == types.BehaviorTypeUnknown {
+		return nil, fmt.Errorf("invalid behavior type %s", loc.BehaviorType)
+	}
+
+	return &LocatorInfo{
+		Locator:      *locInfo,
+		BehaviorType: types.BehaviorTypeFromString(loc.BehaviorType),
+	}, nil
 }
 
 func (lpm *LocatorPoolManager) syncSIDManagers(ctx context.Context, sidManagers []*isovalent_api_v1alpha1.IsovalentSRv6SIDManager) {

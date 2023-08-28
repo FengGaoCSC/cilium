@@ -15,7 +15,6 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/cilium/cilium/enterprise/pkg/srv6/types"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/job"
@@ -55,7 +54,7 @@ type LocatorPoolManagerParams struct {
 }
 
 // allocations is a map of locator pools, key is pool name and value is locator allocated from this pool
-type allocations map[string]*types.Locator
+type allocations map[string]*LocatorInfo
 
 // LocatorPoolManager is responsible for managing SRv6 Locator Pools
 type LocatorPoolManager struct {
