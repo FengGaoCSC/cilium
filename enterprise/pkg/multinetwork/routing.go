@@ -235,7 +235,7 @@ func extractNodeIP(n *nodeTypes.Node, networkName string) (ipv4 net.IP, ipv6 net
 }
 
 func createDirectNodeRoute(podCIDR string, nodeIPv4, nodeIPv6 net.IP) (*netlink.Route, error) {
-	_, dst, err := net.ParseCIDR(string(podCIDR))
+	_, dst, err := net.ParseCIDR(podCIDR)
 	if err != nil {
 		return nil, err
 	}
