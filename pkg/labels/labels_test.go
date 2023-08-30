@@ -405,7 +405,7 @@ func BenchmarkLabels_SortedList(b *testing.B) {
 }
 
 func BenchmarkLabel_FormatForKVStore(b *testing.B) {
-	l := NewLabel("io.kubernetes.pod.namespace", "kube-system", "k8s")
+	l := NewLabel("io.kubernetes.pod.namespace", "kube-system", LabelSourceK8s)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -414,7 +414,7 @@ func BenchmarkLabel_FormatForKVStore(b *testing.B) {
 }
 
 func BenchmarkLabel_String(b *testing.B) {
-	l := NewLabel("io.kubernetes.pod.namespace", "kube-system", "k8s")
+	l := NewLabel("io.kubernetes.pod.namespace", "kube-system", LabelSourceK8s)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -432,9 +432,9 @@ func BenchmarkGenerateLabelString(b *testing.B) {
 
 func TestLabel_String(t *testing.T) {
 	// with value
-	l := NewLabel("io.kubernetes.pod.namespace", "kube-system", "k8s")
+	l := NewLabel("io.kubernetes.pod.namespace", "kube-system", LabelSourceK8s)
 	assert.Equal(t, "k8s:io.kubernetes.pod.namespace=kube-system", l.String())
 	// without value
-	l = NewLabel("io.kubernetes.pod.namespace", "", "k8s")
+	l = NewLabel("io.kubernetes.pod.namespace", "", LabelSourceK8s)
 	assert.Equal(t, "k8s:io.kubernetes.pod.namespace", l.String())
 }
