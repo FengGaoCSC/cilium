@@ -283,6 +283,15 @@ func extractDirectNodeRoutes(networks []*iso_v1alpha1.IsovalentPodNetwork, node 
 				continue
 			}
 
+			// Skip routes without a gateway. This can happen if the node has not
+			// announced its IP address for the pool's network yet
+			if route.Gw == nil {
+				scopedLog.
+					WithField(logfields.CIDR, cidr).
+					Debug("no matching node IP found for pod CIDR, skipping")
+				continue
+			}
+
 			routes = append(routes, route)
 		}
 	}
