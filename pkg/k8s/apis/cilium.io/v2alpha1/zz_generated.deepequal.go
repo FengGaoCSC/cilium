@@ -205,6 +205,14 @@ func (in *CiliumBGPVirtualRouter) DeepEqual(other *CiliumBGPVirtualRouter) bool 
 	if in.MapSRv6VRFs != other.MapSRv6VRFs {
 		return false
 	}
+	if (in.SRv6LocatorPoolSelector == nil) != (other.SRv6LocatorPoolSelector == nil) {
+		return false
+	} else if in.SRv6LocatorPoolSelector != nil {
+		if !in.SRv6LocatorPoolSelector.DeepEqual(other.SRv6LocatorPoolSelector) {
+			return false
+		}
+	}
+
 	if ((in.Neighbors != nil) && (other.Neighbors != nil)) || ((in.Neighbors == nil) != (other.Neighbors == nil)) {
 		in, other := &in.Neighbors, &other.Neighbors
 		if other == nil {

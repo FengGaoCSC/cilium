@@ -220,6 +220,11 @@ type CiliumBGPVirtualRouter struct {
 	//
 	// +kubebuilder:validation:Optional
 	MapSRv6VRFs bool `json:"mapSRv6VRFs"`
+	// SRv6LocatorPoolSelector selects a group of IsovalentSRv6LocatorPool resources
+	// which this virtual router will announce.
+	//
+	// +kubebuilder:validation:Optional
+	SRv6LocatorPoolSelector *slimv1.LabelSelector `json:"srv6LocatorPoolSelector,omitempty"`
 	// Neighbors is a list of neighboring BGP peers for this virtual router
 	//
 	// +kubebuilder:validation:Required

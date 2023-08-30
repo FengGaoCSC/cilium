@@ -206,6 +206,11 @@ func (in *CiliumBGPVirtualRouter) DeepCopyInto(out *CiliumBGPVirtualRouter) {
 		*out = new(v1.LabelSelector)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.SRv6LocatorPoolSelector != nil {
+		in, out := &in.SRv6LocatorPoolSelector, &out.SRv6LocatorPoolSelector
+		*out = new(v1.LabelSelector)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Neighbors != nil {
 		in, out := &in.Neighbors, &out.Neighbors
 		*out = make([]CiliumBGPNeighbor, len(*in))
