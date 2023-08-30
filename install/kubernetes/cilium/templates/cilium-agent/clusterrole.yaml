@@ -106,6 +106,7 @@ rules:
   resources:
   - isovalentegressgatewaypolicies
   - isovalentsrv6sidmanagers
+  - isovalentsrv6locatorpools
   verbs:
   - list
   - watch

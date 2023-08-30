@@ -15,7 +15,10 @@ import (
 )
 
 // Enterprise-only reconcilers
-var ConfigReconcilers = cell.Provide(
-	NewExportVRFReconciler,
-	NewImportVRFReconciler,
+var ConfigReconcilers = cell.Group(
+	ExportSRv6LocatorPoolReconcilerCell,
+	cell.Provide(
+		NewExportVRFReconciler,
+		NewImportVRFReconciler,
+	),
 )
