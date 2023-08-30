@@ -114,21 +114,7 @@ func collectLocalNodeIPs(ifaces []netlink.Link, family int) []net.IP {
 	return nodeIPs
 }
 
-func (m *localNetworkIPCollector) updateNodeIPAddresses(nodeUpdater nodeUpdater) error {
-	ifaces, err := netlink.LinkList()
-	if err != nil {
-		return fmt.Errorf("failed to list node interfaces: %w", err)
-	}
-
-	var nodeIPv4, nodeIPv6 []net.IP
-	if m.daemonConfig.IPv4Enabled() {
-		nodeIPv4 = collectLocalNodeIPs(ifaces, netlink.FAMILY_V4)
-	}
-	if m.daemonConfig.IPv6Enabled() {
-		nodeIPv6 = collectLocalNodeIPs(ifaces, netlink.FAMILY_V6)
-	}
-
-	networks := m.networkStore.List()
+func extractNodeIPsforNetworks(networks []*iso_v1alpha1.IsovalentPodNetwork, nodeIPv4 []net.IP, nodeIPv6 []net.IP) map[string]nodeIPPair {
 	nodeIPByNetworkName := make(map[string]nodeIPPair, len(networks))
 
 	for _, network := range networks {
@@ -171,6 +157,25 @@ func (m *localNetworkIPCollector) updateNodeIPAddresses(nodeUpdater nodeUpdater)
 			nodeIPByNetworkName[networkName] = nodeIPs
 		}
 	}
+	return nodeIPByNetworkName
+}
+
+func (m *localNetworkIPCollector) updateNodeIPAddresses(nodeUpdater nodeUpdater) error {
+	ifaces, err := netlink.LinkList()
+	if err != nil {
+		return fmt.Errorf("failed to list node interfaces: %w", err)
+	}
+
+	var nodeIPv4, nodeIPv6 []net.IP
+	if m.daemonConfig.IPv4Enabled() {
+		nodeIPv4 = collectLocalNodeIPs(ifaces, netlink.FAMILY_V4)
+	}
+	if m.daemonConfig.IPv6Enabled() {
+		nodeIPv6 = collectLocalNodeIPs(ifaces, netlink.FAMILY_V6)
+	}
+
+	networks := m.networkStore.List()
+	nodeIPByNetworkName := extractNodeIPsforNetworks(networks, nodeIPv4, nodeIPv6)
 
 	m.mutex.Lock()
 	changed := maps.EqualFunc(m.nodeIPByNetworkName, nodeIPByNetworkName, nodeIPPair.Equal)
