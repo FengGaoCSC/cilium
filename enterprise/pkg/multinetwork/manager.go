@@ -37,12 +37,15 @@ const (
 	defaultNetwork = "default"
 )
 
+// ManagerStoppedError is returned when a API call is being made while the manager is stopped
 type ManagerStoppedError struct{}
 
 func (m *ManagerStoppedError) Error() string {
 	return "multi-network-manager has been stopped"
 }
 
+// ResourceNotFound is returned when a Kubernetes resource
+// (e.g. Pod, IsovalentPodNetwork) is not found
 type ResourceNotFound struct {
 	Resource  string
 	Name      string
@@ -73,6 +76,10 @@ type daemonConfig interface {
 	IPv6Enabled() bool
 }
 
+// Manager is responsible for managing multi-networking. It implements the
+// Cilium API stubs to provide multi-networking information to the Cilium CNI
+// plugin and contains an implementation of the multi-networking-aware auto direct
+// node routes logic.
 type Manager struct {
 	config       config
 	daemonConfig daemonConfig
@@ -84,6 +91,8 @@ type Manager struct {
 	networkStore    resource.Store[*iso_v1alpha1.IsovalentPodNetwork]
 }
 
+// Start initializes the manager and starts watching the Kubernetes resources.
+// Invoked by the hive framework.
 func (m *Manager) Start(ctx hive.HookContext) (err error) {
 	m.podStore, err = m.podResource.Store(ctx)
 	if err != nil {
@@ -98,18 +107,40 @@ func (m *Manager) Start(ctx hive.HookContext) (err error) {
 	return nil
 }
 
+// Stop stops the manager, meaning it can no longer serve API requests.
+// Invoked by the hive framework.
 func (m *Manager) Stop(ctx hive.HookContext) error {
 	m.podStore = nil
 	m.networkStore = nil
 	return nil
 }
 
+// GetConfigurationStatus returns if multi-networking is enabled. This is used
+// by the Cilium CNI plugin to determine if the multi-networking logic should
+// be used during a CNI ADD request.
 func (m *Manager) GetConfigurationStatus() *models.DaemonConfigurationStatusMultiNetworking {
 	return &models.DaemonConfigurationStatusMultiNetworking{
 		Enabled: m.config.EnableMultiNetwork,
 	}
 }
 
+// GetNetworksForPod returns the networks a pod should be attached to.
+// The returned list of networks contains the network name, routes, and IPAM
+// pool name for each network.
+//
+// This function is invoked via the Cilium API from the Cilium CNI plugin during
+// a CNI ADD request. It uses this information to determine which how many endpoints
+// (and thereby intefaces) have to be created for the new pod.
+//
+// We determine attached networks to by looking at the
+// network.v1alpha1.isovalent.com/pod-networks annotation on the pod. If the
+// annotation is not present, we default to the "default" network. Otherwise,
+// we require all to-be-attached networks to be listed in the annotation,
+// including the "default" one.
+//
+// If the pod or requested network is not yet known, we return an error. This
+// will cause the CNI ADD request to fail, but it will be retried later, at which
+// point the pod and/or network should hopefully be available.
 func (m *Manager) GetNetworksForPod(ctx context.Context, podNamespace, podName string) (*models.NetworkAttachmentList, error) {
 	if m.podStore == nil || m.networkStore == nil {
 		return nil, &ManagerStoppedError{}

@@ -44,10 +44,19 @@ const (
 	isovalentNetworkIP      = "isovalent.com/v1alpha1/NetworkIP"
 )
 
+// newNetworkAddressingType creates a new addressing type for a network.
+// The addressing type is part of the Isovalent namespace to avoid clashes with
+// upstream addressing types. The addressing type also contains the network name,
+// which is used to identify the network of the associated address. We store the
+// network name in the type instead of a separate field to avoid having to change
+// the upstream (stable) node type.
+// This is a temporary solution, the goal is to eventually upstream parts of
+// this commit and change the node schema to store the network name.
 func newNetworkAddressingType(networkName string) addressing.AddressType {
 	return addressing.AddressType(isovalentNetworkIP + ":" + networkName)
 }
 
+// extractNetwork extracts the network name from a isovalentNetworkIP addressing type.
 func extractNetwork(addressType addressing.AddressType) (networkName string, ok bool) {
 	ipType, network, ok := strings.Cut(string(addressType), ":")
 	if !ok || ipType != isovalentNetworkIP {
@@ -57,6 +66,25 @@ func extractNetwork(addressType addressing.AddressType) (networkName string, ok 
 	return network, true
 }
 
+// localNetworkIPCollector collects the local node IP addresses for each network
+// and updates the local node in K8s or kvstore accordingly. This allows other
+// nodes to install direct node routes for secondary networks via the correct IP
+// address.
+
+// In multi-homing mode, we now need to assume that a node will have multiple
+// node IP addresses, i.e. at least one per network. Therefore, the following
+// ccode periodically lists the host's network interfaces and extracts node IP
+// addresses based on the route listed in the `IsovalentPodNetwork`.
+// If the interface IP matches one of the network's routes, we then assume it is
+// the canonical IP address of the node in that network.
+// Future extensions and configurations to this mechanism are possible, but for
+// now we just support this rather simple mechanism.
+//
+// The secondary node IPs are then passed to the `NodeDiscovery` package,
+// which is responsible for announcing them to other nodes in the kvstore and
+// the CiliumNode CRD. This also has the nice side effect that other cilium-agents
+// will now add those secondary node IPs into the IPCache with the `remote-node`
+// identity.
 type localNetworkIPCollector struct {
 	daemonConfig daemonConfig
 
@@ -66,6 +94,8 @@ type localNetworkIPCollector struct {
 	nodeIPByNetworkName map[string]nodeIPPair
 }
 
+// GetNodeAddresses returns the local node IP addresses for each discovered network.
+// This is invoked by NodeDiscovery to populate the local node resource.
 func (m *localNetworkIPCollector) GetNodeAddresses() []nodeTypes.Address {
 	if m.networkStore == nil {
 		return nil
@@ -93,6 +123,7 @@ func (m *localNetworkIPCollector) GetNodeAddresses() []nodeTypes.Address {
 	return nodeAddresses
 }
 
+// collectLocalNodeIPs collects all local node IP addresses from the given interfaces and IP family.
 func collectLocalNodeIPs(ifaces []netlink.Link, family int) []net.IP {
 	nodeIPs := make([]net.IP, 0, len(ifaces))
 	for _, iface := range ifaces {
@@ -114,6 +145,10 @@ func collectLocalNodeIPs(ifaces []netlink.Link, family int) []net.IP {
 	return nodeIPs
 }
 
+// extractNodeIPsforNetworks extracts the local node IP addresses for each network.
+// It does this by matching the network routes to the local node IP addresses. The
+// first matching IP address is used for each network.
+// It returns a map of network name to node IP pair.
 func extractNodeIPsforNetworks(networks []*iso_v1alpha1.IsovalentPodNetwork, nodeIPv4 []net.IP, nodeIPv6 []net.IP) map[string]nodeIPPair {
 	nodeIPByNetworkName := make(map[string]nodeIPPair, len(networks))
 
@@ -160,6 +195,11 @@ func extractNodeIPsforNetworks(networks []*iso_v1alpha1.IsovalentPodNetwork, nod
 	return nodeIPByNetworkName
 }
 
+// updateNodeIPAddresses collects and announces the local node IP
+// addresses for each network. By calling nodeUpdater.UpdateLocalNode(), the
+// nodeUpdater will call back into GetNodeAddresses() to retrieve the list of
+// updated node addresses.
+// This is run periodically by the localNodeSyncController controller.
 func (m *localNetworkIPCollector) updateNodeIPAddresses(nodeUpdater nodeUpdater) error {
 	ifaces, err := netlink.LinkList()
 	if err != nil {
@@ -190,11 +230,30 @@ func (m *localNetworkIPCollector) updateNodeIPAddresses(nodeUpdater nodeUpdater)
 	return nil
 }
 
+// remoteNode represents a remote node for which we have installed direct node routes
 type remoteNode struct {
 	node   *v2.CiliumNode
 	routes []*netlink.Route
 }
 
+// remoteNodeRouteManager manages direct node routes for remote nodes.
+//
+// Direct node routes are routes in the form of `$podCIDR via $nodeIP` for each
+// remote node in the cluster, thereby allowing pod traffic to be routed to the
+// connect node on a L2-connected network.
+//
+// It does this by watching all remote CiliumNodes in the cluster, extracting
+// the remote node's multi-pool pod CIDRs, and then installing routes in the
+// form of `$podCIDR via $nodeIP` for each node.
+//
+// Ideally, we would integrate this logic into the existing `auto-direct-node-routes`
+// code in upstream. However, because making that code multi-network aware is
+// rather intrusive and would require kvstore schema changes, we instead let the
+// logic live here in the multinetwork cell for now.
+//
+// One shortcoming of this (besides code duplication) is that the multinetwork
+// version only subscribes to CiliumNode updates, which means clustermesh is
+// not supported at the moment.
 type remoteNodeRouteManager struct {
 	networkStore resource.Store[*iso_v1alpha1.IsovalentPodNetwork]
 
@@ -202,6 +261,9 @@ type remoteNodeRouteManager struct {
 	nodes map[string]*remoteNode
 }
 
+// getNetworkForIPAMPool extracts the network name for the given IPAM pool name
+// out of the list of known IsovalentPodNetworks. This each IPAM pool is only used
+// in a single network.
 func getNetworkForIPAMPool(networks []*iso_v1alpha1.IsovalentPodNetwork, poolName string) (networkName string, ok bool) {
 	for _, network := range networks {
 		if network.Spec.IPAM.Pool.Name == poolName {
@@ -212,6 +274,10 @@ func getNetworkForIPAMPool(networks []*iso_v1alpha1.IsovalentPodNetwork, poolNam
 	return "", false
 }
 
+// extractNodeIP extracts the node IP for the given network from the given node.
+// For the default network, we use the regular node IP also used by other parts
+// of non-multi-network aware Cilium. For secondary networks, we extract the
+// node IP from isovalentNetworkIP addresses in the IPAddresses field.
 func extractNodeIP(n *nodeTypes.Node, networkName string) (ipv4 net.IP, ipv6 net.IP) {
 	// Use the regular node address for the default network
 	if networkName == defaultNetwork {
@@ -239,6 +305,8 @@ func extractNodeIP(n *nodeTypes.Node, networkName string) (ipv4 net.IP, ipv6 net
 	return ipv4, ipv6
 }
 
+// createDirectNodeRoute creates a direct node route for the given pod CIDR and
+// node IP. The route's next hop will be IPv4 or IPv6 depending on the pod CIDR.
 func createDirectNodeRoute(podCIDR string, nodeIPv4, nodeIPv6 net.IP) (*netlink.Route, error) {
 	_, dst, err := net.ParseCIDR(podCIDR)
 	if err != nil {
@@ -259,6 +327,10 @@ func createDirectNodeRoute(podCIDR string, nodeIPv4, nodeIPv6 net.IP) (*netlink.
 	}, nil
 }
 
+// extractDirectNodeRoutes extracts the direct node routes for the given node.
+// It does this by matching the node's IPAM pools to the networks and then
+// creating a direct node route for each CIDR in the pool. The route's gateway
+// will be the node IP for the network of the IPAM pool.
 func extractDirectNodeRoutes(networks []*iso_v1alpha1.IsovalentPodNetwork, node *v2.CiliumNode) (routes []*netlink.Route) {
 	if node == nil {
 		return nil // return empty slice if node was deleted
@@ -304,6 +376,7 @@ func extractDirectNodeRoutes(networks []*iso_v1alpha1.IsovalentPodNetwork, node 
 	return routes
 }
 
+// extractRemovedRoutes extracts the routes that are in oldRoutes but not in newRoutes.
 func extractRemovedRoutes(oldRoutes, newRoutes []*netlink.Route) (removed []*netlink.Route) {
 	for _, oldRoute := range oldRoutes {
 		if !slices.ContainsFunc(newRoutes, func(r *netlink.Route) bool {
@@ -315,6 +388,11 @@ func extractRemovedRoutes(oldRoutes, newRoutes []*netlink.Route) (removed []*net
 	return removed
 }
 
+// resyncNodes resyncs all direct node routes for all remote nodes. This is
+// done periodically for two reasons:
+// First, it will reinstall any routes if they got accidentally removed.
+// Second, because each route consists of a pod CIDR and a node IP, we re-run
+// the route installation logic in case the node IP was only recently discovered.
 func (m *remoteNodeRouteManager) resyncNodes(ctx context.Context) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -326,6 +404,11 @@ func (m *remoteNodeRouteManager) resyncNodes(ctx context.Context) error {
 	return nil
 }
 
+// updateRoutesForNodeLocked updates the direct node routes for the given node.
+// It does this by extracting the node's direct node routes and then comparing
+// them to the previously installed routes. It then removes all routes that are
+// not in the new set of extracted routes and re-installs all routes, including
+// the ones in oldRoutes to ensure they were not accidentally removed.
 func (m *remoteNodeRouteManager) updateRoutesForNodeLocked(nodeName string, newNode *v2.CiliumNode, oldRoutes []*netlink.Route) {
 	networks := m.networkStore.List()
 	newRoutes := extractDirectNodeRoutes(networks, newNode)
@@ -368,6 +451,8 @@ func (m *remoteNodeRouteManager) updateRoutesForNodeLocked(nodeName string, newN
 	}
 }
 
+// OnUpdateCiliumNode is called when a remote CiliumNode is updated. In this case,
+// we want to update the direct node routes for the node.
 func (m *remoteNodeRouteManager) OnUpdateCiliumNode(oldObj, newObj *v2.CiliumNode, swg *lock.StoppableWaitGroup) error {
 	if k8s.IsLocalCiliumNode(newObj) {
 		return nil
