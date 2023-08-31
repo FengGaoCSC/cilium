@@ -1,0 +1,247 @@
+name: Enterprise Multi-Network
+
+# Any change in triggers needs to be reflected in the concurrency group.
+on:
+  pull_request:
+    paths-ignore:
+      - 'Documentation/**'
+      - 'test/**'
+  push:
+    branches:
+      - v1.14
+      - ft/v1.14/**
+    paths-ignore:
+      - 'Documentation/**'
+      - 'test/**'
+
+# By specifying the access of one of the scopes, all of those that are not
+# specified are set to 'none'.
+permissions:
+  # To be able to access the repository with actions/checkout
+  contents: read
+  # To allow retrieving information from the PR API
+  pull-requests: read
+  # To be able to set commit status
+  statuses: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.after }}
+  cancel-in-progress: true
+
+env:
+  # renovate: datasource=github-releases depName=cilium/cilium-cli
+  cilium_cli_version: v0.15.6
+  network-definitions: enterprise/examples/kubernetes/multi-network/isovalentpodnetworks.yaml
+
+jobs:
+  enterprise-multi-network-conformance-test:
+    runs-on: ubuntu-latest-4cores-16gb
+    env:
+      job_name: 'Setup & Test'
+    timeout-minutes: 120
+    steps:
+      - name: Checkout context ref (trusted)
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+        with:
+          ref: ${{ inputs.context-ref || github.sha }}
+          persist-credentials: false
+
+      - name: Set Environment Variables
+        uses: ./.github/actions/set-env-variables
+
+      - name: Set up job variables
+        id: vars
+        run: |
+          if [ ${{ github.event.pull_request }} ]; then
+            SHA=${{ github.event.pull_request.head.sha }}
+          else
+            SHA=${{ github.sha }}
+          fi
+          echo sha=${SHA} >> $GITHUB_OUTPUT
+
+          # Notes:
+          #  - Multi-network only supports direct routing, thus we disable
+          #    tunnel mode and enable auto-direct-routes.
+          #  - Multi-network only supports endpoint routes, thus we disable
+          #    the local-node-route.
+          #  - iptables-based masquerading does not support multiple non-masquerade
+          #    CIDRs. Thus, we enable BPF masquerading where we can add multiple
+          #    non-masquerade CIDRs.
+          CILIUM_INSTALL_DEFAULTS="--chart-directory=install/kubernetes/cilium \
+            --helm-set=debug.enabled=true \
+            --helm-set=debug.verbose=envoy \
+            --helm-set=image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci \
+            --helm-set=image.useDigest=false \
+            --helm-set=image.tag=${SHA} \
+            --helm-set=operator.image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/operator \
+            --helm-set=operator.image.suffix=-ci \
+            --helm-set=operator.image.tag=${SHA} \
+            --helm-set=operator.image.useDigest=false \
+            --helm-set=hubble.relay.enabled=true \
+            --helm-set=hubble.relay.image.repository=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/hubble-relay-ci \
+            --helm-set=hubble.relay.image.tag=${SHA} \
+            --helm-set=hubble.relay.image.useDigest=false \
+            --helm-set=tunnel=disabled \
+            --helm-set=routingMode=native \
+            --helm-set=autoDirectNodeRoutes=true \
+            --helm-set=endpointRoutes.enabled=true \
+            --helm-set-string=extraConfig.enable-local-node-route=false \
+            --helm-set=kubeProxyReplacement=strict \
+            --helm-set=bpf.masquerade=true \
+            --helm-set=bpf.hostLegacyRouting=true \
+            --helm-set=ipv4NativeRoutingCIDR=10.0.0.0/8 \
+            --helm-set=ipMasqAgent.enabled=true \
+            --helm-set=ipMasqAgent.config.nonMasqueradeCIDRs='{192.168.0.0/16}' \
+            --helm-set=ipam.mode=multi-pool \
+            --helm-set=ipam.operator.autoCreateCiliumPodIPPools.default.ipv4.cidrs='{10.10.0.0/16}' \
+            --helm-set=ipam.operator.autoCreateCiliumPodIPPools.default.ipv4.maskSize=24 \
+            --helm-set=ipam.operator.autoCreateCiliumPodIPPools.secondary-pool.ipv4.cidrs='{192.168.0.0/20}' \
+            --helm-set=ipam.operator.autoCreateCiliumPodIPPools.secondary-pool.ipv4.maskSize=27 \
+            --set-string extraConfig.enable-multi-network=true"
+
+          CONNECTIVITY_TEST_DEFAULTS="--flow-validation=disabled --hubble=false --collect-sysdump-on-failure \
+            --deployment-pod-annotations='{ \
+              \"*\":{\"network.v1alpha1.isovalent.com/pod-networks\":\"default,secondary-network\"}, \
+              \"echo-other-node\":{\"network.v1alpha1.isovalent.com/pod-networks\":\"secondary-network\"}, \
+              \"client2\":{\"network.v1alpha1.isovalent.com/pod-networks\":\"secondary-network\"} \
+            }'"
+
+          echo cilium_install_defaults=${CILIUM_INSTALL_DEFAULTS} >> $GITHUB_OUTPUT
+          echo connectivity_test_defaults=${CONNECTIVITY_TEST_DEFAULTS} >> $GITHUB_OUTPUT
+
+      # Warning: since this is a privileged workflow, subsequent workflow job
+      # steps must take care not to execute untrusted code.
+      - name: Checkout pull request branch (NOT TRUSTED)
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+        with:
+          ref: ${{ steps.vars.outputs.sha }}
+          persist-credentials: false
+
+      - name: Install Cilium CLI
+        uses: cilium/cilium-cli@e718cf78ef55d95cfa0a5a0a935d6a224d567e1d # v0.15.6
+        with:
+          release-version: ${{ env.cilium_cli_version }}
+          ci-version: ${{ env.cilium_cli_ci_version }}
+          binary-name: cilium-cli
+          binary-dir: ./
+
+      - name: Provision LVH VMs
+        uses: cilium/little-vm-helper@908ab1ff8a596a03cd5221a1f8602dc44c3f906d # v0.0.12
+        with:
+          test-name: enterprise-multi-network
+          # renovate: datasource=docker depName=quay.io/lvh-images/kind
+          image-version: '6.0-20230420.212204'
+          host-mount: ./
+          cpu: 4
+          dns-resolver: '1.1.1.1'
+          install-dependencies: 'true'
+          cmd: |
+            git config --global --add safe.directory /host
+
+      - name: Wait for images to be available
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          for image in cilium-ci operator-generic-ci hubble-relay-ci; do
+            until docker manifest inspect quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/$image:${{ steps.vars.outputs.sha }} &> /dev/null; do sleep 45s; done
+          done
+
+      - name: Run connectivity tests
+        uses: cilium/little-vm-helper@908ab1ff8a596a03cd5221a1f8602dc44c3f906d # v0.0.12
+        with:
+          provision: 'false'
+          cmd: |
+            cd /host/
+
+            # create kind cluster with secondary network named "secondary-network"
+            # TODO: switch to ./contrib/scripts/kind.sh --secondary-network "1" "2"
+            ./contrib/scripts/kind.sh "1" "2"
+            docker network create \
+              --driver=bridge \
+              --subnet=192.168.0.0/16 \
+              --ip-range=192.168.0.0/24 \
+              --gateway=192.168.0.1 \
+              -o "com.docker.network.bridge.enable_ip_masquerade=false" \
+              secondary-network
+            kind get nodes --name kind | xargs -L1 docker network connect secondary-network
+
+            export CILIUM_CLI_MODE=helm
+            ./cilium-cli install ${{ steps.vars.outputs.cilium_install_defaults }}
+
+            # Only wait for agent DaemonSet and operator Deployment to become
+            # ready so we can create the IsovalentPodNetworks. We cannot use
+            # `cilium status --wait` because hubble-relay will not become ready
+            # without the default network.
+            kubectl rollout status -n kube-system ds/cilium --timeout=180s
+            kubectl rollout status -n kube-system deploy/cilium-operator --timeout=180s
+
+            # Create IsovalentPodNetworks 'default' and 'secondary-network'
+            kubectl apply -f ${{ env.network-definitions }}
+
+            kubectl get pods --all-namespaces -o wide
+            kubectl get cep --all-namespaces -o wide
+            kubectl -n kube-system exec daemonset/cilium -- cilium status
+            kubectl get isovalentpodnetworks -o yaml
+
+            mkdir -p cilium-junits
+
+            ./cilium-cli connectivity test ${{ steps.vars.outputs.connectivity_test_defaults }} \
+              --junit-file "cilium-junits/${{ env.job_name }} - 1.xml" \
+              --junit-property github_job_step="Run connectivity tests"
+
+            kubectl get pods --all-namespaces -o wide
+            kubectl get cep --all-namespaces -o wide
+
+            # Check that endpoints got created for secondary network
+            CLIENT_CEP=\$(kubectl -n cilium-test get cep -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep "^client-.*-.*-cil1")
+            SAME_NODE_CEP=\$(kubectl -n cilium-test get cep -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep "^echo-same-node-.*-.*-cil1")
+
+            # Check that CNI generated labels got added to identity labels of the CEPs
+            kubectl -n cilium-test get cep \$CLIENT_CEP -o jsonpath='{.status.identity.labels}' | grep "cni:com.isovalent.v1alpha1.network.attachment/secondary-network=cil1"
+            kubectl -n cilium-test get cep \$SAME_NODE_CEP -o jsonpath='{.status.identity.labels}' | grep "cni:com.isovalent.v1alpha1.network.attachment/secondary-network=cil1"
+
+            CLIENT_POD=\$(kubectl -n cilium-test get pod -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep "^client-.*-.*")
+            SAME_NODE_POD=\$(kubectl -n cilium-test get pod -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep "^echo-same-node-.*-.*")
+
+            # Check that multi-homed pods got routes set up for secondary network
+            kubectl -n cilium-test exec -ti \$CLIENT_POD -- ip route | grep "^192\.168\.0\.0/16 via 192\.168\.0\.1 dev cil1"
+            kubectl -n cilium-test exec -ti \$SAME_NODE_POD -- ip route | grep "^192\.168\.0\.0/16 via 192\.168\.0\.1 dev cil1"
+
+            # TODO: remove once we switch to ./contrib/scripts/kind.sh --secondary-network
+            docker network rm secondary-network
+
+            ./contrib/scripts/kind-down.sh
+
+      - name: Fetch artifacts
+        if: ${{ !success() }}
+        uses: cilium/little-vm-helper@908ab1ff8a596a03cd5221a1f8602dc44c3f906d # v0.0.12
+        with:
+          provision: 'false'
+          cmd: |
+            cd /host
+            kubectl get pods --all-namespaces -o wide
+            ./cilium-cli status
+            mkdir -p cilium-sysdumps
+            ./cilium-cli sysdump
+
+      - name: Upload artifacts
+        if: ${{ !success() }}
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        with:
+          name: cilium-sysdumps
+          path: cilium-sysdump-*.zip
+          retention-days: 5
+
+      - name: Upload JUnits [junit]
+        if: ${{ always() }}
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        with:
+          name: cilium-junits
+          path: cilium-junits/*.xml
+          retention-days: 2
+
+      - name: Publish Test Results As GitHub Summary
+        if: ${{ always() }}
+        uses: aanm/junit2md@332ebf0fddd34e91b03a832cfafaa826306558f9 # v0.0.3
+        with:
+          junit-directory: "cilium-junits"
