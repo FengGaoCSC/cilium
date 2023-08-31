@@ -198,9 +198,6 @@ rules:
   - ciliumcidrgroups.cilium.io
   - ciliuml2announcementpolicies.cilium.io
   - ciliumpodippools.cilium.io
-  - isovalentfqdngroups.isovalent.com
-  - isovalentegressgatewaypolicies.isovalent.com
-  - isovalentpodnetworks.isovalent.com
 - apiGroups:
   - cilium.io
   resources:
@@ -222,22 +219,6 @@ rules:
   - ciliumloadbalancerippools/status
   verbs:
   - patch
-- apiGroups:
-  - isovalent.com
-  resources:
-  - isovalentfqdngroups
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cilium.io
-  resources:
-  - ciliumcidrgroups
-  verbs:
-  - create
-  - patch
-  - delete
 # For cilium-operator running in HA mode.
 #
 # Cilium operator running in HA mode requires the use of ResourceLock for Leader Election

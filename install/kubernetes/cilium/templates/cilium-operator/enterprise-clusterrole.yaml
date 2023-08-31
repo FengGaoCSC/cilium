@@ -13,7 +13,25 @@ rules:
   verbs:
   - update
   resourceNames:
+  - isovalentfqdngroups.isovalent.com
   - isovalentegressgatewaypolicies.isovalent.com
+  - isovalentpodnetworks.isovalent.com
+- apiGroups:
+    - isovalent.com
+  resources:
+    - isovalentfqdngroups
+  verbs:
+    - get
+    - list
+    - watch
+- apiGroups:
+    - cilium.io
+  resources:
+    - ciliumcidrgroups
+  verbs:
+    - create
+    - patch
+    - delete
 - apiGroups:
   - isovalent.com
   resources:
