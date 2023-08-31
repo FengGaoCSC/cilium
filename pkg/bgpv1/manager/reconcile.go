@@ -373,17 +373,17 @@ func (r *ExportPodCIDRReconciler) Reconcile(ctx context.Context, p ReconcilePara
 		toAdvertise = append(toAdvertise, types.NewPathForPrefix(prefix))
 	}
 
-	advertisements, err := exportAdvertisementsReconciler(&advertisementsReconcilerParams{
-		ctx:       ctx,
-		name:      "pod CIDR",
-		component: "manager.exportPodCIDRReconciler",
-		enabled:   *p.DesiredConfig.ExportPodCIDR,
+	advertisements, err := ExportAdvertisementsReconciler(&AdvertisementsReconcilerParams{
+		Ctx:       ctx,
+		Name:      "pod CIDR",
+		Component: "manager.exportPodCIDRReconciler",
+		Enabled:   *p.DesiredConfig.ExportPodCIDR,
 
-		sc:   p.CurrentServer,
-		newc: p.DesiredConfig,
+		SC:   p.CurrentServer,
+		NewC: p.DesiredConfig,
 
-		currentAdvertisements: p.CurrentServer.PodCIDRAnnouncements,
-		toAdvertise:           toAdvertise,
+		CurrentAdvertisements: p.CurrentServer.PodCIDRAnnouncements,
+		ToAdvertise:           toAdvertise,
 	})
 
 	if err != nil {
