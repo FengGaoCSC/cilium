@@ -19,7 +19,6 @@
 #include "conntrack.h"
 #include "conntrack_map.h"
 #include "egress_gateway.h"
-#include "egress_gateway_ha.h"
 #include "icmp6.h"
 #include "nat_46x64.h"
 #include "stubs.h"
@@ -815,8 +814,7 @@ static __always_inline bool snat_v4_prepare_state(struct __ctx_buff *ctx,
 	if (is_reply)
 		goto skip_egress_gateway;
 
-	if (egress_gw_snat_needed(ip4, &target->addr) ||
-	    egress_gw_ha_snat_needed(ip4, &target->addr)) {
+	if (egress_gw_snat_needed(ip4, &target->addr)) {
 		target->egress_gateway = true;
 		/* If the endpoint is local, then the connection is already tracked. */
 		if (!local_ep)
