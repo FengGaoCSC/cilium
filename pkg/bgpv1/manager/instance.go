@@ -6,6 +6,7 @@ package manager
 import (
 	"context"
 
+	entTypes "github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/bgpv1/gobgp"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	v2alpha1api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
@@ -37,7 +38,7 @@ type ServerWithConfig struct {
 	ServiceAnnouncements map[resource.Key][]*types.Path
 
 	// Holds any announced VPNv4 Announcements for SRv6 L3VPN.
-	SRv6L3VPNAnnouncements map[uint32]VPNv4Advertisement
+	SRv6L3VPNAnnouncements map[uint32]entTypes.VPNv4Advertisement
 }
 
 // NewServerWithConfig will start an underlying BgpServer utilizing types.ServerParameters
@@ -59,6 +60,6 @@ func NewServerWithConfig(ctx context.Context, params types.ServerParameters) (*S
 		Config:                 nil,
 		PodCIDRAnnouncements:   []*types.Path{},
 		ServiceAnnouncements:   make(map[resource.Key][]*types.Path),
-		SRv6L3VPNAnnouncements: make(map[uint32]VPNv4Advertisement),
+		SRv6L3VPNAnnouncements: make(map[uint32]entTypes.VPNv4Advertisement),
 	}, nil
 }

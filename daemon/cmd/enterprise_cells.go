@@ -13,6 +13,7 @@ package cmd
 import (
 	"github.com/cilium/cilium/pkg/hive/cell"
 
+	"github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
 )
@@ -34,5 +35,6 @@ var (
 
 		cecm.Cell,
 		sidmanager.SIDManagerCell,
+		bgpv1.Cell,
 	)
 )

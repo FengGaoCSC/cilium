@@ -30,6 +30,8 @@ var Cell = cell.Module(
 		// goBGP is currently the only supported RouterManager, if more are
 		// implemented, provide the manager via a Cell that pics implementation based on configuration.
 		manager.NewBGPRouterManager,
+	),
+	cell.Provide(
 		// Create a slim service DiffStore
 		manager.NewDiffStore[*slim_core_v1.Service],
 		// Create a endpoints DiffStore

@@ -1,5 +1,12 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright Authors of Cilium
+// Copyright (C) Isovalent, Inc. - All Rights Reserved.
+//
+// NOTICE: All information contained herein is, and remains the property of
+// Isovalent Inc and its suppliers, if any. The intellectual and technical
+// concepts contained herein are proprietary to Isovalent Inc and its suppliers
+// and may be covered by U.S. and Foreign Patents, patents in process, and are
+// protected by trade secret or copyright law.  Dissemination of this information
+// or reproduction of this material is strictly forbidden unless prior written
+// permission is obtained from Isovalent Inc.
 
 package manager
 
@@ -11,12 +18,13 @@ import (
 	"github.com/osrg/gobgp/v3/pkg/packet/bgp"
 	"github.com/sirupsen/logrus"
 
+	"github.com/cilium/cilium/pkg/bgpv1/manager"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/srv6"
 )
 
-func mapSRv6EgressPolicy(ctx context.Context, currentServer *ServerWithConfig, vrfs []*srv6.VRF) ([]*srv6.EgressPolicy, error) {
-	l := log.WithFields(
+func mapSRv6EgressPolicy(ctx context.Context, logger logrus.FieldLogger, currentServer *manager.ServerWithConfig, vrfs []*srv6.VRF) ([]*srv6.EgressPolicy, error) {
+	l := logger.WithFields(
 		logrus.Fields{
 			"component": "manager.srv6.MapSRv6EgressPolicy",
 		},
@@ -41,7 +49,7 @@ func mapSRv6EgressPolicy(ctx context.Context, currentServer *ServerWithConfig, v
 	for _, r := range resp.Routes {
 		for _, p := range r.Paths {
 			if p.Best {
-				out, err := mapVPNv4ToEgressPolicy(p.PathAttributes, vrfs)
+				out, err := mapVPNv4ToEgressPolicy(logger, p.PathAttributes, vrfs)
 				if err != nil {
 					return nil, fmt.Errorf("failed to map VPNv4 paths to egress policies: %w", err)
 				}
@@ -148,8 +156,8 @@ func mapVRFToVPNv4Paths(podCIDRs []*net.IPNet, vrf *srv6.VRF) ([]*types.Path, er
 	return paths, nil
 }
 
-func mapVPNv4ToEgressPolicy(attrs []bgp.PathAttributeInterface, vrfs []*srv6.VRF) ([]*srv6.EgressPolicy, error) {
-	l := log.WithFields(
+func mapVPNv4ToEgressPolicy(logger logrus.FieldLogger, attrs []bgp.PathAttributeInterface, vrfs []*srv6.VRF) ([]*srv6.EgressPolicy, error) {
+	l := logger.WithFields(
 		logrus.Fields{
 			"component": "manager.srv6.mapVPNv4ToEgressPolicy",
 		},
@@ -296,7 +304,7 @@ func mapVPNv4ToEgressPolicy(attrs []bgp.PathAttributeInterface, vrfs []*srv6.VRF
 					return nil, fmt.Errorf("VPNv4 path expects transposition of SID but no MPLS labels discovered")
 				}
 
-				transposed, err := transposeSID(labels[0], infoSubTLV, subStructTLV)
+				transposed, err := transposeSID(logger, labels[0], infoSubTLV, subStructTLV)
 				if err != nil {
 					return nil, fmt.Errorf("failed to transpose SID: %w", err)
 				}
@@ -335,8 +343,8 @@ func mapVPNv4ToEgressPolicy(attrs []bgp.PathAttributeInterface, vrfs []*srv6.VRF
 // When the TranspositionLengh field in the SRv6SIDSubStructureSubSubTLV is greater then 0
 // the SRv6 SID must be obtained by transposing a variable bit range from the MPLS label
 // within the VPNv4 NLRI. The bit ranges are provided by fields within the SRv6SIDSubStructureSubSubTLV.
-func transposeSID(label uint32, infoTLV *bgp.SRv6InformationSubTLV, structTLV *bgp.SRv6SIDStructureSubSubTLV) ([]byte, error) {
-	l := log.WithFields(
+func transposeSID(logger logrus.FieldLogger, label uint32, infoTLV *bgp.SRv6InformationSubTLV, structTLV *bgp.SRv6SIDStructureSubSubTLV) ([]byte, error) {
+	l := logger.WithFields(
 		logrus.Fields{
 			"component": "manager.srv6.transposeSID",
 		},
