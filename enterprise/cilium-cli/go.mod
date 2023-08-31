@@ -30,6 +30,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/cilium/charts v0.0.0-20230815110222-84cbc90ed50d // indirect
+	github.com/cilium/ebpf v0.10.1-0.20230626090016-654491c8a500 // indirect
 	github.com/cilium/hubble v0.12.0 // indirect
 	github.com/cilium/proxy v0.0.0-20230623092907-8fddead4e52c // indirect
 	github.com/cilium/tetragon/pkg/k8s v0.0.0-20230825140014-ba1b9144068d // indirect

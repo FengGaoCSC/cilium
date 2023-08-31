@@ -119,6 +119,7 @@ github.com/cilium/checkmate v1.0.3 h1:CQC5eOmlAZeEjPrVZY3ZwEBH64lHlx9mXYdUehEwI5
 github.com/cilium/cilium-cli v0.15.7 h1:MubPFgToBrus3JxmK0KhvyMoKGvejwG4tc4KciTZSkg=
 github.com/cilium/cilium-cli v0.15.7/go.mod h1:VzeBza/L43YSm4x+7YMumEMn2uhyQNAWfNYDHgwSE2Y=
 github.com/cilium/ebpf v0.10.1-0.20230626090016-654491c8a500 h1:eAn1/gEVvcamZLoF4JKznmG2zKABsF7mRisyfQtwa3Q=
+github.com/cilium/ebpf v0.10.1-0.20230626090016-654491c8a500/go.mod h1:WE7CZAnqOL2RouJ4f1uyNhqr2P4CCvXFIqdRDUgWsVs=
 github.com/cilium/hubble v0.12.0 h1:0Sc68tCa3jY1x4VqEWp63+r34/e5jmh4p3CWrf5afU8=
 github.com/cilium/hubble v0.12.0/go.mod h1:2mXoJZSczBewSVItWblNmCQaAjSr+NVnWTonwuVcrIk=
 github.com/cilium/proxy v0.0.0-20230623092907-8fddead4e52c h1:/NqY4jLr92f7VcUJe1gHS6CgSGWFUCeD2f4QhxO8tgE=
