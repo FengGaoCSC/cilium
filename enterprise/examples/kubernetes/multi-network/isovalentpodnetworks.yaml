@@ -1,16 +1,6 @@
 apiVersion: isovalent.com/v1alpha1
 kind: IsovalentPodNetwork
 metadata:
-  name: default
-spec:
-  ipam:
-    mode: multi-pool
-    pool:
-      name: default
----
-apiVersion: isovalent.com/v1alpha1
-kind: IsovalentPodNetwork
-metadata:
   name: secondary-network
 spec:
   ipam:

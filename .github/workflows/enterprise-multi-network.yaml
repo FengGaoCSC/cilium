@@ -97,7 +97,8 @@ jobs:
             --helm-set=ipam.operator.autoCreateCiliumPodIPPools.default.ipv4.maskSize=24 \
             --helm-set=ipam.operator.autoCreateCiliumPodIPPools.secondary-pool.ipv4.cidrs='{192.168.0.0/20}' \
             --helm-set=ipam.operator.autoCreateCiliumPodIPPools.secondary-pool.ipv4.maskSize=27 \
-            --set-string extraConfig.enable-multi-network=true"
+            --helm-set=enterprise.multiNetwork.enabled=true \
+            --helm-set=enterprise.multiNetwork.autoCreateDefaultPodNetwork=true"
 
           CONNECTIVITY_TEST_DEFAULTS="--flow-validation=disabled --hubble=false --collect-sysdump-on-failure \
             --deployment-pod-annotations='{ \
@@ -167,21 +168,19 @@ jobs:
 
             export CILIUM_CLI_MODE=helm
             ./cilium-cli install ${{ steps.vars.outputs.cilium_install_defaults }}
+            ./cilium-cli status --wait
 
-            # Only wait for agent DaemonSet and operator Deployment to become
-            # ready so we can create the IsovalentPodNetworks. We cannot use
-            # `cilium status --wait` because hubble-relay will not become ready
-            # without the default network.
-            kubectl rollout status -n kube-system ds/cilium --timeout=180s
-            kubectl rollout status -n kube-system deploy/cilium-operator --timeout=180s
-
-            # Create IsovalentPodNetworks 'default' and 'secondary-network'
+            # Create 'secondary-network' IsovalentPodNetwork
             kubectl apply -f ${{ env.network-definitions }}
 
             kubectl get pods --all-namespaces -o wide
             kubectl get cep --all-namespaces -o wide
             kubectl -n kube-system exec daemonset/cilium -- cilium status
             kubectl get isovalentpodnetworks -o yaml
+
+            # Verify that both IsovalentPodNetworks got created
+            kubectl get isovalentpodnetworks -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep "^default$"
+            kubectl get isovalentpodnetworks -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep "^secondary-network$"
 
             mkdir -p cilium-junits
 
