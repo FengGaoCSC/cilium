@@ -12,6 +12,7 @@ cilium-operator-aws [flags]
 
 ```
       --auto-create-cilium-pod-ip-pools map                  Automatically create CiliumPodIPPool resources on startup. Specify pools in the form of <pool>=ipv4-cidrs:<cidr>,[<cidr>...];ipv4-mask-size:<size> (multiple pools can also be passed by repeating the CLI flag)
+      --auto-create-default-pod-network                      Automatically creates the default IsovalentPodNetwork on startup (default true)
       --aws-enable-prefix-delegation                         Allows operator to allocate prefixes to ENIs instead of individual IP addresses
       --aws-instance-limit-mapping map                       Add or overwrite mappings of AWS instance limit in the form of {"AWS instance type": "Maximum Network Interfaces","IPv4 Addresses per Interface","IPv6 Addresses per Interface"}. cli example: --aws-instance-limit-mapping=a1.medium=2,4,4 --aws-instance-limit-mapping=a2.somecustomflavor=4,5,6 configmap example: {"a1.medium": "2,4,4", "a2.somecustomflavor": "4,5,6"}
       --aws-release-excess-ips                               Enable releasing excess free IP addresses from AWS ENI.
@@ -47,6 +48,7 @@ cilium-operator-aws [flags]
       --enable-k8s-api-discovery                             Enable discovery of Kubernetes API groups and resources with the discovery API
       --enable-k8s-endpoint-slice                            Enables k8s EndpointSlice feature into Cilium-Operator if the k8s cluster supports it (default true)
       --enable-metrics                                       Enable Prometheus metrics
+      --enable-multi-network                                 Enable support for multiple pod networks
       --eni-gc-interval duration                             Interval for garbage collection of unattached ENIs. Set to 0 to disable (default 5m0s)
       --eni-gc-tags map                                      Additional tags attached to ENIs created by Cilium. Dangling ENIs with this tag will be garbage collected
       --eni-tags map                                         ENI tags in the form of k1=v1 (multiple k/v pairs can be passed by repeating the CLI flag)

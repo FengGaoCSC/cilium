@@ -12,6 +12,7 @@ cilium-operator-generic [flags]
 
 ```
       --auto-create-cilium-pod-ip-pools map                  Automatically create CiliumPodIPPool resources on startup. Specify pools in the form of <pool>=ipv4-cidrs:<cidr>,[<cidr>...];ipv4-mask-size:<size> (multiple pools can also be passed by repeating the CLI flag)
+      --auto-create-default-pod-network                      Automatically creates the default IsovalentPodNetwork on startup (default true)
       --bgp-announce-lb-ip                                   Announces service IPs of type LoadBalancer via BGP
       --bgp-config-path string                               Path to file containing the BGP configuration (default "/var/lib/cilium/bgp/config.yaml")
       --ces-max-ciliumendpoints-per-ces int                  Maximum number of CiliumEndpoints allowed in a CES (default 100)
@@ -42,6 +43,7 @@ cilium-operator-generic [flags]
       --enable-k8s-api-discovery                             Enable discovery of Kubernetes API groups and resources with the discovery API
       --enable-k8s-endpoint-slice                            Enables k8s EndpointSlice feature into Cilium-Operator if the k8s cluster supports it (default true)
       --enable-metrics                                       Enable Prometheus metrics
+      --enable-multi-network                                 Enable support for multiple pod networks
       --fqdn-group-min-query-interval duration               Minimum interval between two consecutive queries when resolving a FQDN belonging to an IsovalentFQDNGroup (default 1m0s)
       --gops-port uint16                                     Port for gops server to listen on (default 9891)
   -h, --help                                                 help for cilium-operator-generic
