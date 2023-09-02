@@ -23,6 +23,7 @@ import (
 	k8sclient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	nodetypes "github.com/cilium/cilium/pkg/node/types"
+	"github.com/cilium/cilium/pkg/option"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -92,8 +93,9 @@ func TestSIDManager(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 
-		resource, err := NewLocalIsovalentSRv6SIDManagerResource(lc, cs)
-		require.NoError(t, err)
+		dc := &option.DaemonConfig{EnableSRv6: true}
+
+		resource := NewLocalIsovalentSRv6SIDManagerResource(dc, lc, cs)
 
 		store, err := resource.Store(ctx)
 		require.NoError(t, err)
@@ -101,6 +103,7 @@ func TestSIDManager(t *testing.T) {
 		sidManagerPromise := NewSIDManagerPromise(sidManagerParams{
 			Lc:       lc,
 			Cs:       cs,
+			Dc:       dc,
 			Resource: resource,
 		})
 

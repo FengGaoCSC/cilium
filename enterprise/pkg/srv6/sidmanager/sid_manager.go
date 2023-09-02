@@ -33,6 +33,7 @@ import (
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
+	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
 
 	"golang.org/x/exp/maps"
@@ -145,6 +146,7 @@ type sidManagerParams struct {
 
 	Lc       hive.Lifecycle
 	Cs       client.Clientset
+	Dc       *option.DaemonConfig
 	Resource LocalIsovalentSRv6SIDManagerResource
 }
 
@@ -152,6 +154,10 @@ type sidManagerParams struct {
 // promise will be resolved once the backing SIDManager resource is fetched and
 // all initial allocator creation is done.
 func NewSIDManagerPromise(params sidManagerParams) promise.Promise[SIDManager] {
+	if !params.Dc.EnableSRv6 {
+		return nil
+	}
+
 	resolver, promise := promise.New[SIDManager]()
 
 	m := &sidManager{
@@ -682,9 +688,9 @@ func (m *sidManager) scheduleStateSync() {
 // node name.
 type LocalIsovalentSRv6SIDManagerResource resource.Resource[*v1alpha1.IsovalentSRv6SIDManager]
 
-func NewLocalIsovalentSRv6SIDManagerResource(lc hive.Lifecycle, cs client.Clientset) (LocalIsovalentSRv6SIDManagerResource, error) {
-	if !cs.IsEnabled() {
-		return nil, nil
+func NewLocalIsovalentSRv6SIDManagerResource(dc *option.DaemonConfig, lc hive.Lifecycle, cs client.Clientset) LocalIsovalentSRv6SIDManagerResource {
+	if !dc.EnableSRv6 || !cs.IsEnabled() {
+		return nil
 	}
 	lw := utils.ListerWatcherWithModifiers(
 		utils.ListerWatcherFromTyped[*v1alpha1.IsovalentSRv6SIDManagerList](cs.IsovalentV1alpha1().IsovalentSRv6SIDManagers()),
@@ -693,5 +699,5 @@ func NewLocalIsovalentSRv6SIDManagerResource(lc hive.Lifecycle, cs client.Client
 			opts.FieldSelector = fields.ParseSelectorOrDie("metadata.name=" + nodeTypes.GetName()).String()
 		},
 	)
-	return resource.New[*v1alpha1.IsovalentSRv6SIDManager](lc, lw, resource.WithMetric("IsovalentSRv6SIDManager")), nil
+	return resource.New[*v1alpha1.IsovalentSRv6SIDManager](lc, lw, resource.WithMetric("IsovalentSRv6SIDManager"))
 }
