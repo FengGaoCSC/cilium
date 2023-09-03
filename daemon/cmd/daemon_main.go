@@ -1614,7 +1614,7 @@ type daemonParams struct {
 	L2Announcer          *l2announcer.L2Announcer
 	L7Proxy              *proxy.Proxy
 	DB                   statedb.DB
-	SRv6Manager          *srv6.Manager
+	SRv6Manager          *srv6.Manager `optional:"true"`
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
