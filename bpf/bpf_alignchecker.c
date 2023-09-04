@@ -30,6 +30,8 @@
 #define __expand(TYPE, N) __add_type(TYPE, N)
 #define add_type(TYPE) __expand(TYPE, __COUNTER__)
 
+#include "enterprise_bpf_alignchecker.h"
+
 add_type(struct ipv4_ct_tuple);
 add_type(struct ipv6_ct_tuple);
 add_type(struct ct_entry);
@@ -85,7 +87,3 @@ add_type(struct tunnel_key);
 add_type(struct tunnel_value);
 add_type(struct auth_key);
 add_type(struct auth_info);
-add_type(struct egress_gw_ha_ct_entry);
-add_type(struct egress_gw_ha_policy_key);
-add_type(struct egress_gw_ha_policy_entry);
-

@@ -51,10 +51,6 @@
 #define ENABLE_EGRESS_GATEWAY_COMMON
 #endif
 
-#if defined(ENABLE_EGRESS_GATEWAY_HA) && !defined(ENABLE_EGRESS_GATEWAY_COMMON)
-#define ENABLE_EGRESS_GATEWAY_COMMON
-#endif
-
 #if defined(ENCAP_IFINDEX) || defined(ENABLE_EGRESS_GATEWAY_COMMON) || \
     (defined(ENABLE_DSR) && DSR_ENCAP_MODE == DSR_ENCAP_GENEVE)
 #define HAVE_ENCAP
@@ -431,27 +427,6 @@ struct egress_gw_policy_key {
 struct egress_gw_policy_entry {
 	__u32 egress_ip;
 	__u32 gateway_ip;
-};
-
-struct egress_gw_ha_policy_key {
-	struct bpf_lpm_trie_key lpm_key;
-	__u32 saddr;
-	__u32 daddr;
-};
-
-#define EGRESS_GW_HA_MAX_GATEWAY_NODES 64
-
-struct egress_gw_ha_policy_entry {
-	/* Size is the number of IPs set in the gateway_ips field (i.e. the number of
-	 * gateways configured for the policy).
-	 */
-	__u32 size;
-	__be32 egress_ip;
-	__be32 gateway_ips[EGRESS_GW_HA_MAX_GATEWAY_NODES];
-};
-
-struct egress_gw_ha_ct_entry {
-	__be32 gateway_ip;
 };
 
 struct srv6_vrf_key4 {
@@ -1229,5 +1204,7 @@ struct lpm_val {
 #define TUNNEL_KEY_WITHOUT_SRC_IP offsetof(struct bpf_tunnel_key, local_ipv4)
 
 #include "overloadable.h"
+
+#include "enterprise_common.h"
 
 #endif /* __LIB_COMMON_H_ */

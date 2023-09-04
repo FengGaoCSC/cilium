@@ -125,11 +125,6 @@ DEFINE_IPV6(HOST_IP, 0xbe, 0xef, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0xa, 0x
 #define CAPTURE6_SIZE 16384
 #endif /* ENABLE_IPV6 */
 
-#define EGRESS_GW_HA_POLICY_MAP test_cilium_egress_gw_ha_policy_v4
-#define EGRESS_GW_HA_POLICY_MAP_SIZE 16384
-#define EGRESS_GW_HA_CT_MAP test_cilium_egress_gw_ha_ct_v4
-#define EGRESS_GW_HA_CT_MAP_SIZE 262144
-
 #define EGRESS_POLICY_MAP test_cilium_egress_gw_policy_v4
 #define SRV6_VRF_MAP4 test_cilium_srv6_vrf_v4
 #define SRV6_VRF_MAP6 test_cilium_srv6_vrf_v6
@@ -304,5 +299,7 @@ return false;
 # define NAT_46X64_PREFIX_2 0
 # define NAT_46X64_PREFIX_3 0
 #endif
+
+#include "enterprise_node_config.h"
 
 #endif /* __NODE_CONFIG__ */
