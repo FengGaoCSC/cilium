@@ -964,6 +964,18 @@
      - Update ENI Adapter limits from the EC2 API
      - bool
      - ``true``
+   * - :spelling:ignore:`enterprise.multiNetwork`
+     - Multi-network support (preview feature)
+     - object
+     - ``{"autoCreateDefaultPodNetwork":true,"enabled":false}``
+   * - :spelling:ignore:`enterprise.multiNetwork.autoCreateDefaultPodNetwork`
+     - Automatically creates a "default" IsovalentPodNetwork on operator startup
+     - bool
+     - ``true``
+   * - :spelling:ignore:`enterprise.multiNetwork.enabled`
+     - Enables the multi-network feature in Cilium CNI
+     - bool
+     - ``false``
    * - :spelling:ignore:`enterprise.srv6.locatorPoolEnabled`
      - Enables custom SRv6 SID locator pool operator support.
      - bool
