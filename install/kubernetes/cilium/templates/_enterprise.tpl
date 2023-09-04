@@ -12,4 +12,7 @@ enable-multi-network: {{ .Values.enterprise.multiNetwork.enabled | quote }}
 {{- if hasKey .Values.enterprise.multiNetwork "autoCreateDefaultPodNetwork" }}
 auto-create-default-pod-network: {{ .Values.enterprise.multiNetwork.autoCreateDefaultPodNetwork | quote }}
 {{- end }}
+{{- if hasKey .Values.enterprise.multiNetwork "autoDirectNodeRoutes" }}
+multi-network-auto-direct-node-routes: {{ .Values.enterprise.multiNetwork.autoDirectNodeRoutes | quote }}
+{{- end }}
 {{- end }}

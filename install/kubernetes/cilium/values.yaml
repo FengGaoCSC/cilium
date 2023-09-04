@@ -12,6 +12,8 @@ enterprise:
     enabled: false
     # -- Automatically creates a "default" IsovalentPodNetwork on operator startup
     autoCreateDefaultPodNetwork: true
+    # -- Enable multi-network aware automatic L2 routing between nodes
+    autoDirectNodeRoutes: true
 
 # upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation
