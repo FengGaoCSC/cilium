@@ -191,6 +191,9 @@ func defaultCommands(confDir string, cmdDir string, k8sPods []string) []string {
 			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_snat_v6_external", bpffsMountpoint),
 			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_vtep_map", bpffsMountpoint),
 			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_l2_responder_v4", bpffsMountpoint),
+			// CEE only:
+			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_egress_gw_ha_policy_v4", bpffsMountpoint),
+			fmt.Sprintf("bpftool map dump pinned %s/tc/globals/cilium_egress_gw_ha_ct_v4", bpffsMountpoint),
 		}...)
 	}
 
@@ -422,6 +425,9 @@ func copyCiliumInfoCommands(cmdDir string, k8sPods []string) []string {
 		"cilium lrp list",
 		"cilium cgroups list -o json",
 		"cilium statedb dump",
+		// CEE only:
+		"cilium bpf egress-ha list",
+		"cilium bpf egress-ha ct list",
 	}
 	var commands []string
 
