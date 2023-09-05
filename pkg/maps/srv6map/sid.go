@@ -27,6 +27,13 @@ type SIDKey struct {
 	SID types.IPv6
 }
 
+func (a *SIDKey) Equal(b *SIDKey) bool {
+	if (a != nil) != (b != nil) {
+		return false
+	}
+	return a.SID.IP().Equal(b.SID.IP())
+}
+
 func (k *SIDKey) String() string {
 	return fmt.Sprintf("%s", k.SID)
 }
@@ -45,6 +52,13 @@ func NewSIDKeyFromSID(sid *srv6Types.SID) (*SIDKey, error) {
 
 type SIDValue struct {
 	VRFID uint32
+}
+
+func (a *SIDValue) Equal(b *SIDValue) bool {
+	if (a != nil) != (b != nil) {
+		return false
+	}
+	return a.VRFID == b.VRFID
 }
 
 // srv6SIDMap is the internal representation of an SRv6 SID map.
@@ -88,6 +102,10 @@ func CreateSIDMap() error {
 
 func OpenSIDMap() error {
 	return initSIDMap(false)
+}
+
+func (m *srv6SIDMap) Lookup(key SIDKey, val *SIDValue) error {
+	return m.Map.Lookup(key, val)
 }
 
 func (m *srv6SIDMap) Update(key SIDKey, vrfID uint32) error {

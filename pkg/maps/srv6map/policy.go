@@ -8,6 +8,7 @@ import (
 	"net"
 	"unsafe"
 
+	"golang.org/x/exp/slices"
 	"golang.org/x/sys/unix"
 	netutils "k8s.io/utils/net"
 
@@ -36,6 +37,15 @@ type PolicyKey struct {
 	DestCIDR *net.IPNet
 }
 
+func (a *PolicyKey) Equal(b *PolicyKey) bool {
+	if (a != nil) != (b != nil) {
+		return false
+	}
+	return a.VRFID == b.VRFID &&
+		a.DestCIDR.IP.Equal(b.DestCIDR.IP) &&
+		slices.Equal(a.DestCIDR.Mask, b.DestCIDR.Mask)
+}
+
 func (k *PolicyKey) String() string {
 	return fmt.Sprintf("%d %s", k.VRFID, k.DestCIDR)
 }
@@ -53,6 +63,13 @@ func (k *PolicyKey) IsIPv6() bool {
 
 type PolicyValue struct {
 	SID types.IPv6
+}
+
+func (a *PolicyValue) Equal(b *PolicyValue) bool {
+	if (a != nil) != (b != nil) {
+		return false
+	}
+	return a.SID.IP().Equal(b.SID.IP())
 }
 
 // String pretty print the SID.
@@ -176,6 +193,13 @@ func (k *PolicyKey6) getDestCIDR() *net.IPNet {
 		IP:   k.DestCIDR.IP(),
 		Mask: net.CIDRMask(int(k.PrefixLen-policyStaticPrefixBits), 128),
 	}
+}
+
+func (m *srv6PolicyMap) Lookup(key PolicyKey, val *PolicyValue) error {
+	if key.IsIPv6() {
+		return m.Map.Lookup(key.toIPv6(), val)
+	}
+	return m.Map.Lookup(key.toIPv4(), val)
 }
 
 func (m *srv6PolicyMap) Update(key PolicyKey, sid types.IPv6) error {

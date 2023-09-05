@@ -8,6 +8,7 @@ import (
 	"net"
 	"unsafe"
 
+	"golang.org/x/exp/slices"
 	"golang.org/x/sys/unix"
 
 	"github.com/cilium/cilium/pkg/ebpf"
@@ -32,6 +33,15 @@ type VRFKey struct {
 	DestCIDR *net.IPNet
 }
 
+func (a *VRFKey) Equal(b *VRFKey) bool {
+	if (a != nil) != (b != nil) {
+		return false
+	}
+	return a.SourceIP.Equal(*b.SourceIP) &&
+		a.DestCIDR.IP.Equal(b.DestCIDR.IP) &&
+		slices.Equal(a.DestCIDR.Mask, b.DestCIDR.Mask)
+}
+
 func (k *VRFKey) String() string {
 	return fmt.Sprintf("%s %s", k.SourceIP, k.DestCIDR)
 }
@@ -51,6 +61,13 @@ func (k *VRFKey) IsIPv6() bool {
 // VRF ID for SRv6 lookups.
 type VRFValue struct {
 	ID uint32
+}
+
+func (a *VRFValue) Equal(b *VRFValue) bool {
+	if (a != nil) != (b != nil) {
+		return false
+	}
+	return a.ID == b.ID
 }
 
 // String pretty prints the VRF ID.
@@ -176,6 +193,13 @@ func (k *VRFKey6) getDestCIDR() *net.IPNet {
 		IP:   k.DestCIDR.IP(),
 		Mask: net.CIDRMask(int(k.PrefixLen-staticPrefixBits), 128),
 	}
+}
+
+func (m *srv6VRFMap) Lookup(key VRFKey, val *VRFValue) error {
+	if key.IsIPv6() {
+		return m.Map.Lookup(key.toIPv6(), val)
+	}
+	return m.Map.Lookup(key.toIPv4(), val)
 }
 
 func (m *srv6VRFMap) Update(key VRFKey, vrfID uint32) error {
