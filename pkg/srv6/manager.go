@@ -736,6 +736,18 @@ nextPolicyKey:
 	}
 }
 
+func (manager *Manager) addMissingSRv6SIDs() {
+	for _, vrf := range manager.vrfs {
+		if vrf.SIDInfo == nil {
+			continue
+		}
+		if err := manager.updateSIDMap(vrf.SIDInfo.SID, vrf.VRFID); err != nil {
+			log.WithField("VRF", vrf.id.Name).WithError(err).Error("VRF has SID allocation and SIDMap entry is missing, but failed to update")
+			continue
+		}
+	}
+}
+
 // removeUnusedSRv6SIDs implements the same as removeUnusedSRv6PolicyRules but
 // for the SID map.
 func (manager *Manager) removeUnusedSRv6SIDs() {
@@ -932,6 +944,9 @@ func (m *Manager) reconcileVRFIngressPath() {
 
 	// remove any SIDs in the SID map which we do not have allocations for
 	m.removeUnusedSRv6SIDs()
+
+	// add any SIDs which have allocation, but SIDMap entry is missing
+	m.addMissingSRv6SIDs()
 
 	m.createIngressPathVRFs(toCreate)
 	m.updateIngressPathVRFs(toUpdate)
