@@ -304,6 +304,15 @@ Annotations:
 
 .. _1.11_upgrade_notes:
 
+1.11.21 Upgrade Notes
+---------------------
+
+* ``CiliumNetworkPolicy`` cannot match the ``reserved:init`` labels any more.
+  If you have ``CiliumNetworkPolicy`` resources that have a match for
+  labels ``reserved:init``, these policies must be converted to
+  ``CiliumClusterwideNetworkPolicy`` by changing the resource type for the
+  policy.
+
 1.11.x Known Regressions
 ------------------------
 
