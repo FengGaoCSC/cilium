@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/netip"
 
+	entTypes "github.com/cilium/cilium/enterprise/pkg/bgpv1/types"
 	"github.com/cilium/cilium/pkg/bgpv1/agent"
 	"github.com/cilium/cilium/pkg/bgpv1/agent/signaler"
 	"github.com/cilium/cilium/pkg/bgpv1/types"
@@ -188,6 +189,8 @@ func (r *PreflightReconciler) Reconcile(ctx context.Context, p ReconcileParams) 
 	// Clear the shadow state since any advertisements will be gone now that the server has been recreated.
 	p.CurrentServer.PodCIDRAnnouncements = nil
 	p.CurrentServer.ServiceAnnouncements = make(map[resource.Key][]*types.Path)
+	p.CurrentServer.SRv6L3VPNAnnouncements = make(map[uint32]entTypes.VPNv4Advertisement)
+	p.CurrentServer.SRv6LocatorAnnouncements = []*types.Path{}
 
 	return nil
 }
