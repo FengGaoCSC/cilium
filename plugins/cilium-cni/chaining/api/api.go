@@ -32,9 +32,8 @@ const (
 type PluginContext struct {
 	Logger  *logrus.Entry
 	Args    *skel.CmdArgs
-	CniArgs types.ArgsSpec
+	CniArgs *types.ArgsSpec
 	NetConf *types.NetConf
-	//Client  *client.Client
 }
 
 // ChainingPlugin is the interface each chaining plugin must implement

@@ -142,7 +142,7 @@ func multiNetworkCmdAdd(
 	args *skel.CmdArgs,
 	n *types.NetConf,
 	logger *logrus.Entry,
-	cniArgs types.ArgsSpec,
+	cniArgs *types.ArgsSpec,
 	c *client.Client,
 	netNs ns.NetNS,
 	conf *models.DaemonConfigurationStatus,
