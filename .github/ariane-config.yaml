@@ -13,6 +13,7 @@ triggers:
     - conformance-ingress.yaml
     - conformance-runtime.yaml
     - enterprise-clustermesh-overlapping-podcidr.yaml
+    - enterprise-multi-network.yaml
     - integration-test.yaml
     - tests-datapath-verifier.yaml
     - tests-l4lb.yaml
@@ -50,6 +51,9 @@ triggers:
   /ci-l4lb:
     workflows:
     - tests-l4lb.yaml
+  /ci-multi-network:
+    workflows:
+    - enterprise-multi-network.yaml
 
 workflows:
   conformance-aks.yaml:
@@ -75,6 +79,8 @@ workflows:
   conformance-runtime.yaml:
     paths-ignore-regex: Documentation/
   enterprise-clustermesh-overlapping-podcidr.yaml:
+    paths-ignore-regex: (test|Documentation)/
+  enterprise-multi-network.yaml:
     paths-ignore-regex: (test|Documentation)/
   integration-test.yaml:
     paths-ignore-regex: Documentation/
