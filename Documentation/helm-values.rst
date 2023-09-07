@@ -964,6 +964,10 @@
      - Update ENI Adapter limits from the EC2 API
      - bool
      - ``true``
+   * - :spelling:ignore:`enterprise.clustermesh.enableOverlappingPodCIDRSupport`
+     - Enable overlapping PodCIDR support
+     - bool
+     - ``false``
    * - :spelling:ignore:`enterprise.multiNetwork`
      - Multi-network support (preview feature)
      - object
@@ -982,10 +986,6 @@
      - ``false``
    * - :spelling:ignore:`enterprise.srv6.locatorPoolEnabled`
      - Enables custom SRv6 SID locator pool operator support.
-     - bool
-     - ``false``
-   * - :spelling:ignore:`enterprise.clustermesh.enableOverlappingPodCIDRSupport`
-     - Enable overlapping PodCIDR support
      - bool
      - ``false``
    * - :spelling:ignore:`envoy.affinity`
