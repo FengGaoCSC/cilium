@@ -647,6 +647,15 @@ ipv4_ct_tuple_swap_ports(struct ipv4_ct_tuple *tuple)
 	tuple->dport = tmp;
 }
 
+static __always_inline void
+ipv4_ct_tuple_swap_addrs(struct ipv4_ct_tuple *tuple)
+{
+	__be32 tmp_addr = tuple->saddr;
+
+	tuple->saddr = tuple->daddr;
+	tuple->daddr = tmp_addr;
+}
+
 static __always_inline __be32
 ipv4_ct_reverse_tuple_saddr(const struct ipv4_ct_tuple *rtuple)
 {
