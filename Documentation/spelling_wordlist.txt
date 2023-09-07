@@ -859,6 +859,7 @@ podLabels
 podSecurityContext
 podcasts
 policyAuditMode
+policyCIDRMatchMode
 policyEnforcementMode
 policyMapMax
 policymap
