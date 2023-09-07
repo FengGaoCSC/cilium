@@ -1370,12 +1370,6 @@ func (e *Endpoint) syncPolicyMapWithDump() error {
 	return err
 }
 
-const (
-	// syncPolicyMapInterval is the interval for periodic full reconciliation of
-	// the policy map to catch unexpected discrepancies with agent and kernel state.
-	syncPolicyMapInterval = 15 * time.Minute
-)
-
 func (e *Endpoint) startSyncPolicyMapController() {
 	ctrlName := fmt.Sprintf("sync-policymap-%d", e.ID)
 	e.controllers.CreateController(ctrlName,
@@ -1390,7 +1384,7 @@ func (e *Endpoint) startSyncPolicyMapController() {
 				defer e.unlock()
 				return e.syncPolicyMapWithDump()
 			},
-			RunInterval: syncPolicyMapInterval,
+			RunInterval: option.Config.PolicyMapFullReconciliationInterval,
 			Context:     e.aliveCtx,
 		},
 	)
