@@ -193,16 +193,7 @@ jobs:
             cd /host/
 
             # create kind cluster with secondary network named "secondary-network"
-            # TODO: switch to ./contrib/scripts/kind.sh --secondary-network "1" "2"
-            ./contrib/scripts/kind.sh "1" "2"
-            docker network create \
-              --driver=bridge \
-              --subnet=192.168.0.0/16 \
-              --ip-range=192.168.0.0/24 \
-              --gateway=192.168.0.1 \
-              -o "com.docker.network.bridge.enable_ip_masquerade=false" \
-              secondary-network
-            kind get nodes --name kind | xargs -L1 docker network connect secondary-network
+            ./contrib/scripts/kind.sh --secondary-network "1" "2"
 
             export CILIUM_CLI_MODE=helm
             ./cilium-cli install ${{ steps.vars.outputs.cilium_install_defaults }}
@@ -243,9 +234,6 @@ jobs:
             # Check that multi-homed pods got routes set up for secondary network
             kubectl -n cilium-test exec -ti \$CLIENT_POD -- ip route | grep "^192\.168\.0\.0/16 via 192\.168\.0\.1 dev cil1"
             kubectl -n cilium-test exec -ti \$SAME_NODE_POD -- ip route | grep "^192\.168\.0\.0/16 via 192\.168\.0\.1 dev cil1"
-
-            # TODO: remove once we switch to ./contrib/scripts/kind.sh --secondary-network
-            docker network rm secondary-network
 
             ./contrib/scripts/kind-down.sh
 
