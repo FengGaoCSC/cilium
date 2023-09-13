@@ -11,11 +11,82 @@ permissions:
   # Required to generate OIDC tokens for `sigstore/cosign-installer` authentication
   id-token: write
 
+env:
+  ATLANTIS_VERSION: v1.0.0-alpha4.11
+
 jobs:
+  atlantis-gen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download atlantis
+        uses: dsaltares/fetch-gh-release-asset@0.0.8
+        with:
+          repo: "isovalent/atlantis"
+          version: "tags/${{ env.ATLANTIS_VERSION }}"
+          file: "atlantis-.*-linux-amd64.tar.gz"
+          regex: true
+          token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
+
+      - name: Download atlantis checksum file
+        uses: dsaltares/fetch-gh-release-asset@0.0.8
+        with:
+          repo: "isovalent/atlantis"
+          version: "tags/${{ env.ATLANTIS_VERSION }}"
+          file: "atlantis-.*-linux-amd64.tar.gz.sha256sum"
+          regex: true
+          token: ${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run atlantis gen
+        shell: bash
+        run: |
+          sha256sum --check atlantis-*-linux-amd64.tar.gz.sha256sum
+          tar xf atlantis-*-linux-amd64.tar.gz
+          mv atlantis /usr/local/bin
+          # Atlantis needs to access private repos.
+          git config --global url."https://${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}:@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${{ secrets.ISOVALENT_BOT_READ_PRIVATE_REPOSITORIES }}:@github.com/".insteadOf "git@github.com:"
+          atlantis version
+          atlantis gen
+          git status
+
+      - name: Getting image tag
+        id: tag
+        run: |
+          echo ::set-output name=tag::${GITHUB_REF##*/}
+      - name: Push
+        shell: bash
+        run: |
+          git config user.name "isovalent-bot"
+          git config user.email "<>"
+          git add go.mod go.sum api daemon pkg placeholder_root.go vendor
+          if git diff --cached --exit-code > /dev/null ; then
+            echo "Nothing to commit"
+          else
+            git commit -m "Run atlantis gen on ${{ steps.tag.outputs.tag }}"
+            git checkout -b ${{ steps.tag.outputs.tag }}-gen
+            git push origin ${{ steps.tag.outputs.tag }}-gen
+          fi
+
+
   build-and-push:
     name: Build and Push Images
     environment: release-developer-images
     runs-on: ubuntu-22.04
+    needs: atlantis-gen
     strategy:
       matrix:
         include:
@@ -87,6 +158,7 @@ jobs:
         uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
         with:
           persist-credentials: false
+          ref: ${{ steps.tag.outputs.tag }}-gen
 
       - name: Release Build ${{ matrix.name }}
         uses: docker/build-push-action@2eb1c1961a95fc15694676618e422e8ba1d63825 # v4.1.1
@@ -106,7 +178,6 @@ jobs:
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@6e04d228eb30da1757ee4e1dd75a0ec73a653e06 # v3.1.1
-
       - name: Sign Container Image
         run: |
           cosign sign -y quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-dev@${{ steps.docker_build_release.outputs.digest }}
