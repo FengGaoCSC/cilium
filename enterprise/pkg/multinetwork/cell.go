@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/cilium/cilium/daemon/k8s"
+	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	iso_v1alpha1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1alpha1"
@@ -73,8 +74,11 @@ func newMultiNetworkManager(params managerParams) *Manager {
 	}
 
 	manager := &Manager{
-		config:          params.Config,
-		daemonConfig:    params.DaemonConfig,
+		config:       params.Config,
+		daemonConfig: params.DaemonConfig,
+
+		controllerManager: controller.NewManager(),
+
 		podResource:     params.PodResource,
 		networkResource: params.NetworkResource,
 	}

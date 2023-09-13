@@ -84,6 +84,8 @@ type Manager struct {
 	config       config
 	daemonConfig daemonConfig
 
+	controllerManager *controller.Manager
+
 	podResource k8sResource.LocalPodResource
 	podStore    resource.Store[*slim_core_v1.Pod]
 
@@ -197,36 +199,14 @@ func (m *Manager) GetNetworksForPod(ctx context.Context, podNamespace, podName s
 // StartRoutingController implements a multi-network aware version of auto-direct-node-routes.
 // We currently duplicate this logic here because the routing logic in the open-source linuxNodeHandler
 // is not multi-network aware, but the goal is to eventually upstream this.
-// The routing logic is split into two components:
-// The localNetworkIPCollector auto-detects the secondary node IPs of the local node (based on network routes)
-// and announces them in the CiliumNode object via NodeDiscovery.
-// The remoteNodeRouteManager part subscribes to all remote CiliumNode objects, correlates pod CIDRs with
-// the remote node's secondary IP, and then installs a route for each pod CIDR.
-func (m *Manager) StartRoutingController(nodeDiscovery *nodediscovery.NodeDiscovery, ciliumNodeChain *subscriber.CiliumNodeChain) {
+// The remoteNodeRouteManager logic of the routing feature subscribes to all remote CiliumNode objects,
+// correlates pod CIDRs with the remote node's secondary IP, and then installs a route for each pod CIDR.
+// StartRoutingController must be called before the K8s watcher is started, as it
+// otherwise misses the initial CiliumNode objects in the CiliumNodeChain.
+func (m *Manager) StartRoutingController(ciliumNodeChain *subscriber.CiliumNodeChain) {
 	if !m.config.MultiNetworkAutoDirectNodeRoutes || m.networkStore == nil {
 		return
 	}
-
-	controllerMgr := controller.NewManager()
-
-	// localNetworkIPCollector auto-detects local node IPs and provides them to
-	// nodeDiscovery
-	localIP := &localNetworkIPCollector{
-		daemonConfig:        m.daemonConfig,
-		networkStore:        m.networkStore,
-		mutex:               lock.Mutex{},
-		nodeIPByNetworkName: make(map[string]nodeIPPair),
-	}
-
-	// Collects local podCIDRs and stores them in nodeIPByNetworkName
-	controllerMgr.UpdateController(localNodeSyncController, controller.ControllerParams{
-		DoFunc: func(ctx context.Context) error {
-			return localIP.updateNodeIPAddresses(nodeDiscovery)
-		},
-		RunInterval: 15 * time.Second,
-	})
-	// Announces IPs in nodeIPByNetworkName in CiliumNode via NodeDiscovery
-	nodeDiscovery.WithAdditionalNodeAddressSource(localIP)
 
 	// remoteNodeRouteManager is responsible for managing multi-network auto direct node routes
 	remoteNodes := &remoteNodeRouteManager{
@@ -239,8 +219,38 @@ func (m *Manager) StartRoutingController(nodeDiscovery *nodediscovery.NodeDiscov
 	ciliumNodeChain.Register(remoteNodes)
 
 	// Regularly reinstall all routes in case networks have changed or routes have been manually removed
-	controllerMgr.UpdateController(remoteRouteController, controller.ControllerParams{
+	m.controllerManager.UpdateController(remoteRouteController, controller.ControllerParams{
 		DoFunc:      remoteNodes.resyncNodes,
 		RunInterval: 1 * time.Minute,
 	})
+}
+
+// StartLocalIPCollector is part of the multi-network-aware auto-direct-node-routes feature.
+// The localNetworkIPCollector auto-detects the secondary node IPs of the local node (based on network routes)
+// and announces them in the CiliumNode object via NodeDiscovery.
+// This must be called after the CiliumNode resource has already been registered, as it invokes
+// NodeDiscovery.UpdateLocalNode.
+func (m *Manager) StartLocalIPCollector(nodeDiscovery *nodediscovery.NodeDiscovery) {
+	if !m.config.MultiNetworkAutoDirectNodeRoutes || m.networkStore == nil {
+		return
+	}
+
+	// localNetworkIPCollector auto-detects local node IPs and provides them to
+	// nodeDiscovery
+	localIP := &localNetworkIPCollector{
+		daemonConfig:        m.daemonConfig,
+		networkStore:        m.networkStore,
+		mutex:               lock.Mutex{},
+		nodeIPByNetworkName: make(map[string]nodeIPPair),
+	}
+
+	// Collects local podCIDRs and stores them in nodeIPByNetworkName
+	m.controllerManager.UpdateController(localNodeSyncController, controller.ControllerParams{
+		DoFunc: func(ctx context.Context) error {
+			return localIP.updateNodeIPAddresses(nodeDiscovery)
+		},
+		RunInterval: 15 * time.Second,
+	})
+	// Announces IPs in nodeIPByNetworkName in CiliumNode via NodeDiscovery
+	nodeDiscovery.WithAdditionalNodeAddressSource(localIP)
 }

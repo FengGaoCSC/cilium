@@ -454,7 +454,7 @@ func (m *remoteNodeRouteManager) updateRoutesForNodeLocked(nodeName string, newN
 // OnUpdateCiliumNode is called when a remote CiliumNode is updated. In this case,
 // we want to update the direct node routes for the node.
 func (m *remoteNodeRouteManager) OnUpdateCiliumNode(oldObj, newObj *v2.CiliumNode, swg *lock.StoppableWaitGroup) error {
-	if k8s.IsLocalCiliumNode(newObj) {
+	if k8s.IsLocalCiliumNode(oldObj) || k8s.IsLocalCiliumNode(newObj) {
 		return nil
 	}
 

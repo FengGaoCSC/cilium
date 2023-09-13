@@ -693,6 +693,12 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// watchers.NewCiliumNodeUpdater needs to be registered *after* d.endpointManager
 	d.k8sWatcher.RegisterNodeSubscriber(watchers.NewCiliumNodeUpdater(d.nodeDiscovery))
 
+	// MultiNetwork also calls RegisterCiliumNodeSubscriber, needs to be started before
+	// the K8s watcher
+	if d.multiNetworkManager != nil {
+		d.multiNetworkManager.StartRoutingController(d.k8sWatcher.CiliumNodeChain)
+	}
+
 	d.redirectPolicyManager.RegisterSvcCache(d.k8sWatcher.K8sSvcCache)
 	if option.Config.BGPAnnounceLBIP {
 		d.bgpSpeaker.RegisterSvcCache(d.k8sWatcher.K8sSvcCache)
@@ -1246,8 +1252,10 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		ipsec.StartStaleKeysReclaimer(ctx)
 	}
 
+	// StartLocalIPCollector needs to be called after the local CiliumNode object
+	// has been created
 	if d.multiNetworkManager != nil {
-		params.MultiNetworkManager.StartRoutingController(d.nodeDiscovery, d.k8sWatcher.CiliumNodeChain)
+		d.multiNetworkManager.StartLocalIPCollector(d.nodeDiscovery)
 	}
 
 	return &d, restoredEndpoints, nil
