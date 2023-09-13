@@ -246,7 +246,7 @@ jobs:
           - focus: "f01-agent-chaos"
             cliFocus: "K8sAgentChaosTest"
             ip-family: "dual"
-            kube-image: "kindest/node:v1.28.0@sha256:b7a4cad12c197af3ba43202d3efe03246b3f0793f162afb40a33c923952d5b31"
+            kube-image: "quay.io/cilium/kindest-node:v1.28.2"
             kernel: "bpf-next-20230911.012614@sha256:f5598a66eba0a65df0e90903f7e4468795b641d42ec875444322ff1c9a9c4ee8"
     steps:
       - name: Checkout context ref (trusted)
