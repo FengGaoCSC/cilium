@@ -133,7 +133,7 @@ jobs:
             --helm-set=ipam.mode=multi-pool \
             --helm-set=ipam.operator.autoCreateCiliumPodIPPools.default.ipv4.cidrs='{10.10.0.0/16}' \
             --helm-set=ipam.operator.autoCreateCiliumPodIPPools.default.ipv4.maskSize=24 \
-            --helm-set=ipam.operator.autoCreateCiliumPodIPPools.secondary-pool.ipv4.cidrs='{192.168.0.0/20}' \
+            --helm-set=ipam.operator.autoCreateCiliumPodIPPools.secondary-pool.ipv4.cidrs='{192.168.16.0/20}' \
             --helm-set=ipam.operator.autoCreateCiliumPodIPPools.secondary-pool.ipv4.maskSize=27 \
             --helm-set=enterprise.multiNetwork.enabled=true \
             --helm-set=enterprise.multiNetwork.autoCreateDefaultPodNetwork=true"
