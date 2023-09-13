@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ATLANTIS_VERSION: v1.0.0-alpha4.9
+  ATLANTIS_VERSION: v1.0.0-alpha4.11
 
 jobs:
   build-and-push-prs:
