@@ -167,7 +167,7 @@ jobs:
         with:
           test-name: enterprise-multi-network
           # renovate: datasource=docker depName=quay.io/lvh-images/kind
-          image-version: '6.0-20230420.212204'
+          image-version: '6.0-20230824.161940'
           host-mount: ./
           cpu: 4
           dns-resolver: '1.1.1.1'
