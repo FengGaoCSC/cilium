@@ -124,6 +124,7 @@ jobs:
             --helm-set-string=extraConfig.enable-local-node-route=false \
             --helm-set=kubeProxyReplacement=strict \
             --helm-set=bpf.masquerade=true \
+            --helm-set=devices='{eth+}' \
             --helm-set=ipv4NativeRoutingCIDR=10.0.0.0/8 \
             --helm-set=ipMasqAgent.enabled=true \
             --helm-set=ipMasqAgent.config.nonMasqueradeCIDRs='{192.168.0.0/16}' \
