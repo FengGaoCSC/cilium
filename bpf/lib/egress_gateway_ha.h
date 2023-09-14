@@ -107,9 +107,8 @@ bool egress_gw_ha_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_un
 	ipv4_ct_tuple_swap_addrs(&ct_key);
 	ct_key.flags = 0;
 
-	/* First, if this is not a new connection, check if it is
-	 * already in the egress CT map */
-	if (ct_status != CT_NEW) {
+	/* Established connection should have its gateway in the EgressCT map: */
+	if (ct_status == CT_ESTABLISHED) {
 		egress_ct = lookup_ip4_egress_ct(&ct_key);
 		if (egress_ct) {
 			/* If there's an entry, extract the IP of the gateway node from
