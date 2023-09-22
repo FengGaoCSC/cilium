@@ -132,6 +132,10 @@ func OpenVRFMaps() error {
 	return initVRFMaps(false)
 }
 
+func VRFMapsInitialized() bool {
+	return SRv6VRFMap4 != nil && SRv6VRFMap6 != nil
+}
+
 // srv6VRFMap is the internal representation of an SRv6 VRF mapping map.
 type srv6VRFMap struct {
 	*ebpf.Map

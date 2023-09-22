@@ -24,6 +24,7 @@ import (
 	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/ipam"
 	"github.com/cilium/cilium/pkg/k8s"
+	"github.com/cilium/cilium/pkg/k8s/resource"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/lock"
@@ -98,8 +99,11 @@ type Manager struct {
 	// vrfs stores VRFs indexed by vrfID
 	vrfs map[vrfID]*VRF
 
-	// epDataStore stores endpointId to endpoint metadata mapping
-	epDataStore map[endpointID]*endpointMetadata
+	// cepResource provides access to events and read-only store of CiliumEndpoint resources
+	cepResource resource.Resource[*k8sTypes.CiliumEndpoint]
+
+	// cepStore is a read-only store of CiliumEndpoint resources
+	cepStore resource.Store[*k8sTypes.CiliumEndpoint]
 
 	// identityAllocator is used to fetch identity labels for endpoint updates
 	identityAllocator identityCache.IdentityAllocator
@@ -138,6 +142,7 @@ type Params struct {
 	CacheIdentityAllocator cache.IdentityAllocator
 	CacheStatus            k8s.CacheStatus
 	SIDManagerPromise      promise.Promise[sidmanager.SIDManager]
+	CiliumEndpointResource resource.Resource[*k8sTypes.CiliumEndpoint]
 }
 
 // NewSRv6Manager returns a new SRv6 policy manager.
@@ -150,12 +155,12 @@ func NewSRv6Manager(p Params) *Manager {
 		k8sCacheSyncedChecker: p.CacheStatus,
 		policies:              make(map[policyID]*EgressPolicy),
 		vrfs:                  make(map[vrfID]*VRF),
-		epDataStore:           make(map[endpointID]*endpointMetadata),
 		identityAllocator:     p.CacheIdentityAllocator,
 		allocatedSIDs:         make(map[uint32]*SIDAllocation),
 		bgp:                   p.Sig,
 		sidManagerPromise:     p.SIDManagerPromise,
 		asyncReconcileVRFCh:   make(chan struct{}, 1),
+		cepResource:           p.CiliumEndpointResource,
 	}
 
 	p.Lifecycle.Append(manager)
@@ -173,6 +178,30 @@ func (manager *Manager) Start(hookCtx hive.HookContext) error {
 	if err != nil {
 		return fmt.Errorf("failed to await on SIDManager")
 	}
+
+	// Create Endpoints store and watch for Endpoints events
+	manager.cepStore, err = manager.cepResource.Store(hookCtx)
+	if err != nil {
+		return fmt.Errorf("failed creating Endpoints resource.Store: %w", err)
+	}
+	go func() {
+		epSynced := false
+		for event := range manager.cepResource.Events(hookCtx) {
+			// reconcile upon CiliumEndpoint events
+			manager.Lock()
+			switch event.Kind {
+			case resource.Sync:
+				epSynced = true
+				manager.reconcileVRF()
+			case resource.Upsert, resource.Delete:
+				if epSynced {
+					manager.reconcileVRF()
+				}
+			}
+			manager.Unlock()
+			event.Done(nil)
+		}
+	}()
 
 	// This goroutine handles asynchronous reconcileVRF
 	go func() {
@@ -572,60 +601,6 @@ func (manager *Manager) OnDeleteSRv6VRF(vrfID vrfID) {
 	manager.reconcileVRF()
 }
 
-// OnUpdateEndpoint is the event handler for endpoint additions and updates.
-func (manager *Manager) OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint) {
-	var (
-		identityLabels labels.Labels
-		epData         *endpointMetadata
-		err            error
-	)
-
-	manager.Lock()
-	defer manager.Unlock()
-
-	logger := log.WithFields(logrus.Fields{
-		logfields.K8sEndpointName: endpoint.Name,
-		logfields.K8sNamespace:    endpoint.Namespace,
-	})
-
-	if len(endpoint.Networking.Addressing) == 0 {
-		logger.WithError(err).
-			Error("Failed to get valid endpoint IPs, skipping update of SRv6 maps.")
-		return
-	}
-
-	if identityLabels, err = manager.getIdentityLabels(uint32(endpoint.Identity.ID)); err != nil {
-		logger.WithError(err).
-			Error("Failed to get idenity labels for endpoint, skipping update of SRv6 maps.")
-		return
-	}
-
-	if epData, err = getEndpointMetadata(endpoint, identityLabels); err != nil {
-		logger.WithError(err).
-			Error("Failed to get valid endpoint metadata, skipping update of SRv6 maps.")
-		return
-	}
-
-	manager.epDataStore[epData.id] = epData
-
-	manager.reconcileVRF()
-}
-
-// OnDeleteEndpoint is the event handler for endpoint deletions.
-func (manager *Manager) OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint) {
-	manager.Lock()
-	defer manager.Unlock()
-
-	id := types.NamespacedName{
-		Name:      endpoint.GetName(),
-		Namespace: endpoint.GetNamespace(),
-	}
-
-	delete(manager.epDataStore, id)
-
-	manager.reconcileVRF()
-}
-
 // getIdentityLabels waits for the global identities to be populated to the cache,
 // then looks up identity by ID from the cached identity allocator and return its labels.
 func (manager *Manager) getIdentityLabels(securityIdentity uint32) (labels.Labels, error) {
@@ -798,6 +773,7 @@ func (m *Manager) reconcileVRFEgressPath() {
 		)
 		srv6VRFs = map[string]keyEntry{}
 	)
+
 	log.Info("Reconciling egress datapath for encapsulation.")
 
 	// populate srv6VRFs map
@@ -817,7 +793,7 @@ func (m *Manager) reconcileVRFEgressPath() {
 		})
 
 	for _, vrf := range m.vrfs {
-		keys := vrf.getVRFKeysFromMatchingEndpoint(m.epDataStore)
+		keys := m.getVRFKeysFromMatchingEndpoint(vrf)
 		for _, key := range keys {
 			vrfVal, vrfPresent := srv6VRFs[key.String()]
 			if vrfPresent && vrfVal.value.ID == vrf.VRFID {
@@ -840,7 +816,7 @@ func (m *Manager) reconcileVRFEgressPath() {
 nextVRFKey:
 	for _, vrfKeyEntry := range srv6VRFs {
 		for _, vrf := range m.vrfs {
-			keys := vrf.getVRFKeysFromMatchingEndpoint(m.epDataStore)
+			keys := m.getVRFKeysFromMatchingEndpoint(vrf)
 			for _, key := range keys {
 				if vrfKeyEntry.key.Match(*key.SourceIP, key.DestCIDR) {
 					continue nextVRFKey
@@ -1265,7 +1241,11 @@ func (manager *Manager) reconcileVRF() {
 		l.Debug("SRv6 Manager not configured with SID Allocator yet, won't export VRFs.")
 	}
 
-	manager.reconcileVRFEgressPath()
+	if srv6map.VRFMapsInitialized() {
+		manager.reconcileVRFEgressPath()
+	} else {
+		l.Debug("SRv6 VRF maps not initialized yet, skipping egress datapath reconciliation.")
+	}
 
 	manager.bgp.Event(struct{}{})
 }

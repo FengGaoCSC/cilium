@@ -179,8 +179,6 @@ type EgressGatewayManager interface {
 type srv6Manager interface {
 	OnAddSRv6Policy(config srv6.EgressPolicy)
 	OnDeleteSRv6Policy(configID types.NamespacedName)
-	OnUpdateEndpoint(endpoint *k8sTypes.CiliumEndpoint)
-	OnDeleteEndpoint(endpoint *k8sTypes.CiliumEndpoint)
 	OnAddSRv6VRF(vrf srv6.VRF)
 	OnDeleteSRv6VRF(vrfID types.NamespacedName)
 }

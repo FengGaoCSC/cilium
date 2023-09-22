@@ -45,17 +45,44 @@ type VRF struct {
 //
 // if a provided endpoint matches a rule a srv6map.VRFKey will be created for
 // each of the endpoint's IPv6 addresses and appended to the returned slice.
-func (v *VRF) getVRFKeysFromMatchingEndpoint(endpoints map[endpointID]*endpointMetadata) []srv6map.VRFKey {
+func (m *Manager) getVRFKeysFromMatchingEndpoint(vrf *VRF) []srv6map.VRFKey {
+	logger := log.WithFields(logrus.Fields{
+		logfields.VRF: vrf.id,
+	})
 	keys := []srv6map.VRFKey{}
-	for _, rule := range v.rules {
-		for _, endpoint := range endpoints {
-			if !rule.selectsEndpoint(endpoint) {
+	for _, rule := range vrf.rules {
+		for _, endpoint := range m.cepStore.List() {
+			// NOTE: endpoint.Labels is always nil, as labels are not stored in the slim CiliumEndpoint.
+			// Because of that, we need to retrieve them based on the endpoint identity.
+			// We could use endpoint.Identity.Labels right away, but that would require parsing them,
+			// - so we retrieve them from the identityCache.IdentityAllocator instead (getIdentityLabels).
+			if endpoint.Identity == nil {
+				logger.WithFields(logrus.Fields{logfields.K8sEndpointName: endpoint.Name, logfields.K8sNamespace: endpoint.Namespace}).
+					Warning("Endpoint does not have an identity, skipping from VRF matching")
 				continue
 			}
-			for i := range endpoint.ips {
+			labels, err := m.getIdentityLabels(uint32(endpoint.Identity.ID))
+			if err != nil {
+				logger.WithFields(logrus.Fields{logfields.K8sEndpointName: endpoint.Name, logfields.K8sNamespace: endpoint.Namespace}).
+					WithError(err).Error("Could not get endpoint identity labels, skipping from VRF matching")
+				continue
+			}
+			if !rule.selectsEndpoint(labels.K8sStringMap()) {
+				continue
+			}
+			var ips []net.IP
+			for _, pair := range endpoint.Networking.Addressing {
+				if pair.IPV4 != "" {
+					ips = append(ips, net.ParseIP(pair.IPV4).To4())
+				}
+				if pair.IPV6 != "" {
+					ips = append(ips, net.ParseIP(pair.IPV6).To16())
+				}
+			}
+			for i := range ips {
 				for _, dstCIDR := range rule.dstCIDRs {
 					keys = append(keys, srv6map.VRFKey{
-						SourceIP: &(endpoint.ips[i]),
+						SourceIP: &(ips[i]),
 						DestCIDR: dstCIDR,
 					})
 				}
@@ -106,8 +133,8 @@ type vrfID = types.NamespacedName
 
 // selectsEndpoint determines if the given endpoint is selected by the VRFRule
 // based on matching labels of policy and endpoint.
-func (rule *VRFRule) selectsEndpoint(endpoint *endpointMetadata) bool {
-	labelsToMatch := k8sLabels.Set(endpoint.labels)
+func (rule *VRFRule) selectsEndpoint(endpointLabels map[string]string) bool {
+	labelsToMatch := k8sLabels.Set(endpointLabels)
 	for _, selector := range rule.endpointSelectors {
 		if selector.Matches(labelsToMatch) {
 			return true

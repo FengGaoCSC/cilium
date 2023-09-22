@@ -231,11 +231,6 @@ func (k *K8sWatcher) endpointUpdated(oldEndpoint, endpoint *types.CiliumEndpoint
 		EgressGatewayHAManager.OnUpdateEndpoint(endpoint)
 	}
 	EgressGatewayHAManagerLock.RUnlock()
-
-	if option.Config.EnableSRv6 {
-		k.srv6Manager.OnUpdateEndpoint(endpoint)
-	}
-
 }
 
 func (k *K8sWatcher) endpointDeleted(endpoint *types.CiliumEndpoint) {
@@ -270,10 +265,6 @@ func (k *K8sWatcher) endpointDeleted(endpoint *types.CiliumEndpoint) {
 		EgressGatewayHAManager.OnDeleteEndpoint(endpoint)
 	}
 	EgressGatewayHAManagerLock.RUnlock()
-
-	if option.Config.EnableSRv6 {
-		k.srv6Manager.OnDeleteEndpoint(endpoint)
-	}
 }
 
 // CreateCiliumEndpointLocalPodIndexFunc returns an IndexFunc that indexes only local
