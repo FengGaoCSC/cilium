@@ -9,3 +9,4 @@ runs:
         echo "QUAY_ORGANIZATION_DEV=isovalent-dev" >> $GITHUB_ENV
         # no prod yet
         echo "QUAY_CHARTS_ORGANIZATION_DEV=isovalent-charts-dev" >> $GITHUB_ENV
+        echo "BRANCH_SUFFIX=-ce" >> $GITHUB_ENV
