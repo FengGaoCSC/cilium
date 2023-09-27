@@ -18,8 +18,10 @@ import (
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/utils/features"
 
+	enterpriseCheck "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/check"
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
+	enterpriseTests "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/tests"
 	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 )
 
@@ -27,8 +29,16 @@ const (
 	testNoPolicies = "no-policies"
 )
 
-//go:embed manifests/allow-all-dns-loookups-policy.yaml
-var allowAllDNSLookupsPolicyYAML string
+var (
+	//go:embed manifests/allow-all-dns-loookups-policy.yaml
+	allowAllDNSLookupsPolicyYAML string
+
+	//go:embed manifests/egress-gateway-policy.yaml
+	egressGatewayPolicyYAML string
+
+	//go:embed manifests/egress-gateway-policy-excluded-cidrs.yaml
+	egressGatewayPolicyExcludedCIDRsYAML string
+)
 
 func addConnectivityTests(ct *check.ConnectivityTest, externalCiliumDNSProxyPods map[string]check.Pod) error {
 	if err := addHubbleVersionTests(ct); err != nil {
@@ -42,6 +52,13 @@ func addConnectivityTests(ct *check.ConnectivityTest, externalCiliumDNSProxyPods
 	if err := addExternalCiliumDNSProxyTests(ct, externalCiliumDNSProxyPods); err != nil {
 		return err
 	}
+
+	if ct.Params().IncludeUnsafeTests {
+		if err := addEgressGatewayHATests(ct); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -81,6 +98,30 @@ func addPhantomServiceTests(ct *check.ConnectivityTest) (err error) {
 	mustGetTest(ct, "client-egress-knp").WithSetupFunc(deploy.PhantomService).WithScenarios(tests.PodToPhantomService())
 
 	return
+}
+
+func addEgressGatewayHATests(ct *check.ConnectivityTest) (err error) {
+	enterpriseCheck.NewEnterpriseConnectivityTest(ct).
+		NewEnterpriseTest("egress-gateway-ha").
+		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyYAML,
+			enterpriseCheck.IsovalentEgressGatewayPolicyParams{}).
+		WithIPRoutesFromOutsideToPodCIDRs().
+		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.EgressGatewayHA),
+			features.RequireEnabled(features.NodeWithoutCilium)).
+		WithScenarios(enterpriseTests.EgressGatewayHA())
+
+	enterpriseCheck.NewEnterpriseConnectivityTest(ct).
+		NewEnterpriseTest("egress-gateway-ha-excluded-cidrs").
+		WithIsovalentEgressGatewayPolicy(egressGatewayPolicyExcludedCIDRsYAML,
+			enterpriseCheck.IsovalentEgressGatewayPolicyParams{
+				ExcludedCIDRs: check.ExternalNodeExcludedCIDRs,
+			}).
+		WithIPRoutesFromOutsideToPodCIDRs().
+		WithFeatureRequirements(features.RequireEnabled(enterpriseFeatures.EgressGatewayHA),
+			features.RequireEnabled(features.NodeWithoutCilium)).
+		WithScenarios(enterpriseTests.EgressGatewayExcludedCIDRs())
+
+	return nil
 }
 
 func mustGetTest(ct *check.ConnectivityTest, name string) *check.Test {

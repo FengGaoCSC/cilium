@@ -1,0 +1,32 @@
+apiVersion: isovalent.com/v1
+kind: IsovalentEgressGatewayPolicy
+metadata:
+  name: iegp-sample
+spec:
+  selectors:
+  - podSelector:
+      matchLabels:
+        io.kubernetes.pod.namespace: cilium-test
+        kind: client
+  destinationCIDRs:
+  - 0.0.0.0/0
+  egressGroups:
+  - nodeSelector:
+      matchLabels:
+        kubernetes.io/hostname: NODE_NAME_PLACEHOLDER
+---
+apiVersion: isovalent.com/v1
+kind: IsovalentEgressGatewayPolicy
+metadata:
+  name: iegp-sample-echo-service
+spec:
+  selectors:
+  - podSelector:
+      matchLabels:
+        kind: echo
+  destinationCIDRs:
+  - 0.0.0.0/0
+  egressGroups:
+  - nodeSelector:
+      matchLabels:
+        kubernetes.io/hostname: NODE_NAME_PLACEHOLDER
