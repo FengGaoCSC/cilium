@@ -223,8 +223,8 @@ jobs:
             SAME_NODE_CEP=\$(kubectl -n cilium-test get cep -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep "^echo-same-node-.*-.*-cil1")
 
             # Check that CNI generated labels got added to identity labels of the CEPs
-            kubectl -n cilium-test get cep \$CLIENT_CEP -o jsonpath='{.status.identity.labels}' | grep "cni:com.isovalent.v1alpha1.network.attachment/secondary-network=cil1"
-            kubectl -n cilium-test get cep \$SAME_NODE_CEP -o jsonpath='{.status.identity.labels}' | grep "cni:com.isovalent.v1alpha1.network.attachment/secondary-network=cil1"
+            kubectl -n cilium-test get cep \$CLIENT_CEP -o jsonpath='{.status.identity.labels}' | grep "cni:com.isovalent.v1alpha1.network.attachment=secondary-network"
+            kubectl -n cilium-test get cep \$SAME_NODE_CEP -o jsonpath='{.status.identity.labels}' | grep "cni:com.isovalent.v1alpha1.network.attachment=secondary-network"
 
             CLIENT_POD=\$(kubectl -n cilium-test get pod -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep "^client-.*-.*")
             SAME_NODE_POD=\$(kubectl -n cilium-test get pod -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | grep "^echo-same-node-.*-.*")
