@@ -16,6 +16,7 @@ triggers:
     - enterprise-clustermesh-overlapping-podcidr.yaml
     - enterprise-multi-network.yaml
     - integration-test.yaml
+    - tests-clustermesh-upgrade.yaml
     - tests-datapath-verifier.yaml
     - tests-l4lb.yaml
   /ci-aks:
@@ -28,6 +29,7 @@ triggers:
     workflows:
     - conformance-clustermesh.yaml
     - enterprise-clustermesh-overlapping-podcidr.yaml
+    - tests-clustermesh-upgrade.yaml
   /ci-e2e:
     workflows:
     - conformance-e2e.yaml
@@ -99,6 +101,8 @@ workflows:
     paths-ignore-regex: (test|Documentation)/
   integration-test.yaml:
     paths-ignore-regex: Documentation/
+  tests-clustermesh-upgrade.yaml:
+    paths-ignore-regex: (test|Documentation)/
   tests-datapath-verifier.yaml:
     paths-regex: (bpf|test/verifier|vendor)/
   tests-l4lb.yaml:
