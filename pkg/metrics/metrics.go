@@ -229,11 +229,11 @@ var (
 
 	// NodeConnectivityStatus is the connectivity status between local node to
 	// other node intra or inter cluster.
-	NodeConnectivityStatus = NoOpGaugeVec
+	NodeConnectivityStatus = NoOpGaugeDeletableVec
 
 	// NodeConnectivityLatency is the connectivity latency between local node to
 	// other node intra or inter cluster.
-	NodeConnectivityLatency = NoOpGaugeVec
+	NodeConnectivityLatency = NoOpGaugeDeletableVec
 
 	// Endpoint
 

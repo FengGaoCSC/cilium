@@ -31,16 +31,26 @@ type GaugeVec interface {
 	prometheus.Collector
 }
 
+type DeletableGaugeVec interface {
+	GaugeVec
+
+	Delete(ll prometheus.Labels) bool
+	DeleteLabelValues(lvs ...string) bool
+	DeletePartialMatch(labels prometheus.Labels) int
+	Reset()
+}
+
 var (
 	NoOpMetric    prometheus.Metric    = &metric{}
 	NoOpCollector prometheus.Collector = &collector{}
 
-	NoOpCounter     prometheus.Counter     = &counter{NoOpMetric, NoOpCollector}
-	NoOpCounterVec  CounterVec             = &counterVec{NoOpCollector}
-	NoOpObserver    prometheus.Observer    = &observer{}
-	NoOpObserverVec prometheus.ObserverVec = &observerVec{NoOpCollector}
-	NoOpGauge       prometheus.Gauge       = &gauge{NoOpMetric, NoOpCollector}
-	NoOpGaugeVec    GaugeVec               = &gaugeVec{NoOpCollector}
+	NoOpCounter           prometheus.Counter     = &counter{NoOpMetric, NoOpCollector}
+	NoOpCounterVec        CounterVec             = &counterVec{NoOpCollector}
+	NoOpObserver          prometheus.Observer    = &observer{}
+	NoOpObserverVec       prometheus.ObserverVec = &observerVec{NoOpCollector}
+	NoOpGauge             prometheus.Gauge       = &gauge{NoOpMetric, NoOpCollector}
+	NoOpGaugeVec          GaugeVec               = &gaugeVec{NoOpCollector}
+	NoOpGaugeDeletableVec DeletableGaugeVec      = &gaugeDeletableVec{gaugeVec{NoOpCollector}}
 )
 
 // Metric
@@ -125,6 +135,24 @@ func (g *gauge) Sub(float64)       {}
 func (g *gauge) SetToCurrentTime() {}
 
 // GaugeVec
+
+type gaugeDeletableVec struct {
+	gaugeVec
+}
+
+func (*gaugeDeletableVec) Delete(ll prometheus.Labels) bool {
+	return false
+}
+
+func (*gaugeDeletableVec) DeleteLabelValues(lvs ...string) bool {
+	return false
+}
+
+func (*gaugeDeletableVec) DeletePartialMatch(labels prometheus.Labels) int {
+	return 0
+}
+
+func (*gaugeDeletableVec) Reset() {}
 
 type gaugeVec struct {
 	prometheus.Collector
