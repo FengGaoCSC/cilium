@@ -68,7 +68,7 @@ bool egress_gw_ha_policy_entry_is_excluded_cidr(const struct egress_gw_ha_policy
 
 static __always_inline
 bool egress_gw_ha_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_unused,
-					 int ct_status __maybe_unused,
+					 enum ct_status ct_status __maybe_unused,
 					 __u32 *tunnel_endpoint __maybe_unused)
 {
 #if defined(ENABLE_EGRESS_GATEWAY_HA)
