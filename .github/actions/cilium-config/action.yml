@@ -116,7 +116,7 @@ runs:
 
           EGRESS_GATEWAY=""
           if [ "${{ inputs.egress-gateway }}" == "true" ]; then
-            EGRESS_GATEWAY="--helm-set=egressGateway.enabled=true"
+            EGRESS_GATEWAY="--helm-set=egressGateway.enabled=true --helm-set=enterprise.egressGatewayHA.enabled=true"
           fi
 
           LB_ACCELERATION=""
