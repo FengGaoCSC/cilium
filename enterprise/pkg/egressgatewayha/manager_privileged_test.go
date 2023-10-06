@@ -1340,6 +1340,8 @@ func parseEgressRule(sourceIP, destCIDR, egressIP, gatewayIP string) parsedEgres
 }
 
 func assertEgressRules(c *C, policyMap egressmapha.PolicyMap, rules []egressRule) {
+	c.Helper()
+
 	err := tryAssertEgressRules(policyMap, rules)
 	c.Assert(err, IsNil)
 }
