@@ -61,7 +61,8 @@ jobs:
         timeout-minutes: 30
         shell: bash
         run: |
-          until helm pull ${{ env.helm_chart_repo }} --version ${{ steps.vars.outputs.version }} &> /dev/null; do sleep 30s; done
+          echo ${{ secrets.QUAY_CHARTS_DEV_PASSWORD }} | helm registry login quay.io -u ${{ secrets.QUAY_CHARTS_DEV_USERNAME }} --password-stdin
+          until helm pull ${{ env.helm_chart_repo }} --version ${{ steps.vars.outputs.version }}; do sleep 30s; done
 
       - name: Install Cilium
         run: |
