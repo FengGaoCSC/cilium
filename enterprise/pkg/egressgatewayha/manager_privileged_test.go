@@ -204,6 +204,77 @@ func (k *EgressGatewayTestSuite) SetUpTest(c *C) {
 	c.Assert(k.manager, NotNil)
 }
 
+func (k *EgressGatewayTestSuite) TestEgressGatewayIEGPParser(c *C) {
+	// must specify name
+	policy := policyParams{
+		name:            "",
+		destinationCIDR: destCIDR,
+		iface:           testInterface1,
+	}
+
+	iegp, _ := newIEGP(&policy)
+	_, err := ParseIEGP(iegp)
+	c.Assert(err, NotNil)
+
+	// catch nil DestinationCIDR field
+	policy = policyParams{
+		name:  "policy-1",
+		iface: testInterface1,
+	}
+
+	iegp, _ = newIEGP(&policy)
+	iegp.Spec.DestinationCIDRs = nil
+	_, err = ParseIEGP(iegp)
+	c.Assert(err, NotNil)
+
+	// must specify at least one DestinationCIDR
+	policy = policyParams{
+		name:  "policy-1",
+		iface: testInterface1,
+	}
+
+	iegp, _ = newIEGP(&policy)
+	_, err = ParseIEGP(iegp)
+	c.Assert(err, NotNil)
+
+	// catch nil EgressGroups field
+	policy = policyParams{
+		name:            "policy-1",
+		destinationCIDR: destCIDR,
+		iface:           testInterface1,
+	}
+
+	iegp, _ = newIEGP(&policy)
+	iegp.Spec.EgressGroups = nil
+	_, err = ParseIEGP(iegp)
+	c.Assert(err, NotNil)
+
+	// must specify some sort of endpoint selector
+	policy = policyParams{
+		name:            "policy-1",
+		destinationCIDR: destCIDR,
+		iface:           testInterface1,
+	}
+
+	iegp, _ = newIEGP(&policy)
+	iegp.Spec.Selectors[0].NamespaceSelector = nil
+	iegp.Spec.Selectors[0].PodSelector = nil
+	_, err = ParseIEGP(iegp)
+	c.Assert(err, NotNil)
+
+	// can't specify both egress iface and IP
+	policy = policyParams{
+		name:            "policy-1",
+		destinationCIDR: destCIDR,
+		iface:           testInterface1,
+		egressIP:        egressIP1,
+	}
+
+	iegp, _ = newIEGP(&policy)
+	_, err = ParseIEGP(iegp)
+	c.Assert(err, NotNil)
+}
+
 func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	testInterface1Idx := createTestInterface(c, testInterface1, egressCIDR1)
 	testInterface2Idx := createTestInterface(c, testInterface2, egressCIDR2)
