@@ -286,6 +286,11 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		return nil, fmt.Errorf("must have a name")
 	}
 
+	destinationCIDRs := iegp.Spec.DestinationCIDRs
+	if destinationCIDRs == nil {
+		return nil, fmt.Errorf("destinationCIDRs can't be empty")
+	}
+
 	egressGroups := iegp.Spec.EgressGroups
 	if egressGroups == nil {
 		return nil, fmt.Errorf("egressGroups can't be empty")
@@ -307,7 +312,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 		})
 	}
 
-	for _, cidrString := range iegp.Spec.DestinationCIDRs {
+	for _, cidrString := range destinationCIDRs {
 		_, cidr, err := net.ParseCIDR(string(cidrString))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse destination CIDR %s: %s", cidrString, err)
