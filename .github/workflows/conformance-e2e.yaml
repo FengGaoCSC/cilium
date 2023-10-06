@@ -238,6 +238,14 @@ jobs:
             egress-gateway: 'true'
             misc: 'encryption.wireguard.encapsulate=true'
 
+          - name: '15'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '4.19-20231026.065108'
+            kube-proxy: 'iptables'
+            kpr: 'false'
+            tunnel: 'vxlan'
+            misc: 'policyCIDRMatchMode=nodes'
+
     timeout-minutes: 60
     steps:
       - name: Checkout context ref (trusted)
@@ -276,6 +284,7 @@ jobs:
           encryption-node: ${{ matrix.encryption-node }}
           egress-gateway: ${{ matrix.egress-gateway }}
           host-fw: ${{ matrix.host-fw }}
+          misc: ${{ matrix.misc }}
 
       # Warning: since this is a privileged workflow, subsequent workflow job
       # steps must take care not to execute untrusted code.
