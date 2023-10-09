@@ -814,7 +814,7 @@ static __always_inline bool snat_v4_prepare_state(struct __ctx_buff *ctx,
 	if (is_reply)
 		goto skip_egress_gateway;
 
-	if (egress_gw_snat_needed(ip4->saddr, ip4->daddr, &target->addr)) {
+	if (egress_gw_snat_needed_hook(ip4->saddr, ip4->daddr, &target->addr)) {
 		target->egress_gateway = true;
 		/* If the endpoint is local, then the connection is already tracked. */
 		if (!local_ep)

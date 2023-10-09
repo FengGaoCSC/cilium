@@ -22,8 +22,6 @@
 #define EGRESS_GATEWAY_NO_GATEWAY (0)
 #define EGRESS_GATEWAY_EXCLUDED_CIDR bpf_htonl(1)
 
-#include "lib/egress_gateway_ha.h"
-
 #ifdef ENABLE_EGRESS_GATEWAY
 static __always_inline
 struct egress_gw_policy_entry *lookup_ip4_egress_gw_policy(__be32 saddr, __be32 daddr)
@@ -38,9 +36,9 @@ struct egress_gw_policy_entry *lookup_ip4_egress_gw_policy(__be32 saddr, __be32 
 #endif /* ENABLE_EGRESS_GATEWAY */
 
 static __always_inline
-bool egress_gw_oss_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_unused,
-					  enum ct_status ct_status __maybe_unused,
-					  __u32 *tunnel_endpoint __maybe_unused)
+bool egress_gw_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_unused,
+				      enum ct_status ct_status __maybe_unused,
+				      __u32 *tunnel_endpoint __maybe_unused)
 {
 #if defined(ENABLE_EGRESS_GATEWAY)
 	struct egress_gw_policy_entry *egress_gw_policy;
@@ -87,18 +85,9 @@ bool egress_gw_oss_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_u
 }
 
 static __always_inline
-bool egress_gw_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_unused,
-				      enum ct_status ct_status __maybe_unused,
-				      __u32 *tunnel_endpoint __maybe_unused)
-{
-	return egress_gw_oss_request_needs_redirect(rtuple, ct_status, tunnel_endpoint) ||
-	       egress_gw_ha_request_needs_redirect(rtuple, ct_status, tunnel_endpoint);
-}
-
-static __always_inline
-bool egress_gw_oss_snat_needed(__be32 saddr __maybe_unused,
-			       __be32 daddr __maybe_unused,
-			       __be32 *snat_addr __maybe_unused)
+bool egress_gw_snat_needed(__be32 saddr __maybe_unused,
+			   __be32 daddr __maybe_unused,
+			   __be32 *snat_addr __maybe_unused)
 {
 #if defined(ENABLE_EGRESS_GATEWAY)
 	struct egress_gw_policy_entry *egress_gw_policy;
@@ -119,16 +108,9 @@ bool egress_gw_oss_snat_needed(__be32 saddr __maybe_unused,
 }
 
 static __always_inline
-bool egress_gw_snat_needed(__be32 saddr, __be32 daddr, __be32 *snat_addr)
-{
-	return egress_gw_oss_snat_needed(saddr, daddr, snat_addr) ||
-	       egress_gw_ha_snat_needed(saddr, daddr, snat_addr);
-}
-
-static __always_inline
-bool egress_gw_oss_reply_needs_redirect(struct iphdr *ip4 __maybe_unused,
-					__u32 *tunnel_endpoint __maybe_unused,
-					__u32 *dst_sec_identity __maybe_unused)
+bool egress_gw_reply_needs_redirect(struct iphdr *ip4 __maybe_unused,
+				    __u32 *tunnel_endpoint __maybe_unused,
+				    __u32 *dst_sec_identity __maybe_unused)
 {
 #if defined(ENABLE_EGRESS_GATEWAY)
 	struct egress_gw_policy_entry *egress_policy;
@@ -155,12 +137,28 @@ bool egress_gw_oss_reply_needs_redirect(struct iphdr *ip4 __maybe_unused,
 #endif /* ENABLE_EGRESS_GATEWAY */
 }
 
+#include "lib/egress_gateway_ha.h"
+
 static __always_inline
-bool egress_gw_reply_needs_redirect(struct iphdr *ip4 __maybe_unused,
-				    __u32 *tunnel_endpoint __maybe_unused,
-				    __u32 *dst_sec_identity __maybe_unused)
+bool egress_gw_request_needs_redirect_hook(struct ipv4_ct_tuple *rtuple, enum ct_status ct_status,
+					   __u32 *tunnel_endpoint)
 {
-	return egress_gw_oss_reply_needs_redirect(ip4, tunnel_endpoint, dst_sec_identity) ||
+	return egress_gw_request_needs_redirect(rtuple, ct_status, tunnel_endpoint) ||
+	       egress_gw_ha_request_needs_redirect(rtuple, ct_status, tunnel_endpoint);
+}
+
+static __always_inline
+bool egress_gw_snat_needed_hook(__be32 saddr, __be32 daddr, __be32 *snat_addr)
+{
+	return egress_gw_snat_needed(saddr, daddr, snat_addr) ||
+	       egress_gw_ha_snat_needed(saddr, daddr, snat_addr);
+}
+
+static __always_inline
+bool egress_gw_reply_needs_redirect_hook(struct iphdr *ip4, __u32 *tunnel_endpoint,
+					 __u32 *dst_sec_identity)
+{
+	return egress_gw_reply_needs_redirect(ip4, tunnel_endpoint, dst_sec_identity) ||
 	       egress_gw_ha_reply_needs_redirect(ip4, tunnel_endpoint, dst_sec_identity);
 }
 
