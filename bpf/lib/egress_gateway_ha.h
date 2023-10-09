@@ -205,7 +205,6 @@ bool egress_gw_ha_reply_needs_redirect(struct iphdr *ip4 __maybe_unused,
 	if (!egress_gw_policy)
 		return false;
 
-	/* FIXME: no gateway traffic should be dropped in a future release */
 	if (!egress_gw_policy->size)
 		return false;
 
