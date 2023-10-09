@@ -1562,6 +1562,13 @@ static __always_inline int nodeport_snat_fwd_ipv4(struct __ctx_buff *ctx,
 	};
 	int ret = CTX_ACT_OK;
 	bool snat_needed;
+	struct ipv4_ct_tuple tuple = {};
+	void *data, *data_end;
+	struct iphdr *ip4;
+
+	if (!revalidate_data(ctx, &data, &data_end, &ip4))
+		return DROP_INVALID;
+	snat_v4_init_tuple(ip4, NAT_DIR_EGRESS, &tuple);
 
 	snat_needed = snat_v4_prepare_state(ctx, &target);
 	if (snat_needed)
@@ -1574,6 +1581,11 @@ static __always_inline int nodeport_snat_fwd_ipv4(struct __ctx_buff *ctx,
 	 * to multiple SNATs. To prevent from that, set the SNAT done flag.
 	 */
 	ctx_snat_done_set(ctx);
+
+#if defined(ENABLE_EGRESS_GATEWAY_COMMON)
+	if (target.egress_gateway)
+		return egress_gw_fib_lookup_and_redirect(ctx, target.addr, tuple.daddr, ext_err);
+#endif
 
 	return ret;
 }
