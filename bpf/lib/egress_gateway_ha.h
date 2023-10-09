@@ -166,13 +166,14 @@ do_egress_gateway_redirect:
 }
 
 static __always_inline
-bool egress_gw_ha_snat_needed(struct iphdr *ip4 __maybe_unused,
+bool egress_gw_ha_snat_needed(__be32 saddr __maybe_unused,
+			      __be32 daddr __maybe_unused,
 			      __be32 *snat_addr __maybe_unused)
 {
 #if defined(ENABLE_EGRESS_GATEWAY_HA)
 	struct egress_gw_ha_policy_entry *egress_gw_policy;
 
-	egress_gw_policy = lookup_ip4_egress_gw_ha_policy(ip4->saddr, ip4->daddr);
+	egress_gw_policy = lookup_ip4_egress_gw_ha_policy(saddr, daddr);
 	if (!egress_gw_policy)
 		return false;
 

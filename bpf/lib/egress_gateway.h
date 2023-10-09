@@ -96,13 +96,14 @@ bool egress_gw_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_unuse
 }
 
 static __always_inline
-bool egress_gw_oss_snat_needed(struct iphdr *ip4 __maybe_unused,
+bool egress_gw_oss_snat_needed(__be32 saddr __maybe_unused,
+			       __be32 daddr __maybe_unused,
 			       __be32 *snat_addr __maybe_unused)
 {
 #if defined(ENABLE_EGRESS_GATEWAY)
 	struct egress_gw_policy_entry *egress_gw_policy;
 
-	egress_gw_policy = lookup_ip4_egress_gw_policy(ip4->saddr, ip4->daddr);
+	egress_gw_policy = lookup_ip4_egress_gw_policy(saddr, daddr);
 	if (!egress_gw_policy)
 		return false;
 
@@ -118,11 +119,10 @@ bool egress_gw_oss_snat_needed(struct iphdr *ip4 __maybe_unused,
 }
 
 static __always_inline
-bool egress_gw_snat_needed(struct iphdr *ip4,
-			   __be32 *snat_addr)
+bool egress_gw_snat_needed(__be32 saddr, __be32 daddr, __be32 *snat_addr)
 {
-	return egress_gw_oss_snat_needed(ip4, snat_addr) ||
-	       egress_gw_ha_snat_needed(ip4, snat_addr);
+	return egress_gw_oss_snat_needed(saddr, daddr, snat_addr) ||
+	       egress_gw_ha_snat_needed(saddr, daddr, snat_addr);
 }
 
 static __always_inline
