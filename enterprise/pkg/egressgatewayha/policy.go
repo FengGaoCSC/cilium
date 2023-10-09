@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
-	"github.com/cilium/cilium/pkg/ip"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
 	v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	k8sLabels "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/labels"
@@ -47,8 +46,6 @@ type groupConfig struct {
 type gatewayConfig struct {
 	// ifaceName is the name of the interface used to SNAT traffic
 	ifaceName string
-	// ifaceIndex is the index of the interface used to SNAT traffic
-	ifaceIndex int
 	// egressIP is the IP used to SNAT traffic
 	egressIP net.IPNet
 
@@ -61,12 +58,6 @@ type gatewayConfig struct {
 	// Not all of them may be actively acting as gateway since with the
 	// maxGatewayNodes policy directive we can select a subset of them
 	healthyGatewayIPs []net.IP
-
-	// localNodeConfiguredAsGateway tells if the local node belongs to the
-	// pool of egress gateway node for this config.
-	// This information is used to decide if it is necessary to install ENI
-	// IP rules/routes
-	localNodeConfiguredAsGateway bool
 }
 
 // PolicyConfig is the internal representation of IsovalentEgressGatewayPolicy.
@@ -162,14 +153,12 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 	var err error
 
-	gwc.localNodeConfiguredAsGateway = false
-
 	switch {
 	case gc.iface != "":
 		// If the group config specifies an interface, use the first IPv4 assigned to that
 		// interface as egress IP
 		gwc.ifaceName = gc.iface
-		gwc.egressIP, gwc.ifaceIndex, err = getIfaceFirstIPv4Address(gc.iface)
+		gwc.egressIP, err = getIfaceFirstIPv4Address(gc.iface)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve IPv4 address for egress interface: %w", err)
 		}
@@ -177,7 +166,7 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 		// If the group config specifies an egress IP, use the interface with that IP as egress
 		// interface
 		gwc.egressIP.IP = gc.egressIP
-		gwc.ifaceName, gwc.ifaceIndex, gwc.egressIP.Mask, err = getIfaceWithIPv4Address(gc.egressIP)
+		gwc.ifaceName, gwc.egressIP.Mask, err = getIfaceWithIPv4Address(gc.egressIP)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve interface with egress IP: %w", err)
 		}
@@ -190,42 +179,13 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 		}
 
 		gwc.ifaceName = iface.Attrs().Name
-		gwc.egressIP, gwc.ifaceIndex, err = getIfaceFirstIPv4Address(gwc.ifaceName)
+		gwc.egressIP, err = getIfaceFirstIPv4Address(gwc.ifaceName)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve IPv4 address for egress interface: %w", err)
 		}
 	}
 
-	gwc.localNodeConfiguredAsGateway = true
-
 	return nil
-}
-
-// destinationMinusExcludedCIDRs will return, for a given policy, a list of all
-// destination CIDRs to which the excluded CIDRs have been subtracted.
-func (config *PolicyConfig) destinationMinusExcludedCIDRs() []*net.IPNet {
-	if len(config.excludedCIDRs) == 0 {
-		return config.dstCIDRs
-	}
-
-	cidrs := []*net.IPNet{}
-
-	for _, dstCIDR := range config.dstCIDRs {
-		dstCIDRMinusExcludedCIDRs := []*net.IPNet{dstCIDR}
-		for _, excludedCIDR := range config.excludedCIDRs {
-			newDstCIDRMinuxExcludedCIDRs := []*net.IPNet{}
-			for _, cidr := range dstCIDRMinusExcludedCIDRs {
-				r, _, l := ip.PartitionCIDR(*cidr, *excludedCIDR)
-				newDstCIDRMinuxExcludedCIDRs = append(newDstCIDRMinuxExcludedCIDRs, append(r, l...)...)
-			}
-
-			dstCIDRMinusExcludedCIDRs = newDstCIDRMinuxExcludedCIDRs
-		}
-
-		cidrs = append(cidrs, dstCIDRMinusExcludedCIDRs...)
-	}
-
-	return cidrs
 }
 
 // forEachEndpointAndCIDR iterates through each combination of endpoints and
@@ -245,25 +205,6 @@ func (config *PolicyConfig) forEachEndpointAndCIDR(f func(net.IP, *net.IPNet, bo
 			isExcludedCIDR = true
 			for _, excludedCIDR := range config.excludedCIDRs {
 				f(endpointIP, excludedCIDR, isExcludedCIDR, &config.gatewayConfig)
-			}
-		}
-	}
-}
-
-// forEachEndpointAndDestination iterates through each combination of endpoints
-// and computed destination (i.e. the effective destination CIDR space, defined
-// as the diff between the destination and the excluded CIDRs) of the receiver
-// policy, and for each of them it calls the f callback function, passing the
-// given endpoint and CIDR, together with the gatewayConfig of the receiver
-// policy
-func (config *PolicyConfig) forEachEndpointAndDestination(f func(net.IP, *net.IPNet, *gatewayConfig)) {
-
-	cidrs := config.destinationMinusExcludedCIDRs()
-
-	for _, endpoint := range config.matchedEndpoints {
-		for _, endpointIP := range endpoint.ips {
-			for _, cidr := range cidrs {
-				f(endpointIP, cidr, &config.gatewayConfig)
 			}
 		}
 	}

@@ -19,7 +19,6 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/pkg/bpf"
-	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/hivetest"
 	"github.com/cilium/cilium/pkg/identity"
@@ -81,20 +80,6 @@ var (
 	nodeGroup2Labels  = map[string]string{"label2": "2"}
 	nodeGroup12Labels = map[string]string{"label1": "1", "label2": "2"}
 )
-
-type ipRule struct {
-	sourceIP   string
-	destCIDR   string
-	egressIP   string
-	ifaceIndex int
-}
-
-type parsedIPRule struct {
-	sourceIP   net.IP
-	destCIDR   net.IPNet
-	egressIP   net.IPNet
-	ifaceIndex int
-}
 
 type egressRule struct {
 	sourceIP  string
@@ -276,8 +261,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayIEGPParser(c *C) {
 }
 
 func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
-	testInterface1Idx := createTestInterface(c, testInterface1, egressCIDR1)
-	testInterface2Idx := createTestInterface(c, testInterface2, egressCIDR2)
+	createTestInterface(c, testInterface1, egressCIDR1)
+	createTestInterface(c, testInterface2, egressCIDR2)
 
 	policyMap := k.manager.policyMap
 	egressGatewayManager := k.manager
@@ -313,7 +298,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{})
-	assertIPRules(c, []ipRule{})
 
 	// Add a new endpoint which matches policy-1
 	ep1, id1 := newEndpointAndIdentity("ep-1", ep1IP, ep1Labels)
@@ -325,10 +309,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// Make k8s1 unhealthy
 	k.healthcheck.unhealthy("k8s1")
 	forceReconcile(k.manager, eventHealthcheck)
@@ -336,10 +316,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// Remove k8s1 from node-group-1
@@ -351,8 +327,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, zeroIP4, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{})
-
 	// Add back node1
 	node1.Labels = nodeGroup1Labels
 	egressGatewayManager.OnUpdateNode(node1)
@@ -360,10 +334,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// And make it healthy
@@ -376,10 +346,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// Make k8s2 unhealthy
 	k.healthcheck.unhealthy("k8s2")
 	forceReconcile(egressGatewayManager, eventHealthcheck)
@@ -387,10 +353,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// Remove k8s2 from node-group-1
@@ -402,10 +364,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node1IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// Add back k8s2
 	node2.Labels = nodeGroup1Labels
 	egressGatewayManager.OnUpdateNode(node2)
@@ -413,10 +371,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// And make it healthy
@@ -429,17 +383,12 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// Update the EP labels in order for it to not be a match
 	id1 = updateEndpointAndIdentity(&ep1, id1, map[string]string{})
 	egressGatewayManager.OnUpdateEndpoint(&ep1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{})
-	assertIPRules(c, []ipRule{})
 
 	// Add back the endpoint
 	id1 = updateEndpointAndIdentity(&ep1, id1, ep1Labels)
@@ -451,17 +400,12 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// Update the policy group config to match node-group-2
 	policy1.nodeLabels = nodeGroup2Labels
 	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{})
-	assertIPRules(c, []ipRule{})
 
 	// Change it back to node-group-1
 	policy1.nodeLabels = nodeGroup1Labels
@@ -473,10 +417,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// Update the policy group config to allow at most 1 gateway at a time
 	policy1.maxGatewayNodes = 1
 	addPolicy(c, k.policies, policy1)
@@ -484,10 +424,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// Make k8s1 unhealthy
@@ -499,10 +435,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// Remove k8s1 from node-group-1
 	node1.Labels = noNodeGroup
 	egressGatewayManager.OnUpdateNode(node1)
@@ -511,8 +443,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, zeroIP4, node2IP},
 	})
-
-	assertIPRules(c, []ipRule{})
 
 	// Add back node1
 	node1.Labels = nodeGroup1Labels
@@ -528,10 +458,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node1IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// Clear the maxGatewayNodes policy property
 	policy1.maxGatewayNodes = 0
 	addPolicy(c, k.policies, policy1)
@@ -540,10 +466,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
 		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// Changing the DestCIDR to 0.0.0.0 results in a conflict with
@@ -556,9 +478,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, allZeroDestCIDR, egressIP1, node1IP},
 		{ep1IP, allZeroDestCIDR, egressIP1, node2IP},
-	})
-	assertIPRules(c, []ipRule{
-		{ep1IP, allZeroDestCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// Restore old DestCIDR
@@ -581,10 +500,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// Add k8s1 to node-group-2 egress group
 	node1.Labels = nodeGroup12Labels
 	egressGatewayManager.OnUpdateNode(node1)
@@ -593,10 +508,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	assertEgressRules(c, policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
 		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// Add a new endpoint that matches policy-2
@@ -608,30 +519,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node1IP},
 		{ep1IP, destCIDR, egressIP1, node2IP},
 		{ep2IP, destCIDR, egressIP2, node1IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
-	})
-
-	// Test if disabling the --install-egress-gateway-routes agent option
-	// will result in stale IP routes/rules getting removed
-	egressGatewayManager.installRoutes = false
-	egressGatewayManager.reconciliationTrigger.Trigger()
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertIPRules(c, []ipRule{})
-
-	// Enabling it back should result in the routes/rules being in place
-	// again
-	egressGatewayManager.installRoutes = true
-	egressGatewayManager.reconciliationTrigger.Trigger()
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
 	})
 
 	// Add also k8s2 to node-group-2 egress group
@@ -646,11 +533,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep2IP, destCIDR, egressIP2, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
-	})
-
 	// Test excluded CIDRs by adding one to policy-1
 	policy1.excludedCIDRs = []string{excludedCIDR1}
 	addPolicy(c, k.policies, policy1)
@@ -662,32 +544,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, excludedCIDR1, egressIP1, gatewayExcludedCIDRValue},
 		{ep2IP, destCIDR, egressIP2, node1IP},
 		{ep2IP, destCIDR, egressIP2, node2IP},
-	})
-
-	// When an excluded CIDRs is specified, the manager will install
-	// multiple IP rules, one for each of the CIDRs we obtain by subtracting
-	// the excluded CIDR (1.1.1.1/22) from the destination CIDR (1.1.1.0/24):
-	//
-	// $ netcalc sub 1.1.1.0/24 1.1.1.22/32
-	// 1.1.1.0/28
-	// 1.1.1.16/30
-	// 1.1.1.20/31
-	// 1.1.1.23/32
-	// 1.1.1.24/29
-	// 1.1.1.32/27
-	// 1.1.1.64/26
-	// 1.1.1.128/25
-	assertIPRules(c, []ipRule{
-		{ep1IP, "1.1.1.128/25", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.64/26", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.32/27", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.0/28", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.24/29", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.16/30", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.20/31", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.23/32", egressCIDR1, testInterface1Idx},
-
-		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
 	})
 
 	// Add a second excluded CIDR to policy-1
@@ -704,38 +560,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep2IP, destCIDR, egressIP2, node2IP},
 	})
 
-	// $ for net in $(netcalc sub 1.1.1.0/24 1.1.1.22/32); do
-	//    netcalc sub $net 1.1.1.240/30
-	// done
-	// 1.1.1.0/28
-	// 1.1.1.16/30
-	// 1.1.1.20/31
-	// 1.1.1.23/32
-	// 1.1.1.24/29
-	// 1.1.1.32/27
-	// 1.1.1.64/26
-	// 1.1.1.128/26
-	// 1.1.1.192/27
-	// 1.1.1.224/28
-	// 1.1.1.244/30
-	// 1.1.1.248/29
-	assertIPRules(c, []ipRule{
-		{ep1IP, "1.1.1.0/28", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.16/30", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.20/31", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.23/32", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.24/29", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.32/27", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.64/26", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.128/26", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.192/27", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.224/28", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.244/30", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.248/29", egressCIDR1, testInterface1Idx},
-
-		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
-	})
-
 	// Remove the first excluded CIDR from policy-1
 	policy1.excludedCIDRs = []string{excludedCIDR2}
 	addPolicy(c, k.policies, policy1)
@@ -747,24 +571,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, excludedCIDR2, egressIP1, gatewayExcludedCIDRValue},
 		{ep2IP, destCIDR, egressIP2, node1IP},
 		{ep2IP, destCIDR, egressIP2, node2IP},
-	})
-
-	// $ netcalc sub 1.1.1.0/24 1.1.1.240/30
-	// 1.1.1.0/25
-	// 1.1.1.128/26
-	// 1.1.1.192/27
-	// 1.1.1.224/28
-	// 1.1.1.244/30
-	// 1.1.1.248/29
-	assertIPRules(c, []ipRule{
-		{ep1IP, "1.1.1.0/25", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.128/26", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.192/27", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.224/28", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.244/30", egressCIDR1, testInterface1Idx},
-		{ep1IP, "1.1.1.248/29", egressCIDR1, testInterface1Idx},
-
-		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
 	})
 
 	// Remove the second excluded CIDR
@@ -779,11 +585,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep2IP, destCIDR, egressIP2, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
-	})
-
 	// Remove k8s1 from node-group-1 (but keep it in node-group-2)
 	node1.Labels = nodeGroup2Labels
 	egressGatewayManager.OnUpdateNode(node1)
@@ -793,10 +594,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, zeroIP4, node2IP},
 		{ep2IP, destCIDR, egressIP2, node1IP},
 		{ep2IP, destCIDR, egressIP2, node2IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
 	})
 
 	// Update the EP 1 labels in order for it to not be a match
@@ -809,21 +606,16 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep2IP, destCIDR, egressIP2, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep2IP, destCIDR, egressCIDR2, testInterface2Idx},
-	})
-
 	// Update the EP 2 labels in order for it to not be a match
 	_ = updateEndpointAndIdentity(&ep2, id2, map[string]string{})
 	egressGatewayManager.OnUpdateEndpoint(&ep2)
 	waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{})
-	assertIPRules(c, []ipRule{})
 }
 
 func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
-	testInterface1Idx := createTestInterface(c, testInterface1, egressCIDR1)
+	createTestInterface(c, testInterface1, egressCIDR1)
 
 	egressGatewayManager := k.manager
 
@@ -846,7 +638,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{})
-	assertIPRules(c, []ipRule{})
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Create a new HA policy based on a group config
@@ -861,7 +652,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{})
-	assertIPRules(c, []ipRule{})
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Add a new endpoint which matches policy-1
@@ -881,10 +671,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
 		{ep1IP, destIP, node2IP},
 	})
@@ -898,10 +684,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destCIDR, egressIP1, node1IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// CT entry is gone:
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
@@ -913,10 +695,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
 		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
@@ -935,10 +713,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
 		{ep1IP, destIP, node2IP},
 	})
@@ -952,10 +726,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destCIDR, egressIP1, node1IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// CT entry should now also be gone
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
@@ -967,10 +737,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
 		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
@@ -991,10 +757,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
 		{ep1IP, destIP, node2IP},
 	})
@@ -1006,10 +768,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// CT entry should still exist, as k8s2 is healthy
@@ -1026,10 +784,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destCIDR, egressIP1, node1IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// CT entry should now also be gone
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
@@ -1042,10 +796,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destCIDR, egressIP1, node1IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Update the policy group config to allow all gateways again
@@ -1056,10 +806,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
 		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
@@ -1080,10 +826,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{
 		{ep1IP, destIP, node2IP},
 	})
@@ -1095,10 +837,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	// CT entry should still exist, as k8s2 is healthy
@@ -1115,10 +853,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destCIDR, egressIP1, node1IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	// CT entry should now also be gone
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
@@ -1131,10 +865,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destCIDR, egressIP1, node1IP},
 	})
 
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
-	})
-
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Update the policy group config to allow all gateways again
@@ -1145,10 +875,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
 		{ep1IP, destCIDR, egressIP1, node1IP},
 		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	assertIPRules(c, []ipRule{
-		{ep1IP, destCIDR, egressCIDR1, testInterface1Idx},
 	})
 
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
@@ -1191,7 +917,7 @@ func TestCell(t *testing.T) {
 	}
 }
 
-func createTestInterface(tb testing.TB, iface string, addr string) int {
+func createTestInterface(tb testing.TB, iface string, addr string) {
 	tb.Helper()
 
 	la := netlink.NewLinkAttrs()
@@ -1220,8 +946,6 @@ func createTestInterface(tb testing.TB, iface string, addr string) int {
 	if err := netlink.AddrAdd(link, a); err != nil {
 		tb.Fatal(err)
 	}
-
-	return link.Attrs().Index
 }
 
 func waitForReconciliationRun(tb testing.TB, egressGatewayManager *Manager, currentRun uint64) uint64 {
@@ -1281,107 +1005,6 @@ func updateEndpointAndIdentity(endpoint *k8sTypes.CiliumEndpoint, oldID *identit
 	endpoint.Identity.ID = int64(newID.ID)
 	return newID
 }
-
-func parseIPRule(sourceIP, destCIDR, egressIP string, ifaceIndex int) parsedIPRule {
-	sip := net.ParseIP(sourceIP)
-	if sip == nil {
-		panic("Invalid source IP")
-	}
-
-	_, dc, err := net.ParseCIDR(destCIDR)
-	if err != nil {
-		panic("Invalid destination CIDR")
-	}
-
-	eip, ecidr, _ := net.ParseCIDR(egressIP)
-	if eip == nil {
-		panic("Invalid egress IP")
-	}
-
-	return parsedIPRule{
-		sourceIP:   sip,
-		destCIDR:   *dc,
-		egressIP:   net.IPNet{IP: eip, Mask: ecidr.Mask},
-		ifaceIndex: ifaceIndex,
-	}
-}
-
-func assertIPRules(c *C, rules []ipRule) {
-	c.Helper()
-	err := tryAssertIPRules(rules)
-	c.Assert(err, IsNil)
-}
-
-func tryAssertIPRules(rules []ipRule) error {
-	parsedRules := []parsedIPRule{}
-	for _, r := range rules {
-		parsedRules = append(parsedRules, parseIPRule(r.sourceIP, r.destCIDR, r.egressIP, r.ifaceIndex))
-	}
-
-	installedRules, err := listEgressIpRules()
-	if err != nil {
-		panic("Cannot list IP rules")
-	}
-
-nextRule:
-	for _, rule := range parsedRules {
-		for _, installedRule := range installedRules {
-			if rule.sourceIP.Equal(installedRule.Src.IP) && rule.destCIDR.String() == installedRule.Dst.String() &&
-				rule.ifaceIndex == installedRule.Table-linux_defaults.RouteTableEgressGatewayHAInterfacesOffset {
-
-				if err := tryAssertIPRoutes(rule.egressIP, rule.ifaceIndex); err != nil {
-					return err
-				}
-
-				continue nextRule
-			}
-		}
-
-		return fmt.Errorf("Missing IP rule")
-	}
-
-nextInstalledRule:
-	for _, installedRule := range installedRules {
-		for _, rule := range parsedRules {
-			if rule.sourceIP.Equal(installedRule.Src.IP) && rule.destCIDR.String() == installedRule.Dst.String() &&
-				rule.ifaceIndex == installedRule.Table-linux_defaults.RouteTableEgressGatewayHAInterfacesOffset {
-				continue nextInstalledRule
-			}
-		}
-
-		return fmt.Errorf("Untracked IP rule")
-	}
-
-	return nil
-}
-
-func tryAssertIPRoutes(egressIP net.IPNet, ifaceIndex int) error {
-	eniGatewayIP := getFirstIPInHostRange(egressIP)
-	routingTableIdx := egressGatewayRoutingTableIdx(ifaceIndex)
-
-	route, err := netlink.RouteListFiltered(netlink.FAMILY_V4, &netlink.Route{
-		LinkIndex: ifaceIndex,
-		Dst:       &net.IPNet{IP: eniGatewayIP, Mask: net.CIDRMask(32, 32)},
-		Scope:     netlink.SCOPE_LINK,
-		Table:     routingTableIdx,
-	}, netlink.RT_FILTER_OIF|netlink.RT_FILTER_DST|netlink.RT_FILTER_SCOPE|netlink.RT_FILTER_TABLE)
-
-	if err != nil || route == nil {
-		return fmt.Errorf("Cannot find nexthop route to the VPC subnet: %s", err)
-	}
-
-	route, err = netlink.RouteListFiltered(netlink.FAMILY_V4, &netlink.Route{
-		Table: routingTableIdx,
-		Gw:    eniGatewayIP,
-	}, netlink.RT_FILTER_DST|netlink.RT_FILTER_TABLE|netlink.RT_FILTER_GW)
-
-	if err != nil || route == nil {
-		return fmt.Errorf("Cannot find default route to the VPC: %s", err)
-	}
-
-	return nil
-}
-
 func parseEgressRule(sourceIP, destCIDR, egressIP, gatewayIP string) parsedEgressRule {
 	sip := net.ParseIP(sourceIP)
 	if sip == nil {
