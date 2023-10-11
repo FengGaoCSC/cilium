@@ -186,7 +186,7 @@ func (manager *Manager) Start(hookCtx hive.HookContext) error {
 	}
 	go func() {
 		epSynced := false
-		for event := range manager.cepResource.Events(hookCtx) {
+		for event := range manager.cepResource.Events(context.Background()) {
 			// reconcile upon CiliumEndpoint events
 			manager.Lock()
 			switch event.Kind {
