@@ -14,6 +14,7 @@ import (
 	"context"
 
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/tests"
+	enterpriseFeatures "github.com/isovalent/cilium/enterprise/cilium-cli/hooks/utils/features"
 
 	"github.com/cilium/cilium-cli/cli"
 	"github.com/cilium/cilium-cli/connectivity/check"
@@ -40,7 +41,7 @@ func (eh *EnterpriseHooks) AddSysdumpTasks(collector *sysdump.Collector) error {
 }
 
 func (eh *EnterpriseHooks) SetupAndValidate(ctx context.Context, ct *check.ConnectivityTest) error {
-	err := detectFeatures(ctx, ct)
+	err := enterpriseFeatures.Detect(ctx, ct)
 	if err != nil {
 		return err
 	}

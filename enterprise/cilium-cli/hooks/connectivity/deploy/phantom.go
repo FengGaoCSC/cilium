@@ -23,14 +23,15 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 
 	"github.com/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium-cli/utils/features"
 )
 
 const (
 	PhantomServicePort = 9090
 )
 
-func PhantomServiceAddress(ipFam check.IPFamily) string {
-	if ipFam == check.IPFamilyV6 {
+func PhantomServiceAddress(ipFam features.IPFamily) string {
+	if ipFam == features.IPFamilyV6 {
 		// The 2001:db8::/32 subnet is reserved for documentation by https://www.rfc-editor.org/rfc/rfc3849
 		return "2001:db8::94"
 	}

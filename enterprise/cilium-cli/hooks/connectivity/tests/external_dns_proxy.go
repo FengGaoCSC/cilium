@@ -16,6 +16,7 @@ import (
 	"regexp"
 
 	"github.com/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium-cli/utils/features"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,7 +45,7 @@ func (s *externalCiliumDNSProxy) Run(ctx context.Context, t *check.Test) {
 
 	for _, client := range ct.ClientPods() {
 		for _, svc := range ct.EchoServices() {
-			t.NewAction(s, fmt.Sprintf("nslookup %s", svc.Name()), &client, svc, check.IPFamilyAny).Run(func(a *check.Action) {
+			t.NewAction(s, fmt.Sprintf("nslookup %s", svc.Name()), &client, svc, features.IPFamilyAny).Run(func(a *check.Action) {
 				// Iterate enough time to observe the metric evolves, nslookup command will
 				// hit the cilium-dnsproxy pods, note that the iteration is done directly in
 				// the pod for performance concerns.

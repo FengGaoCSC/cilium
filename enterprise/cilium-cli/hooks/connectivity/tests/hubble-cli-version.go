@@ -16,6 +16,7 @@ import (
 
 	"github.com/cilium/cilium-cli/connectivity/check"
 	"github.com/cilium/cilium-cli/defaults"
+	"github.com/cilium/cilium-cli/utils/features"
 )
 
 func HubbleCLIVersion() check.Scenario {
@@ -30,7 +31,7 @@ func (s *hubbleCLIVersion) Name() string {
 
 func (s *hubbleCLIVersion) Run(ctx context.Context, t *check.Test) {
 	for name, pod := range t.Context().CiliumPods() {
-		t.NewAction(s, name, &pod, nil, check.IPFamilyAny).Run(func(a *check.Action) {
+		t.NewAction(s, name, &pod, nil, features.IPFamilyAny).Run(func(a *check.Action) {
 			cmd := []string{"hubble", "version"}
 			stdout, err := pod.K8sClient.ExecInPod(ctx, pod.Pod.Namespace, pod.Pod.Name, defaults.AgentContainerName, cmd)
 			if err != nil {

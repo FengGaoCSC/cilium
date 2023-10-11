@@ -15,6 +15,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/cilium-cli/connectivity/check"
+	"github.com/cilium/cilium-cli/utils/features"
 
 	"github.com/isovalent/cilium/enterprise/cilium-cli/hooks/connectivity/deploy"
 )
@@ -40,7 +41,7 @@ func (s *podToPhantomService) Run(ctx context.Context, t *check.Test) {
 	for _, pod := range ct.ClientPods() {
 		pod := pod // copy to avoid memory aliasing when using reference
 
-		t.ForEachIPFamily(func(ipFam check.IPFamily) {
+		t.ForEachIPFamily(func(ipFam features.IPFamily) {
 			target := check.HTTPEndpoint(fmt.Sprintf("phantom-service-%s", ipFam),
 				fmt.Sprintf("http://%s:%d", deploy.PhantomServiceAddress(ipFam), deploy.PhantomServicePort))
 
