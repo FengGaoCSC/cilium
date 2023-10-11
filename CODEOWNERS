@@ -243,6 +243,13 @@
 #   An empty team to indicate the lack of code owners.
 * @isovalent/core-structure
 /atlantis.yaml @isovalent/void
+/bpf/lib/egress_gateway_ha.h @isovalent/egress-gateway
+/bpf/test/*egress_gateway_ha_*.c @isovalent/egress-gateway
+/bpf/test/lib/egress_gateway_ha.h @isovalent/egress-gateway
 /renovate.json5 @isovalent/void
 /enterprise @isovalent/void
 *enterprise* @isovalent/void
+/enterprise/cilium-cli/hooks/tests/egressgateway.go @isovalent/egress-gateway
+/enterprise/cilium/cmd/bpf_egress* @isovalent/egress-gateway
+/enterprise/pkg/egressgatewayha/ @isovalent/egress-gateway
+/enterprise/pkg/maps/egressmapha/ @isovalent/egress-gateway
