@@ -9,6 +9,7 @@
 #include "maps.h"
 
 #ifdef ENABLE_EGRESS_GATEWAY_COMMON
+#ifdef ENABLE_IPV4
 
 #ifdef ENABLE_EGRESS_GATEWAY_HA
 static __always_inline
@@ -224,6 +225,6 @@ bool egress_gw_ha_reply_needs_redirect(struct iphdr *ip4 __maybe_unused,
 #endif /* ENABLE_EGRESS_GATEWAY_HA */
 }
 
+#endif /* ENABLE_IPV4 */
 #endif /* ENABLE_EGRESS_GATEWAY_COMMON */
-
 #endif /* __LIB_EGRESS_GATEWAY_HA_H_ */

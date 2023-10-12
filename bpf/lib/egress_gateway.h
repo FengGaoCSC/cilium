@@ -11,6 +11,7 @@
 #include "maps.h"
 
 #ifdef ENABLE_EGRESS_GATEWAY_COMMON
+#ifdef ENABLE_IPV4
 
 /* EGRESS_STATIC_PREFIX represents the size in bits of the static prefix part of
  * an egress policy key (i.e. the source IP).
@@ -182,5 +183,6 @@ bool egress_gw_reply_needs_redirect_hook(struct iphdr *ip4, __u32 *tunnel_endpoi
 	       egress_gw_ha_reply_needs_redirect(ip4, tunnel_endpoint, dst_sec_identity);
 }
 
+#endif /* ENABLE_IPV4 */
 #endif /* ENABLE_EGRESS_GATEWAY_COMMON */
 #endif /* __LIB_EGRESS_GATEWAY_H_ */
