@@ -15,7 +15,7 @@ concurrency:
 
 env:
   helm_chart_repo: oci://quay.io/isovalent-charts-dev/cilium
-  fqdn_proxy_version: v1.14.0-rc1
+  fqdn_proxy_version: v1.14.0
   kind_version: v0.17.0
   kind_config: .github/kind-config.yaml
 
@@ -72,8 +72,7 @@ jobs:
       - name: Install FQDN proxy
         run: |
           helm repo add isovalent https://helm.isovalent.com
-          helm repo update
-          helm install -n kube-system cilium-dnsproxy isovalent/cilium-dnsproxy --version ${{ env.fqdn_proxy_version }} --set prometheus.enabled=true
+          helm install -n kube-system cilium-dnsproxy isovalent/cilium-dnsproxy --version ${{ env.fqdn_proxy_version }} --set prometheus.enabled=true --set debug=true
           kubectl rollout status -n kube-system ds/cilium
 
       - name: Run enterprise tests
