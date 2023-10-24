@@ -13,8 +13,10 @@ package egressgatewayha
 import (
 	"fmt"
 	"net"
+	"net/netip"
 
 	"github.com/sirupsen/logrus"
+	"go4.org/netipx"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
@@ -33,7 +35,7 @@ import (
 type groupConfig struct {
 	nodeSelector    api.EndpointSelector
 	iface           string
-	egressIP        net.IP
+	egressIP        netip.Addr
 	maxGatewayNodes int
 }
 
@@ -47,11 +49,11 @@ type gatewayConfig struct {
 	// ifaceName is the name of the interface used to SNAT traffic
 	ifaceName string
 	// egressIP is the IP used to SNAT traffic
-	egressIP net.IPNet
+	egressIP netip.Addr
 
 	// activeGatewayIPs is a slice of node IPs that are actively working as
 	// egress gateways
-	activeGatewayIPs []net.IP
+	activeGatewayIPs []netip.Addr
 
 	// healthyGatewayIPs is the entire pool of healthy nodes that can act as
 	// egress gateway for the given policy.
@@ -66,8 +68,8 @@ type PolicyConfig struct {
 	id types.NamespacedName
 
 	endpointSelectors []api.EndpointSelector
-	dstCIDRs          []*net.IPNet
-	excludedCIDRs     []*net.IPNet
+	dstCIDRs          []netip.Prefix
+	excludedCIDRs     []netip.Prefix
 
 	groupConfigs []groupConfig
 
@@ -107,16 +109,21 @@ func (config *groupConfig) selectsNodeAsGateway(node nodeTypes.Node) bool {
 
 func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 	gwc := gatewayConfig{
-		egressIP: net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 0)},
+		egressIP: netip.IPv4Unspecified(),
 	}
 
 	for _, gc := range config.groupConfigs {
 		// we need a per-group slice to properly honor the maxGatewayNodes
 		// directive
-		groupGatewayIPs := []net.IP{}
+		groupGatewayIPs := []netip.Addr{}
 
 		for _, node := range manager.nodes {
 			if !gc.selectsNodeAsGateway(node) {
+				continue
+			}
+
+			nodeAddr, ok := netipx.FromStdIP(node.GetK8sNodeIP())
+			if !ok {
 				continue
 			}
 
@@ -124,7 +131,7 @@ func (config *PolicyConfig) regenerateGatewayConfig(manager *Manager) {
 				gwc.healthyGatewayIPs = append(gwc.healthyGatewayIPs, node.GetK8sNodeIP())
 
 				if gc.maxGatewayNodes == 0 || len(groupGatewayIPs) < gc.maxGatewayNodes {
-					groupGatewayIPs = append(groupGatewayIPs, node.GetK8sNodeIP())
+					groupGatewayIPs = append(groupGatewayIPs, nodeAddr)
 				}
 			}
 
@@ -162,11 +169,11 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 		if err != nil {
 			return fmt.Errorf("failed to retrieve IPv4 address for egress interface: %w", err)
 		}
-	case gc.egressIP != nil && !gc.egressIP.Equal(net.IPv4zero):
+	case gc.egressIP.IsValid():
 		// If the group config specifies an egress IP, use the interface with that IP as egress
 		// interface
-		gwc.egressIP.IP = gc.egressIP
-		gwc.ifaceName, gwc.egressIP.Mask, err = getIfaceWithIPv4Address(gc.egressIP)
+		gwc.egressIP = gc.egressIP
+		gwc.ifaceName, err = getIfaceWithIPv4Address(gc.egressIP)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve interface with egress IP: %w", err)
 		}
@@ -193,7 +200,7 @@ func (gwc *gatewayConfig) deriveFromGroupConfig(gc *groupConfig) error {
 // calls the f callback function passing the given endpoint and CIDR, together
 // with a boolean value indicating if the CIDR belongs to the excluded ones and
 // the gatewayConfig of the receiver policy
-func (config *PolicyConfig) forEachEndpointAndCIDR(f func(net.IP, *net.IPNet, bool, *gatewayConfig)) {
+func (config *PolicyConfig) forEachEndpointAndCIDR(f func(netip.Addr, netip.Prefix, bool, *gatewayConfig)) {
 
 	for _, endpoint := range config.matchedEndpoints {
 		for _, endpointIP := range endpoint.ips {
@@ -214,8 +221,8 @@ func (config *PolicyConfig) forEachEndpointAndCIDR(f func(net.IP, *net.IPNet, bo
 // the internal representation of the egress gateway policy
 func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 	var endpointSelectorList []api.EndpointSelector
-	var dstCidrList []*net.IPNet
-	var excludedCIDRs []*net.IPNet
+	var dstCidrList []netip.Prefix
+	var excludedCIDRs []netip.Prefix
 
 	allowAllNamespacesRequirement := slim_metav1.LabelSelectorRequirement{
 		Key:      k8sConst.PodNamespaceLabel,
@@ -243,7 +250,8 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 			return nil, fmt.Errorf("group configuration can't specify both an interface and an egress IP")
 		}
 
-		egressIP := net.ParseIP(gcSpec.EgressIP)
+		// EgressIP is not a required field.
+		egressIP, _ := netip.ParseAddr(gcSpec.EgressIP)
 
 		gc = append(gc, groupConfig{
 			nodeSelector:    api.NewESFromK8sLabelSelector("", gcSpec.NodeSelector),
@@ -254,7 +262,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 	}
 
 	for _, cidrString := range destinationCIDRs {
-		_, cidr, err := net.ParseCIDR(string(cidrString))
+		cidr, err := netip.ParsePrefix(string(cidrString))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse destination CIDR %s: %s", cidrString, err)
 		}
@@ -262,7 +270,7 @@ func ParseIEGP(iegp *v1.IsovalentEgressGatewayPolicy) (*PolicyConfig, error) {
 	}
 
 	for _, cidrString := range iegp.Spec.ExcludedCIDRs {
-		_, cidr, err := net.ParseCIDR(string(cidrString))
+		cidr, err := netip.ParsePrefix(string(cidrString))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse excluded CIDR %s: %s", cidr, err)
 		}

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -89,10 +90,10 @@ type egressRule struct {
 }
 
 type parsedEgressRule struct {
-	sourceIP  net.IP
-	destCIDR  net.IPNet
-	egressIP  net.IP
-	gatewayIP net.IP
+	sourceIP  netip.Addr
+	destCIDR  netip.Prefix
+	egressIP  netip.Addr
+	gatewayIP netip.Addr
 }
 
 type egressCtEntry struct {
@@ -103,9 +104,9 @@ type egressCtEntry struct {
 }
 
 type parsedEgressCtEntry struct {
-	sourceIP  net.IP
-	destIP    net.IP
-	gatewayIP net.IP
+	sourceIP  netip.Addr
+	destIP    netip.Addr
+	gatewayIP netip.Addr
 }
 
 type healthcheckerMock struct {
@@ -1006,29 +1007,14 @@ func updateEndpointAndIdentity(endpoint *k8sTypes.CiliumEndpoint, oldID *identit
 	return newID
 }
 func parseEgressRule(sourceIP, destCIDR, egressIP, gatewayIP string) parsedEgressRule {
-	sip := net.ParseIP(sourceIP)
-	if sip == nil {
-		panic("Invalid source IP")
-	}
-
-	_, dc, err := net.ParseCIDR(destCIDR)
-	if err != nil {
-		panic("Invalid destination CIDR")
-	}
-
-	eip := net.ParseIP(egressIP)
-	if eip == nil {
-		panic("Invalid egress IP")
-	}
-
-	gip := net.ParseIP(gatewayIP)
-	if gip == nil {
-		panic("Invalid gateway IP")
-	}
+	sip := netip.MustParseAddr(sourceIP)
+	dc := netip.MustParsePrefix(destCIDR)
+	eip := netip.MustParseAddr(egressIP)
+	gip := netip.MustParseAddr(gatewayIP)
 
 	return parsedEgressRule{
 		sourceIP:  sip,
-		destCIDR:  *dc,
+		destCIDR:  dc,
 		egressIP:  eip,
 		gatewayIP: gip,
 	}
@@ -1053,18 +1039,18 @@ func tryAssertEgressRules(policyMap egressmapha.PolicyMap, rules []egressRule) e
 			return fmt.Errorf("cannot lookup policy entry: %w", err)
 		}
 
-		if !policyVal.GetEgressIP().Equal(r.egressIP) {
+		if policyVal.GetEgressIP() != r.egressIP {
 			return fmt.Errorf("policy egress IP %s doesn't match rule egress IP %s", policyVal.GetEgressIP(), r.egressIP)
 		}
 
-		if r.gatewayIP.Equal(net.ParseIP(zeroIP4)) {
+		if r.gatewayIP == netip.IPv4Unspecified() {
 			if policyVal.Size != 0 {
 				return fmt.Errorf("policy size is %d even though no gateway is set", policyVal.Size)
 			}
 		} else {
 			gwFound := false
 			for _, policyGatewayIP := range policyVal.GetGatewayIPs() {
-				if policyGatewayIP.Equal(r.gatewayIP) {
+				if policyGatewayIP == r.gatewayIP {
 					gwFound = true
 					break
 				}
@@ -1082,8 +1068,8 @@ func tryAssertEgressRules(policyMap egressmapha.PolicyMap, rules []egressRule) e
 		nextPolicyGateway:
 			for _, gatewayIP := range val.GetGatewayIPs() {
 				for _, r := range parsedRules {
-					if key.Match(r.sourceIP, &r.destCIDR) {
-						if val.GetEgressIP().Equal(r.egressIP) && gatewayIP.Equal(r.gatewayIP) {
+					if key.Match(r.sourceIP, r.destCIDR) {
+						if val.GetEgressIP() == r.egressIP && gatewayIP == r.gatewayIP {
 							continue nextPolicyGateway
 						}
 					}
@@ -1103,20 +1089,9 @@ func tryAssertEgressRules(policyMap egressmapha.PolicyMap, rules []egressRule) e
 }
 
 func parseEgressCtEntry(sourceIP, destIP, gatewayIP string) parsedEgressCtEntry {
-	sip := net.ParseIP(sourceIP)
-	if sip == nil {
-		panic("Invalid source IP")
-	}
-
-	dip := net.ParseIP(destIP)
-	if dip == nil {
-		panic("Invalid destination IP")
-	}
-
-	gip := net.ParseIP(gatewayIP)
-	if gip == nil {
-		panic("Invalid gateway IP")
-	}
+	sip := netip.MustParseAddr(sourceIP)
+	dip := netip.MustParseAddr(destIP)
+	gip := netip.MustParseAddr(gatewayIP)
 
 	return parsedEgressCtEntry{
 		sourceIP:  sip,
@@ -1150,15 +1125,15 @@ func tryAssertEgressCtEntries(tb testing.TB, ctMap egressmapha.CtMap, entries []
 			},
 		}
 
-		copy(key.DestAddr[:], e.destIP.To4())
-		copy(key.SourceAddr[:], e.sourceIP.To4())
+		key.DestAddr.FromAddr(e.destIP)
+		key.SourceAddr.FromAddr(e.sourceIP)
 
 		err := ctMap.Lookup(key, &val)
 		if err != nil {
 			return err
 		}
 
-		if !val.Gateway.IP().Equal(e.gatewayIP) {
+		if val.Gateway.Addr() != e.gatewayIP {
 			return fmt.Errorf("%v doesn't match %v", val.Gateway.IP(), e.gatewayIP)
 		}
 	}
@@ -1167,7 +1142,7 @@ func tryAssertEgressCtEntries(tb testing.TB, ctMap egressmapha.CtMap, entries []
 	ctMap.IterateWithCallback(
 		func(key *egressmapha.EgressCtKey4, val *egressmapha.EgressCtVal4) {
 			for _, e := range parsedEntries {
-				if key.DestAddr.IP().Equal(e.destIP) && key.SourceAddr.IP().Equal(e.sourceIP) && val.Gateway.IP().Equal(e.gatewayIP) {
+				if key.DestAddr.Addr() == e.destIP && key.SourceAddr.Addr() == e.sourceIP && val.Gateway.Addr() == e.gatewayIP {
 					return
 				}
 			}
@@ -1190,11 +1165,11 @@ func insertEgressCtEntry(c *C, ctMap egressmapha.CtMap, sourceIP, destIP, gatewa
 		},
 	}
 
-	copy(key.DestAddr[:], entry.destIP.To4())
-	copy(key.SourceAddr[:], entry.sourceIP.To4())
+	key.DestAddr.FromAddr(entry.destIP)
+	key.SourceAddr.FromAddr(entry.sourceIP)
 
 	val := &egressmapha.EgressCtVal4{}
-	copy(val.Gateway[:], entry.gatewayIP.To4())
+	val.Gateway.FromAddr(entry.gatewayIP)
 
 	err := ctMap.Update(key, val, 0)
 	c.Assert(err, IsNil)

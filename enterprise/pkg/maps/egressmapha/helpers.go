@@ -6,14 +6,14 @@ package egressmapha
 import (
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 
 	"github.com/cilium/cilium/pkg/ebpf"
 )
 
 // ApplyEgressPolicy adds a new entry to the egress policy map.
 // If a policy with the same key already exists, it will get replaced.
-func ApplyEgressPolicy(policyMap PolicyMap, sourceIP net.IP, destCIDR net.IPNet, egressIP net.IP, activeGatewayIPs []net.IP) error {
+func ApplyEgressPolicy(policyMap PolicyMap, sourceIP netip.Addr, destCIDR netip.Prefix, egressIP netip.Addr, activeGatewayIPs []netip.Addr) error {
 	if len(activeGatewayIPs) > maxGatewayNodes {
 		return fmt.Errorf("cannot apply egress policy: too many gateways")
 	}
@@ -29,7 +29,7 @@ func ApplyEgressPolicy(policyMap PolicyMap, sourceIP net.IP, destCIDR net.IPNet,
 // destination CIDR) tuple.
 // In addition to removing the policy, this function removes also all CT entries
 // from the egress CT map which match the egress policy.
-func RemoveEgressPolicy(policyMap PolicyMap, sourceIP net.IP, destCIDR net.IPNet) error {
+func RemoveEgressPolicy(policyMap PolicyMap, sourceIP netip.Addr, destCIDR netip.Prefix) error {
 	_, err := policyMap.Lookup(sourceIP, destCIDR)
 	if err != nil {
 		if errors.Is(err, ebpf.ErrKeyNotExist) {

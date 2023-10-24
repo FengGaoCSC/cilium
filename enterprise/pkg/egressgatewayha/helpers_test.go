@@ -13,7 +13,7 @@ package egressgatewayha
 import (
 	"context"
 	"errors"
-	"net"
+	"net/netip"
 	"testing"
 
 	v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
@@ -87,11 +87,13 @@ type policyParams struct {
 }
 
 func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
-	_, parsedDestinationCIDR, _ := net.ParseCIDR(params.destinationCIDR)
+	// Note we avoid 'MustParse*()' varieties here to allow testing how
+	// poor input is handed to ParseIEGP().
+	parsedDestinationCIDR, _ := netip.ParsePrefix(params.destinationCIDR)
 
-	parsedExcludedCIDRs := []*net.IPNet{}
+	parsedExcludedCIDRs := []netip.Prefix{}
 	for _, excludedCIDR := range params.excludedCIDRs {
-		_, parsedExcludedCIDR, _ := net.ParseCIDR(excludedCIDR)
+		parsedExcludedCIDR, _ := netip.ParsePrefix(excludedCIDR)
 		parsedExcludedCIDRs = append(parsedExcludedCIDRs, parsedExcludedCIDR)
 	}
 
@@ -99,7 +101,7 @@ func newIEGP(params *policyParams) (*Policy, *PolicyConfig) {
 		id: types.NamespacedName{
 			Name: params.name,
 		},
-		dstCIDRs:      []*net.IPNet{parsedDestinationCIDR},
+		dstCIDRs:      []netip.Prefix{parsedDestinationCIDR},
 		excludedCIDRs: parsedExcludedCIDRs,
 		endpointSelectors: []api.EndpointSelector{
 			{

@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net"
+	"net/netip"
 	"os"
 	"text/tabwriter"
 
@@ -84,11 +84,11 @@ var bpfEgressListCmd = &cobra.Command{
 
 // This function attempt to translate gatewayIP to special values if they exist
 // or return the IP as a string otherwise.
-func mapGatewayIP(ip net.IP) string {
-	if ip.Equal(egressgateway.GatewayNotFoundIPv4) {
+func mapGatewayIP(ip netip.Addr) string {
+	if ip == egressgateway.GatewayNotFoundIPv4 {
 		return "Not Found"
 	}
-	if ip.Equal(egressgateway.ExcludedCIDRIPv4) {
+	if ip == egressgateway.ExcludedCIDRIPv4 {
 		return "Excluded CIDR"
 	}
 	return ip.String()
