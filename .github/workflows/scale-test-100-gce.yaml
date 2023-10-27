@@ -140,7 +140,7 @@ jobs:
           control_plane_size: n1-standard-8
           control_plane_count: 1
           node_size: e2-medium
-          node_count: 15
+          node_count: 50
           kops_state: ${{ secrets.GCP_PERF_KOPS_STATE_STORE }}
           project_id: ${{ secrets.GCP_PERF_PROJECT_ID }}
       
@@ -175,7 +175,7 @@ jobs:
             --provider=gce \
             --enable-prometheus-server \
             --tear-down-prometheus-server=false \
-            --nodes=10 \
+            --nodes=20 \
             --report-dir=./report \
             --experimental-prometheus-snapshot-to-report-dir=true \
             --kubeconfig=$HOME/.kube/config
