@@ -135,6 +135,11 @@ spec:
                         description: CiliumBGPNeighbor is a neighboring peer for use
                           in a CiliumBGPVirtualRouter configuration.
                         properties:
+                          authSecretRef:
+                            description: AuthSecretRef is the name of the secret to
+                              use to fetch a TCP authentication password for this
+                              peer.
+                            type: string
                           connectRetryTimeSeconds:
                             default: 120
                             description: ConnectRetryTimeSeconds defines the initial

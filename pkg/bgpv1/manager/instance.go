@@ -42,6 +42,9 @@ type ServerWithConfig struct {
 
 	// Holds any announced SRv6 locators
 	SRv6LocatorAnnouncements []*types.Path
+
+	// Holds peer => password mappings
+	NeighborReconcilerMetadata NeighborReconcilerMetadata
 }
 
 // NewServerWithConfig will start an underlying BgpServer utilizing types.ServerParameters
@@ -59,11 +62,12 @@ func NewServerWithConfig(ctx context.Context, params types.ServerParameters) (*S
 	}
 
 	return &ServerWithConfig{
-		Server:                   s,
-		Config:                   nil,
-		PodCIDRAnnouncements:     []*types.Path{},
-		ServiceAnnouncements:     make(map[resource.Key][]*types.Path),
-		SRv6L3VPNAnnouncements:   make(map[uint32]entTypes.VPNv4Advertisement),
-		SRv6LocatorAnnouncements: []*types.Path{},
+		Server:                     s,
+		Config:                     nil,
+		PodCIDRAnnouncements:       []*types.Path{},
+		ServiceAnnouncements:       make(map[resource.Key][]*types.Path),
+		SRv6L3VPNAnnouncements:     make(map[uint32]entTypes.VPNv4Advertisement),
+		SRv6LocatorAnnouncements:   []*types.Path{},
+		NeighborReconcilerMetadata: make(NeighborReconcilerMetadata),
 	}, nil
 }
