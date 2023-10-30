@@ -1,0 +1,58 @@
+name: 'Add new IG to cluster'
+description: "Workflow that cleans up kops cluster"
+inputs:
+  cluster_name:
+    description: "Name of the cluster"
+    required: true
+  kops_state:
+    description: "Bucket with kops state"
+    required: true
+  node_size:
+    description: "Node size"
+    required: true
+  node_count:
+    description: "Number of nodes"
+    required: true
+  ig_name:
+    description: "Name of instanceGroup"
+    required: true
+  zones:
+    description: "Zones of instanceGroup"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Generate IG yaml
+      shell: bash
+      run: |
+          ./kops create ig ${{ inputs.ig_name }} --subnet us-west1 \
+            --role node \
+            --name ${{ inputs.cluster_name }} \
+            --state ${{ inputs.kops_state }} \
+            --dry-run \
+            -o yaml | tail -n +2 > ig.yaml
+
+    - name: Replace config
+      shell: bash
+      run: |
+          sed -i -e 's,maxSize: 2,maxSize: 1,g' ig.yaml
+          sed -i -e 's,minSize: 2,minSize: 1,g' ig.yaml
+          sed -i -e 's,machineType: e2-medium,machineType: e2-standard-8,g' ig.yaml
+          echo "  zones:" >> ig.yaml
+          echo "  - us-west1-a" >> ig.yaml
+          cat ig.yaml
+
+    - name: Create IG
+      shell: bash
+      run: |
+          ./kops create -f ig.yaml \
+            --name ${{ inputs.cluster_name }} \
+            --state ${{ inputs.kops_state }}
+
+    - name: Ensure cluster state matches config
+      shell: bash
+      run: |
+        ./kops update cluster \
+          ${{ inputs.cluster_name }} \
+          --state ${{ inputs.kops_state }} \
+          --yes

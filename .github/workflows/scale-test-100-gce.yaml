@@ -140,9 +140,20 @@ jobs:
           control_plane_size: n1-standard-8
           control_plane_count: 1
           node_size: e2-medium
-          node_count: 50
+          node_count: 1
           kops_state: ${{ secrets.GCP_PERF_KOPS_STATE_STORE }}
           project_id: ${{ secrets.GCP_PERF_PROJECT_ID }}
+
+      - name: Create IG
+        uses: ./.github/actions/scale-tests/create-ig
+        timeout-minutes: 30
+        with:
+          cluster_name: ${{ env.test_name }}-${{ env.cluster_name }}
+          node_size: e2-standard-8
+          node_count: 1
+          ig_name: heapster
+          kops_state: ${{ secrets.GCP_PERF_KOPS_STATE_STORE }}
+          zones: us-west1-a
       
       - name: Install Cilium
         run: |
@@ -175,7 +186,7 @@ jobs:
             --provider=gce \
             --enable-prometheus-server \
             --tear-down-prometheus-server=false \
-            --nodes=20 \
+            --nodes=10 \
             --report-dir=./report \
             --experimental-prometheus-snapshot-to-report-dir=true \
             --kubeconfig=$HOME/.kube/config
