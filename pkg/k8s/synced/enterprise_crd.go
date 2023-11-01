@@ -26,7 +26,7 @@ func AllIsovalentCRDResourceNames() []string {
 		CRDResourceName(v1alpha1.SRv6LocatorPoolName),
 	}
 
-	if option.Config.EnableIPv4EgressGatewayHA {
+	if option.Config.EnableIPv4EgressGateway || option.Config.EnableIPv4EgressGatewayHA {
 		result = append(result, CRDResourceName(isovalent_api_v1.IEGPName))
 	}
 
