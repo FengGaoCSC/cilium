@@ -72,7 +72,6 @@ type Operator struct {
 // "default" network by default. Without a default network, such pods would
 // be stuck in ContainerCreating state.
 func newMultiNetworkOperator(params operatorParams) *Operator {
-	params.Logger.Info("starting multi network operator")
 	if !params.Config.EnableMultiNetwork || !params.Clientset.IsEnabled() {
 		return nil
 	}
