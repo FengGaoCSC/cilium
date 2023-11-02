@@ -145,6 +145,7 @@ cilium-agent [flags]
       --enable-node-port                                          Enable NodePort type services by Cilium
       --enable-pmtu-discovery                                     Enable path MTU discovery to send ICMP fragmentation-needed replies to the client
       --enable-policy string                                      Enable policy enforcement (default "default")
+      --enable-policy-overflow-endpoint-lockdown                  When an endpoint's policy map overflows shutdown all (ingress and egress) network traffic for that endpoint. (default true)
       --enable-recorder                                           Enable BPF datapath pcap recorder
       --enable-runtime-device-detection                           Enable runtime device detection and datapath reconfiguration (experimental)
       --enable-sctp                                               Enable SCTP support (beta)

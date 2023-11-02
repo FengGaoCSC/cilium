@@ -389,6 +389,8 @@ type Endpoint struct {
 	// Root scope for all of this endpoints reporters.
 	reporterScope       cell.Scope
 	closeHealthReporter func()
+
+	lockDown bool
 }
 
 func (e *Endpoint) GetReporter(name string) cell.HealthReporter {

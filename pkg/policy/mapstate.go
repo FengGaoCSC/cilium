@@ -64,6 +64,7 @@ type MapState interface {
 	GetDenyIdentities(*logrus.Logger) ([]int64, []int64)
 	RevertChanges(ChangeState)
 	AddVisibilityKeys(PolicyOwner, uint16, *VisibilityMetadata, ChangeState)
+	DenyLen() int
 	Len() int
 	Equals(MapState) bool
 	Diff(t *testing.T, expected MapState) string
@@ -330,6 +331,11 @@ func (ms *mapState) ForEachDeny(f func(Key, MapStateEntry) (cont bool)) (complet
 // Len returns the length of the map
 func (ms *mapState) Len() int {
 	return len(ms.allows) + len(ms.denies)
+}
+
+// DenyLen returns the length of the deny entries in the map
+func (ms *mapState) DenyLen() int {
+	return len(ms.denies)
 }
 
 // Equals determines if this MapState is equal to the

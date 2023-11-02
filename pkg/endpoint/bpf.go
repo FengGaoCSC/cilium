@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/google/renameio/v2"
@@ -34,8 +35,11 @@ import (
 	"github.com/cilium/cilium/pkg/maps/policymap"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
+	policyapi "github.com/cilium/cilium/pkg/policy/api"
+	"github.com/cilium/cilium/pkg/policy/trafficdirection"
 	"github.com/cilium/cilium/pkg/revert"
 	"github.com/cilium/cilium/pkg/time"
+	"github.com/cilium/cilium/pkg/u8proto"
 	"github.com/cilium/cilium/pkg/version"
 )
 
@@ -49,10 +53,29 @@ const (
 )
 
 var (
+	ErrPolicyEntryMaxExceeded = errors.New("policy map max entries limit exceeded")
+
 	handleNoHostInterfaceOnce sync.Once
 
 	syncPolicymapControllerGroup = controller.NewGroup("sync-policymap")
+
+	// allTrafficKeys specifies all of the policy Keys necessary to cover
+	// all (ingress and egress) network traffic.
+	allTrafficKeys []policy.Key
 )
+
+func init() {
+	for _, proto := range policyapi.SupportedProtocols() {
+		p := u8proto.ProtoIDs[strings.ToLower(string(proto))]
+		allTrafficKeys = append(allTrafficKeys, policy.Key{
+			Nexthdr:          uint8(p),
+			TrafficDirection: trafficdirection.Ingress.Uint8(),
+		}, policy.Key{
+			Nexthdr:          uint8(p),
+			TrafficDirection: trafficdirection.Egress.Uint8(),
+		})
+	}
+}
 
 // policyMapPath returns the path to the policy map of endpoint.
 func (e *Endpoint) policyMapPath() string {
@@ -1074,11 +1097,29 @@ type policyMapPressureUpdater interface {
 }
 
 func (e *Endpoint) updatePolicyMapPressureMetric() {
-	value := float64(e.realizedPolicy.GetPolicyMap().Len()) / float64(e.policyMap.MaxEntries())
+	value := float64(e.desiredPolicy.GetPolicyMap().Len()) / float64(e.policyMap.MaxEntries())
 	e.PolicyMapPressureUpdater.Update(PolicyMapPressureEvent{
 		Value:      value,
 		EndpointID: e.ID,
 	})
+}
+
+func (e *Endpoint) deletePolicyKeys(deletes, adds policy.Keys) int {
+	addsMap := make(map[policy.Key]struct{})
+	for k := range adds {
+		addsMap[k] = struct{}{}
+	}
+	var errors int
+	for k := range deletes {
+		// AddVisibilityKeys() records changed keys in both 'deletes' (old value) and 'adds' (new value).
+		// Check to make sure the key wasn't added.
+		if _, ok := addsMap[k]; !ok {
+			if !e.deletePolicyKey(k, true) {
+				errors++
+			}
+		}
+	}
+	return errors
 }
 
 func (e *Endpoint) deletePolicyKey(keyToDelete policy.Key, incremental bool) bool {
@@ -1113,6 +1154,32 @@ func (e *Endpoint) deletePolicyKey(keyToDelete policy.Key, incremental bool) boo
 		}, "deletePolicyKey")
 	}
 	return true
+}
+
+func (e *Endpoint) addPolicyKeys(adds policy.Keys) int {
+	var errors int
+	// Add policy map entries before deleting to avoid transient drops
+	for keyToAdd := range adds {
+		entry, exists := e.desiredPolicy.GetPolicyMap().Get(keyToAdd)
+		if !exists {
+			e.getLogger().WithFields(logrus.Fields{
+				logfields.AddedPolicyID: keyToAdd,
+			}).Warn("Tried adding policy map key not in policy")
+			continue
+		}
+
+		// Redirect entries currently come in with a dummy redirect port ("1"), replace it with
+		// the actual proxy port number, or with 0 if the redirect does not exist yet. This is
+		// due to the fact that proxies may not yet have bound to a specific port when a proxy
+		// policy is first instantiated.
+		if entry.IsRedirectEntry() {
+			entry.ProxyPort = e.realizedRedirects[policy.ProxyIDFromKey(e.ID, keyToAdd)]
+		}
+		if !e.addPolicyKey(keyToAdd, entry, true) {
+			errors++
+		}
+	}
+	return errors
 }
 
 func (e *Endpoint) addPolicyKey(keyToAdd policy.Key, entry policy.MapStateEntry, incremental bool) bool {
@@ -1158,7 +1225,7 @@ func (e *Endpoint) ApplyPolicyMapChanges(proxyWaitGroup *completion.WaitGroup) e
 
 	e.PolicyDebug(nil, "ApplyPolicyMapChanges")
 
-	err := e.applyPolicyMapChanges()
+	err := e.applyPolicyMapChangesLocked()
 	if err != nil {
 		return err
 	}
@@ -1169,12 +1236,37 @@ func (e *Endpoint) ApplyPolicyMapChanges(proxyWaitGroup *completion.WaitGroup) e
 	return err
 }
 
-// applyPolicyMapChanges applies any incremental policy map changes
-// collected on the desired policy.
-func (e *Endpoint) applyPolicyMapChanges() error {
+// applyPolicyMapChangesLocked applies any incremental policy map changes
+// collected on the desired policy. The method must be called with the
+// endpoint mutex held.
+func (e *Endpoint) applyPolicyMapChangesLocked() error {
 	errors := 0
 
-	e.PolicyDebug(nil, "applyPolicyMapChanges")
+	e.PolicyDebug(nil, "applyPolicyMapChangesLocked")
+
+	if option.Config.EnablePolicyOverflowEndpointLockdown &&
+		e.desiredPolicy.GetPolicyMap().Len() > policymap.MaxEntries {
+		if e.lockDown {
+			return ErrPolicyEntryMaxExceeded
+		}
+		e.getLogger().WithFields(logrus.Fields{
+			logfields.EndpointID: e.ID,
+		}).Warn("Policy Map exceeds the policy map max entries limit, locking endpoint down...")
+
+		fullLockdown, err := e.endpointPolicyLockdown()
+		if err != nil {
+			e.getLogger().WithFields(logrus.Fields{
+				logfields.EndpointID: e.ID,
+			}).WithError(err).Error("Failed to lockdown endpoint. The endpoint may be compromised, consider quarantining or shutting down this node.")
+			e.lockDown = false
+			return err
+		}
+		e.lockDown = fullLockdown
+		return ErrPolicyEntryMaxExceeded
+	} else {
+		e.lockDown = false
+		e.realizedPolicy = e.desiredPolicy
+	}
 
 	//  Note that after successful endpoint regeneration the
 	//  desired and realized policies are the same pointer. During
@@ -1203,37 +1295,15 @@ func (e *Endpoint) applyPolicyMapChanges() error {
 			}
 		}
 	}
-
-	// Add policy map entries before deleting to avoid transient drops
-	for keyToAdd := range adds {
-		// AddVisibilityKeys() records changed keys in both 'deletes' (old value) and 'adds' (new value).
-		// Remove the key from 'deletes' to keep the new entry.
-		delete(deletes, keyToAdd)
-
-		entry, exists := e.desiredPolicy.GetPolicyMap().Get(keyToAdd)
-		if !exists {
-			e.getLogger().WithFields(logrus.Fields{
-				logfields.AddedPolicyID: keyToAdd,
-			}).Warn("Tried adding policy map key not in policy")
-			continue
-		}
-
-		// Redirect entries currently come in with a dummy redirect port ("1"), replace it with
-		// the actual proxy port number, or with 0 if the redirect does not exist yet. This is
-		// due to the fact that proxies may not yet have bound to a specific port when a proxy
-		// policy is first instantiated.
-		if entry.IsRedirectEntry() {
-			entry.ProxyPort = e.realizedRedirects[policy.ProxyIDFromKey(e.ID, keyToAdd)]
-		}
-		if !e.addPolicyKey(keyToAdd, entry, true) {
-			errors++
-		}
-	}
-
-	for keyToDelete := range deletes {
-		if !e.deletePolicyKey(keyToDelete, true) {
-			errors++
-		}
+	// Add policy map entries before deleting to avoid transient drops. If there
+	// isn't enough space to add all the entries before deleting some, then delete
+	// first.
+	if e.realizedPolicy.GetPolicyMap().Len()+len(adds) <= int(e.policyMap.MaxEntries()) {
+		errors += e.addPolicyKeys(adds)
+		errors += e.deletePolicyKeys(deletes, adds)
+	} else {
+		errors += e.deletePolicyKeys(deletes, adds)
+		errors += e.addPolicyKeys(adds)
 	}
 
 	if errors > 0 {
@@ -1249,14 +1319,82 @@ func (e *Endpoint) applyPolicyMapChanges() error {
 	return nil
 }
 
+// endpointPolicyLockdown puts the endpoint policy map into a lockdown
+// mode. If the policy map can still accomodate all the deny entries (and
+// there is at least one deny policy) then all deny entries are inserted without
+// any allows. If there is no space for the deny entries or there is no deny entries
+// to insert then a new bpf policy map is populated with deny all traffic entries.
+// The old map is unpinned, and the new map is pinned.
+func (e *Endpoint) endpointPolicyLockdown() (bool, error) {
+	var fullLockDown bool
+	tmpPMPath := e.policyMapPath() + "_lockdown"
+	pM, err := policymap.CreateUnpinned(tmpPMPath)
+	if err != nil {
+		return false, fmt.Errorf("could not create bpf map %q: %w", tmpPMPath, err)
+	}
+	mapState := policy.NewMapState(nil)
+	// deny entries also exceed max entries, or there are no deny entires,
+	// go into a full lockdown.
+	if e.desiredPolicy.GetPolicyMap().DenyLen() > policymap.MaxEntries ||
+		e.desiredPolicy.GetPolicyMap().DenyLen() == 0 {
+		fullLockDown = true
+		for _, k := range allTrafficKeys {
+			policymapKey := policymap.NewKey(k.Identity, k.DestPort,
+				k.Nexthdr, k.TrafficDirection)
+			if err := pM.DenyKey(policymapKey); err != nil {
+				return false, fmt.Errorf("failed to add deny all policy: %w", err)
+			}
+			mapState.Insert(k, policy.MapStateEntry{IsDeny: true})
+		}
+	} else {
+		var outErr error
+		e.desiredPolicy.GetPolicyMap().ForEachDeny(func(k policy.Key, entry policy.MapStateEntry) bool {
+			policymapKey := policymap.NewKey(k.Identity, k.DestPort,
+				k.Nexthdr, k.TrafficDirection)
+			var err error
+			if entry.IsDeny {
+				err = pM.DenyKey(policymapKey)
+			} else {
+				err = pM.AllowKey(policymapKey, entry.AuthType.Uint8(), entry.ProxyPort)
+			}
+			if err != nil {
+				outErr = err
+				return false
+			}
+			mapState.Insert(k, entry)
+			return true
+		})
+		if outErr != nil {
+			return false, fmt.Errorf("failed to add all deny policies: %w", outErr)
+		}
+	}
+	err = e.policyMap.Unpin()
+	if err != nil {
+		return false, fmt.Errorf("failed to unpin previous map: %w", err)
+	}
+	e.policyMap = pM
+	e.realizedPolicy = policy.NewEndpointPolicy(e.policyGetter.GetPolicyRepository())
+	e.realizedPolicy.SetPolicyMap(mapState)
+	if err = e.policyMap.Pin(e.policyMapPath()); err != nil {
+		return false, fmt.Errorf("failed to pin new map to %q: %w", e.policyMapPath(), err)
+	}
+	e.updatePolicyMapPressureMetric()
+	return fullLockDown, nil
+}
+
 // syncPolicyMap updates the bpf policy map state based on the
 // difference between the realized and desired policy state without
 // dumping the bpf policy map.
 func (e *Endpoint) syncPolicyMap() error {
 	// Apply pending policy map changes first so that desired map is up-to-date before
 	// we diff the maps below.
-	err := e.applyPolicyMapChanges()
+	err := e.applyPolicyMapChangesLocked()
 	if err != nil {
+		if errors.Is(err, ErrPolicyEntryMaxExceeded) {
+			e.PolicyDebug(nil, "syncPolicyMap(): not syncing as the endpoint is in lock-down mode")
+			// syncPolicyMap has succeeded, as the policy mapstate is where it should be.
+			return nil
+		}
 		return err
 	}
 
@@ -1370,8 +1508,14 @@ func (e *Endpoint) syncPolicyMapWithDump() error {
 
 	// Apply pending policy map changes first so that desired map is up-to-date before
 	// we diff the maps below.
-	err := e.applyPolicyMapChanges()
+	err := e.applyPolicyMapChangesLocked()
 	if err != nil {
+		// syncPolicyMapWithDump has succeeded, as the policy mapstate is where it should be.
+		// The dump will not be useful at this point, so returning here rather than returning
+		// after the dump is ideal.
+		if errors.Is(err, ErrPolicyEntryMaxExceeded) {
+			return nil
+		}
 		return err
 	}
 
