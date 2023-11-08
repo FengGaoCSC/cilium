@@ -210,9 +210,9 @@ func (k *CTMapPrivilegedTestSuite) TestCtGcTcp(c *C) {
 	defer natMap.Map.Unpin()
 
 	ctMapName := MapNameTCP4Global + "_test"
-	setupMapInfo(mapTypeIPv4TCPGlobal, ctMapName,
-		&CtKey4Global{}, int(unsafe.Sizeof(CtKey4Global{})),
-		100, natMap)
+	mapInfo[mapTypeIPv4TCPGlobal] = mapAttributes{
+		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
+	}
 
 	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal)
 	err = ctMap.OpenOrCreate()
@@ -320,9 +320,9 @@ func (k *CTMapPrivilegedTestSuite) TestCtGcDsr(c *C) {
 	defer natMap.Map.Unpin()
 
 	ctMapName := MapNameTCP4Global + "_test"
-	setupMapInfo(mapTypeIPv4TCPGlobal, ctMapName,
-		&CtKey4Global{}, int(unsafe.Sizeof(CtKey4Global{})),
-		100, natMap)
+	mapInfo[mapTypeIPv4TCPGlobal] = mapAttributes{
+		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
+	}
 
 	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal)
 	err = ctMap.OpenOrCreate()
@@ -410,9 +410,9 @@ func (k *CTMapPrivilegedTestSuite) TestCtGcLegacyDsr(c *C) {
 	defer natMap.Map.Unpin()
 
 	ctMapName := MapNameTCP4Global + "_test"
-	setupMapInfo(mapTypeIPv4TCPGlobal, ctMapName,
-		&CtKey4Global{}, int(unsafe.Sizeof(CtKey4Global{})),
-		100, natMap)
+	mapInfo[mapTypeIPv4TCPGlobal] = mapAttributes{
+		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
+	}
 
 	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal)
 	err = ctMap.OpenOrCreate()
