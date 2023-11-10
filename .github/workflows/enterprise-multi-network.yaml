@@ -187,6 +187,8 @@ jobs:
         with:
           provision: 'false'
           cmd: |
+            set -eux
+
             cd /host/
 
             # create kind cluster with secondary network named "secondary-network"
