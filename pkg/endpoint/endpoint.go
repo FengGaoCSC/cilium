@@ -1590,7 +1590,7 @@ func (e *Endpoint) RunMetadataResolver(resolveMetadata MetadataResolverCB) {
 		controller.ControllerParams{
 			DoFunc: func(ctx context.Context) error {
 				ns, podName := e.GetK8sNamespace(), e.GetK8sPodName()
-				pod, cp, identityLabels, info, _, err := resolveMetadata(ns, podName)
+				pod, cp, identityLabels, info, annotations, err := resolveMetadata(ns, podName)
 				if err != nil {
 					e.Logger(controllerPrefix).WithError(err).Warning("Unable to fetch kubernetes labels")
 					return err
@@ -1620,6 +1620,13 @@ func (e *Endpoint) RunMetadataResolver(resolveMetadata MetadataResolverCB) {
 					}
 					return annotations[bandwidth.EgressBandwidth], nil
 				})
+				if networks, ok := annotations["network.v1alpha1.isovalent.com/pod-networks"]; ok {
+					var networkLabels []string
+					for _, network := range strings.Split(networks, ",") {
+						networkLabels = append(networkLabels, fmt.Sprintf("cni:com.isovalent.v1alpha1.network.attachment=%s", network))
+					}
+					identityLabels.MergeLabels(labels.NewLabelsFromModel(networkLabels))
+				}
 				e.UpdateLabels(ctx, identityLabels, info, true)
 				close(done)
 				return nil
