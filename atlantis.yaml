@@ -5,7 +5,7 @@ lib:
   version: d08deac735a85c97bffcd79d73f5f34cc58ae2a9
 plugins:
   - package: github.com/isovalent/fqdn-proxy/plugin
-    version: v1.14.0
+    version: 97aa678a63a6e992497d1b7b85927fc7797028be
     edit:
       cilium: .FQDNProxy
 goModOptions:
