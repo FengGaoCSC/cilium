@@ -19,7 +19,6 @@ cilium-agent hive [flags]
       --cni-chaining-target string                                   CNI network name into which to insert the Cilium chained configuration. Use '*' to select any network.
       --cni-exclusive                                                Whether to remove other CNI configurations
       --cni-log-file string                                          Path where the CNI plugin should write logs (default "/var/run/cilium/cilium-cni.log")
-      --egress-gateway-ha-healthcheck-timeout duration               Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2 (default 2s)
       --egress-gateway-ha-policy-map-max int                         Maximum number of entries in egress gatewa HA policy map (default 16384)
       --egress-gateway-ha-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 1s)
       --egress-gateway-policy-map-max int                            Maximum number of entries in egress gateway policy map (default 16384)

@@ -12,10 +12,18 @@ package egressgatewayha
 
 import (
 	"github.com/cilium/cilium/pkg/hive"
+	"github.com/cilium/cilium/pkg/hive/cell"
 	v1 "github.com/cilium/cilium/pkg/k8s/apis/isovalent.com/v1"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/k8s/utils"
+)
+
+// PolicyCell provides [Policy] for consumption with hive.
+var PolicyCell = cell.Module(
+	"egressgatewayha-policy",
+	"The Egress Gateway Policy declares the desired EGW configuration",
+	cell.Provide(newPolicyResource),
 )
 
 type Policy = v1.IsovalentEgressGatewayPolicy

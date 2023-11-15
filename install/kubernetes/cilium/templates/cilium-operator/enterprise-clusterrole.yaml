@@ -60,4 +60,19 @@ rules:
     - isovalentpodnetworks
   verbs:
     - create
+- apiGroups:
+  - isovalent.com
+  resources:
+  - isovalentegressgatewaypolicies
+  verbs:
+  # to allow IEGP watcher
+  - watch
+  - list
+- apiGroups:
+  - isovalent.com
+  resources:
+  - isovalentegressgatewaypolicies/status
+  verbs:
+  # to allow IEGPs status.groupStatus updates
+  - update
 {{- end }}

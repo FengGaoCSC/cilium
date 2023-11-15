@@ -54,11 +54,6 @@ func (k *K8sWatcher) ciliumNodeInit(ciliumNPClient client.Clientset, asyncContro
 						if k.egressGatewayManager != nil {
 							k.egressGatewayManager.OnUpdateNode(n)
 						}
-						EgressGatewayHAManagerLock.RLock()
-						if EgressGatewayHAManager != nil {
-							EgressGatewayHAManager.OnUpdateNode(n)
-						}
-						EgressGatewayHAManagerLock.RUnlock()
 
 						if n.IsLocal() {
 							return
@@ -93,11 +88,6 @@ func (k *K8sWatcher) ciliumNodeInit(ciliumNPClient client.Clientset, asyncContro
 							if k.egressGatewayManager != nil {
 								k.egressGatewayManager.OnUpdateNode(n)
 							}
-							EgressGatewayHAManagerLock.RLock()
-							if EgressGatewayHAManager != nil {
-								EgressGatewayHAManager.OnUpdateNode(n)
-							}
-							EgressGatewayHAManagerLock.RUnlock()
 							if isLocal {
 								return
 							}
@@ -118,11 +108,6 @@ func (k *K8sWatcher) ciliumNodeInit(ciliumNPClient client.Clientset, asyncContro
 					if k.egressGatewayManager != nil {
 						k.egressGatewayManager.OnDeleteNode(n)
 					}
-					EgressGatewayHAManagerLock.RLock()
-					if EgressGatewayHAManager != nil {
-						EgressGatewayHAManager.OnDeleteNode(n)
-					}
-					EgressGatewayHAManagerLock.RUnlock()
 					errs := k.CiliumNodeChain.OnDeleteCiliumNode(ciliumNode, swgNodes)
 					if errs != nil {
 						valid = false

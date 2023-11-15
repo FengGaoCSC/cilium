@@ -16,7 +16,6 @@ import (
 	"github.com/cilium/cilium/enterprise/pkg/bgpv1"
 	cecm "github.com/cilium/cilium/enterprise/pkg/clustermesh"
 	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
-	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
 	cemaps "github.com/cilium/cilium/enterprise/pkg/maps"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/enterprise/pkg/srv6/sidmanager"
@@ -42,7 +41,9 @@ var (
 		sidmanager.SIDManagerCell,
 		bgpv1.Cell,
 		egressgatewayha.Cell,
-		healthcheck.Cell,
+		egressgatewayha.PolicyCell,
+
+		cell.Invoke(func(*egressgatewayha.Manager) {}),
 	)
 
 	EnterpriseDatapath = cell.Module(

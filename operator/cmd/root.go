@@ -26,6 +26,8 @@ import (
 	operatorApi "github.com/cilium/cilium/api/v1/operator/server"
 	"github.com/cilium/cilium/enterprise/operator/pkg/multinetwork"
 	"github.com/cilium/cilium/enterprise/operator/pkg/srv6/locatorpool"
+	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha"
+	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
 	"github.com/cilium/cilium/operator/api"
 	"github.com/cilium/cilium/operator/auth"
 	"github.com/cilium/cilium/operator/dnsclient"
@@ -149,6 +151,12 @@ var (
 
 			locatorpool.Cell,
 			multinetwork.Cell,
+
+			// egress gateway HA
+			egressgatewayha.OperatorCell,
+			egressgatewayha.PolicyCell,
+			healthcheck.Cell,
+			cell.Invoke(func(*egressgatewayha.OperatorManager) {}),
 		),
 	)
 

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
@@ -41,14 +42,19 @@ type Config struct {
 	// Healthcheck timeout after which an egress gateway is marked not healthy.
 	// This also configures the frequency of probes to a value of healthcheckTimeout / 2
 	EgressGatewayHAHealthcheckTimeout time.Duration
+
+	ClusterHealthPort int
 }
 
 var defaultConfig = Config{
 	EgressGatewayHAHealthcheckTimeout: 2 * time.Second,
+	ClusterHealthPort:                 defaults.ClusterHealthPort,
 }
 
 func (def Config) Flags(flags *pflag.FlagSet) {
 	flags.Duration("egress-gateway-ha-healthcheck-timeout", def.EgressGatewayHAHealthcheckTimeout, "Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2")
+	flags.Int(option.ClusterHealthPort, defaultConfig.ClusterHealthPort, "")
+	flags.MarkHidden(option.ClusterHealthPort)
 }
 
 // Event represents a healthchecking event such as a node becoming healthy/unhealthy
@@ -75,18 +81,19 @@ type nodeStatus struct {
 type healthchecker struct {
 	lock.RWMutex
 
+	Config
+
 	nodes    map[string]nodeTypes.Node
 	statuses map[string]*nodeStatus
-	timeout  time.Duration
 	events   chan Event
 }
 
 // NewHealthchecker returns a new Healthchecker
 func NewHealthchecker(config Config) Healthchecker {
 	return &healthchecker{
+		Config:   config,
 		nodes:    make(map[string]nodeTypes.Node),
 		statuses: make(map[string]*nodeStatus),
-		timeout:  config.EgressGatewayHAHealthcheckTimeout,
 		events:   make(chan Event),
 	}
 }
@@ -129,7 +136,7 @@ func (h *healthchecker) Events() chan Event {
 }
 
 func (h *healthchecker) probeTimestampIsFresh(probeTimestamp time.Time) bool {
-	return time.Since(probeTimestamp) < h.timeout
+	return time.Since(probeTimestamp) < h.EgressGatewayHAHealthcheckTimeout
 }
 
 func runHealthcheckProbe(netClient *http.Client, url string) bool {
@@ -145,10 +152,10 @@ func runHealthcheckProbe(netClient *http.Client, url string) bool {
 // Caller must hold h.RwMutex
 func (h *healthchecker) startNodeHealthcheck(node nodeTypes.Node) {
 	var (
-		tickerCh  = time.NewTicker(h.timeout / 2)
-		netClient = &http.Client{Timeout: h.timeout}
+		tickerCh  = time.NewTicker(h.EgressGatewayHAHealthcheckTimeout / 2)
+		netClient = &http.Client{Timeout: h.EgressGatewayHAHealthcheckTimeout}
 		url       = fmt.Sprintf("http://%s/hello",
-			net.JoinHostPort(node.GetNodeIP(false).String(), strconv.Itoa(option.Config.ClusterHealthPort)))
+			net.JoinHostPort(node.GetNodeIP(false).String(), strconv.Itoa(h.ClusterHealthPort)))
 		logger = log.WithField(logfields.NodeName, node.Name)
 	)
 

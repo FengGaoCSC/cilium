@@ -11,35 +11,37 @@ cilium-operator-alibabacloud hive [flags]
 ### Options
 
 ```
-      --auto-create-default-pod-network                      Automatically creates the default IsovalentPodNetwork on startup (default true)
-      --dns-server-addresses strings                         A list of DNS server addresses to be used by the operator DNS client for resolution of FQDNs in IsovalentFQDNGroup CRDs. Each address should be in the form "<ip>:<port>". When resolving an FQDN, the operator will try to query the first server. If it fails, it will try the next one and so on, following the order specified by the user.
-      --enable-cilium-operator-server-access strings         List of cilium operator APIs which are administratively enabled. Supports '*'. (default [*])
-      --enable-k8s                                           Enable the k8s clientset (default true)
-      --enable-k8s-api-discovery                             Enable discovery of Kubernetes API groups and resources with the discovery API
-      --enable-multi-network                                 Enable support for multiple pod networks
-      --fqdn-group-min-query-interval duration               Minimum interval between two consecutive queries when resolving a FQDN belonging to an IsovalentFQDNGroup (default 1m0s)
-      --gops-port uint16                                     Port for gops server to listen on (default 9891)
-  -h, --help                                                 help for hive
-      --identity-gc-interval duration                        GC interval for security identities (default 15m0s)
-      --identity-gc-rate-interval duration                   Interval used for rate limiting the GC of security identities (default 1m0s)
-      --identity-gc-rate-limit int                           Maximum number of security identities that will be deleted within the identity-gc-rate-interval (default 2500)
-      --identity-heartbeat-timeout duration                  Timeout after which identity expires on lack of heartbeat (default 30m0s)
-      --k8s-api-server string                                Kubernetes API server URL
-      --k8s-client-burst int                                 Burst value allowed for the K8s client
-      --k8s-client-qps float32                               Queries per second limit for the K8s client
-      --k8s-heartbeat-timeout duration                       Configures the timeout for api-server heartbeat, set to 0 to disable (default 30s)
-      --k8s-kubeconfig-path string                           Absolute path of the kubernetes kubeconfig file
-      --mesh-auth-mutual-enabled                             The flag to enable mutual authentication for the SPIRE server (beta).
-      --mesh-auth-spiffe-trust-domain string                 The trust domain for the SPIFFE identity. (default "spiffe.cilium")
-      --mesh-auth-spire-agent-socket string                  The path for the SPIRE admin agent Unix socket. (default "/run/spire/sockets/agent/agent.sock")
-      --mesh-auth-spire-server-address string                SPIRE server endpoint. (default "spire-server.spire.svc:8081")
-      --mesh-auth-spire-server-connection-timeout duration   SPIRE server connection timeout. (default 10s)
-      --operator-api-serve-addr string                       Address to serve API requests (default "localhost:9234")
-      --operator-pprof                                       Enable serving pprof debugging API
-      --operator-pprof-address string                        Address that pprof listens on (default "localhost")
-      --operator-pprof-port uint16                           Port that pprof listens on (default 6061)
-      --skip-crd-creation                                    When true, Kubernetes Custom Resource Definitions will not be created
-      --srv6-locator-pool-enabled                            Enable SRv6 locator pool in Cilium
+      --auto-create-default-pod-network                              Automatically creates the default IsovalentPodNetwork on startup (default true)
+      --dns-server-addresses strings                                 A list of DNS server addresses to be used by the operator DNS client for resolution of FQDNs in IsovalentFQDNGroup CRDs. Each address should be in the form "<ip>:<port>". When resolving an FQDN, the operator will try to query the first server. If it fails, it will try the next one and so on, following the order specified by the user.
+      --egress-gateway-ha-healthcheck-timeout duration               Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2 (default 2s)
+      --egress-gateway-ha-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 2s)
+      --enable-cilium-operator-server-access strings                 List of cilium operator APIs which are administratively enabled. Supports '*'. (default [*])
+      --enable-k8s                                                   Enable the k8s clientset (default true)
+      --enable-k8s-api-discovery                                     Enable discovery of Kubernetes API groups and resources with the discovery API
+      --enable-multi-network                                         Enable support for multiple pod networks
+      --fqdn-group-min-query-interval duration                       Minimum interval between two consecutive queries when resolving a FQDN belonging to an IsovalentFQDNGroup (default 1m0s)
+      --gops-port uint16                                             Port for gops server to listen on (default 9891)
+  -h, --help                                                         help for hive
+      --identity-gc-interval duration                                GC interval for security identities (default 15m0s)
+      --identity-gc-rate-interval duration                           Interval used for rate limiting the GC of security identities (default 1m0s)
+      --identity-gc-rate-limit int                                   Maximum number of security identities that will be deleted within the identity-gc-rate-interval (default 2500)
+      --identity-heartbeat-timeout duration                          Timeout after which identity expires on lack of heartbeat (default 30m0s)
+      --k8s-api-server string                                        Kubernetes API server URL
+      --k8s-client-burst int                                         Burst value allowed for the K8s client
+      --k8s-client-qps float32                                       Queries per second limit for the K8s client
+      --k8s-heartbeat-timeout duration                               Configures the timeout for api-server heartbeat, set to 0 to disable (default 30s)
+      --k8s-kubeconfig-path string                                   Absolute path of the kubernetes kubeconfig file
+      --mesh-auth-mutual-enabled                                     The flag to enable mutual authentication for the SPIRE server (beta).
+      --mesh-auth-spiffe-trust-domain string                         The trust domain for the SPIFFE identity. (default "spiffe.cilium")
+      --mesh-auth-spire-agent-socket string                          The path for the SPIRE admin agent Unix socket. (default "/run/spire/sockets/agent/agent.sock")
+      --mesh-auth-spire-server-address string                        SPIRE server endpoint. (default "spire-server.spire.svc:8081")
+      --mesh-auth-spire-server-connection-timeout duration           SPIRE server connection timeout. (default 10s)
+      --operator-api-serve-addr string                               Address to serve API requests (default "localhost:9234")
+      --operator-pprof                                               Enable serving pprof debugging API
+      --operator-pprof-address string                                Address that pprof listens on (default "localhost")
+      --operator-pprof-port uint16                                   Port that pprof listens on (default 6061)
+      --skip-crd-creation                                            When true, Kubernetes Custom Resource Definitions will not be created
+      --srv6-locator-pool-enabled                                    Enable SRv6 locator pool in Cilium
 ```
 
 ### SEE ALSO

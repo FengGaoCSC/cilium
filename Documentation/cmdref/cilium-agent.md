@@ -84,7 +84,6 @@ cilium-agent [flags]
       --dns-policy-unload-on-shutdown                                Unload DNS policy rules on graceful shutdown
       --dnsproxy-concurrency-limit int                               Limit concurrency of DNS message processing
       --dnsproxy-concurrency-processing-grace-period duration        Grace time to wait when DNS proxy concurrent limit has been reached during DNS message processing
-      --egress-gateway-ha-healthcheck-timeout duration               Healthcheck timeout after which an egress gateway is marked not healthy. This also configures the frequency of probes to a value of healthcheckTimeout / 2 (default 2s)
       --egress-gateway-ha-policy-map-max int                         Maximum number of entries in egress gatewa HA policy map (default 16384)
       --egress-gateway-ha-reconciliation-trigger-interval duration   Time between triggers of egress gateway state reconciliations (default 1s)
       --egress-gateway-policy-map-max int                            Maximum number of entries in egress gateway policy map (default 16384)

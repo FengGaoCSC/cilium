@@ -12,24 +12,24 @@ import (
 	"time"
 
 	. "github.com/cilium/checkmate"
-	"github.com/stretchr/testify/require"
-
 	"github.com/cilium/ebpf/rlimit"
+	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 
-	"github.com/cilium/cilium/enterprise/pkg/egressgatewayha/healthcheck"
 	"github.com/cilium/cilium/enterprise/pkg/maps/egressmapha"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/hivetest"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/k8s"
-	v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
+	cilium_api_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	slimv1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	k8sTypes "github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/labels"
+	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/node/addressing"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
+
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/testutils"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
@@ -41,8 +41,8 @@ const (
 	testInterface1 = "cilium_egwha1"
 	testInterface2 = "cilium_egwha2"
 
-	node1 = "k8s1"
-	node2 = "k8s2"
+	node1Name = "k8s1"
+	node2Name = "k8s2"
 
 	node1IP = "192.168.1.1"
 	node2IP = "192.168.1.2"
@@ -76,10 +76,9 @@ var (
 
 	identityAllocator = testidentity.NewMockIdentityAllocator(nil)
 
-	noNodeGroup       = map[string]string{}
-	nodeGroup1Labels  = map[string]string{"label1": "1"}
-	nodeGroup2Labels  = map[string]string{"label2": "2"}
-	nodeGroup12Labels = map[string]string{"label1": "1", "label2": "2"}
+	noNodeGroup      = map[string]string{}
+	nodeGroup1Labels = map[string]string{"label1": "1"}
+	nodeGroup2Labels = map[string]string{"label2": "2"}
 )
 
 type egressRule struct {
@@ -109,44 +108,11 @@ type parsedEgressCtEntry struct {
 	gatewayIP netip.Addr
 }
 
-type healthcheckerMock struct {
-	nodes  map[string]struct{}
-	events chan healthcheck.Event
-}
-
-func (h *healthcheckerMock) UpdateNodeList(nodes map[string]nodeTypes.Node) {
-}
-
-func (h *healthcheckerMock) NodeIsHealthy(nodeName string) bool {
-	_, ok := h.nodes[nodeName]
-	return ok
-}
-
-func (h *healthcheckerMock) Events() chan healthcheck.Event {
-	return h.events
-}
-
-func (h *healthcheckerMock) healthy(nodeName string) {
-	h.nodes[nodeName] = struct{}{}
-}
-
-func (h *healthcheckerMock) unhealthy(nodeName string) {
-	delete(h.nodes, nodeName)
-}
-
-func newHealthcheckerMock() *healthcheckerMock {
-	return &healthcheckerMock{
-		nodes:  make(map[string]struct{}),
-		events: make(chan healthcheck.Event),
-	}
-}
-
 // Hook up gocheck into the "go test" runner.
 type EgressGatewayTestSuite struct {
 	manager     *Manager
 	policies    fakeResource[*Policy]
 	cacheStatus k8s.CacheStatus
-	healthcheck *healthcheckerMock
 }
 
 var _ = Suite(&EgressGatewayTestSuite{})
@@ -161,30 +127,36 @@ func (k *EgressGatewayTestSuite) SetUpSuite(c *C) {
 	bpf.CheckOrMountFS("")
 	err := rlimit.RemoveMemlock()
 	c.Assert(err, IsNil)
-
-	nodeTypes.SetName(node1)
 }
 
 func (k *EgressGatewayTestSuite) SetUpTest(c *C) {
 	k.cacheStatus = make(k8s.CacheStatus)
 	k.policies = make(fakeResource[*Policy])
-	k.healthcheck = newHealthcheckerMock()
 
 	lc := hivetest.Lifecycle(c)
 	policyMap := egressmapha.CreatePrivatePolicyMap(lc, egressmapha.DefaultPolicyConfig)
 	ctMap := egressmapha.CreatePrivateCtMap(lc)
 
+	localNodeStore := node.NewTestLocalNodeStore(node.LocalNode{
+		Node: nodeTypes.Node{
+			Name: node1Name,
+			IPAddresses: []nodeTypes.Address{
+				{Type: addressing.NodeInternalIP, IP: net.ParseIP(node1IP)},
+			},
+		},
+	})
+
 	var err error
 	k.manager, err = newEgressGatewayManager(Params{
 		Lifecycle:         lc,
-		Config:            Config{true, 1 * time.Millisecond},
+		Config:            Config{true, 2 * time.Second, 1 * time.Millisecond},
 		DaemonConfig:      &option.DaemonConfig{},
 		CacheStatus:       k.cacheStatus,
 		IdentityAllocator: identityAllocator,
 		PolicyMap:         policyMap,
 		CtMap:             ctMap,
 		Policies:          k.policies,
-		Healthchecker:     k.healthcheck,
+		LocalNodeStore:    localNodeStore,
 	})
 	c.Assert(err, IsNil)
 	c.Assert(k.manager, NotNil)
@@ -212,7 +184,6 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayIEGPParser(c *C) {
 	iegp.Spec.DestinationCIDRs = nil
 	_, err = ParseIEGP(iegp)
 	c.Assert(err, NotNil)
-
 	// must specify at least one DestinationCIDR
 	policy = policyParams{
 		name:  "policy-1",
@@ -223,7 +194,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayIEGPParser(c *C) {
 	_, err = ParseIEGP(iegp)
 	c.Assert(err, NotNil)
 
-	// catch nil EgressGroups field
+	// catch nil EgressGateway field
 	policy = policyParams{
 		name:            "policy-1",
 		destinationCIDR: destCIDR,
@@ -268,33 +239,23 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	policyMap := k.manager.policyMap
 	egressGatewayManager := k.manager
 
-	k.healthcheck.nodes = map[string]struct{}{
-		"k8s1": {},
-		"k8s2": {},
-	}
+	reconciliationEventsCount := egressGatewayManager.reconciliationEventsCount.Load()
 
 	close(k.cacheStatus)
 	k.policies.sync(c)
 
-	reconciliationEventsCount := egressGatewayManager.reconciliationEventsCount.Load()
-
-	node1 := newCiliumNode(node1, node1IP, nodeGroup1Labels)
-	egressGatewayManager.OnUpdateNode(node1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
-	node2 := newCiliumNode(node2, node2IP, nodeGroup1Labels)
-	egressGatewayManager.OnUpdateNode(node2)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	// Create a new policy
+	// Create a new HA policy that selects k8s1 and k8s2 nodes
 	policy1 := &policyParams{
-		name:            "policy-1",
-		endpointLabels:  ep1Labels,
-		destinationCIDR: destCIDR,
-		nodeLabels:      nodeGroup1Labels,
-		iface:           testInterface1,
+		name:              "policy-1",
+		endpointLabels:    ep1Labels,
+		destinationCIDR:   destCIDR,
+		nodeLabels:        nodeGroup1Labels,
+		iface:             testInterface1,
+		activeGatewayIPs:  []string{node1IP, node2IP},
+		healthyGatewayIPs: []string{node1IP, node2IP},
 	}
-
 	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -310,18 +271,10 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	// Make k8s1 unhealthy
-	k.healthcheck.unhealthy("k8s1")
-	forceReconcile(k.manager, eventHealthcheck)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	// Remove k8s1 from node-group-1
-	node1.Labels = noNodeGroup
-	egressGatewayManager.OnUpdateNode(node1)
+	// Remove k8s1
+	policy1.activeGatewayIPs = []string{node2IP}
+	policy1.healthyGatewayIPs = []string{node2IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
@@ -329,17 +282,9 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	})
 
 	// Add back node1
-	node1.Labels = nodeGroup1Labels
-	egressGatewayManager.OnUpdateNode(node1)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	// And make it healthy
-	k.healthcheck.healthy("k8s1")
-	forceReconcile(egressGatewayManager, eventHealthcheck)
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
+	policy1.activeGatewayIPs = []string{node1IP, node2IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
@@ -347,18 +292,10 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	// Make k8s2 unhealthy
-	k.healthcheck.unhealthy("k8s2")
-	forceReconcile(egressGatewayManager, eventHealthcheck)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, egressIP1, node1IP},
-	})
-
-	// Remove k8s2 from node-group-1
-	node2.Labels = noNodeGroup
-	egressGatewayManager.OnUpdateNode(node2)
+	// Remove k8s2
+	policy1.healthyGatewayIPs = []string{node1IP}
+	policy1.activeGatewayIPs = []string{node1IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
@@ -366,17 +303,9 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	})
 
 	// Add back k8s2
-	node2.Labels = nodeGroup1Labels
-	egressGatewayManager.OnUpdateNode(node2)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, egressIP1, node1IP},
-	})
-
-	// And make it healthy
-	k.healthcheck.healthy("k8s2")
-	forceReconcile(egressGatewayManager, eventHealthcheck)
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
+	policy1.activeGatewayIPs = []string{node1IP, node2IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
@@ -400,92 +329,9 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node1IP},
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
-
-	// Update the policy group config to match node-group-2
 	policy1.nodeLabels = nodeGroup2Labels
-	addPolicy(c, k.policies, policy1)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
-	assertEgressRules(c, policyMap, []egressRule{})
-
-	// Change it back to node-group-1
-	policy1.nodeLabels = nodeGroup1Labels
-	addPolicy(c, k.policies, policy1)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, egressIP1, node1IP},
-		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	// Update the policy group config to allow at most 1 gateway at a time
-	policy1.maxGatewayNodes = 1
-	addPolicy(c, k.policies, policy1)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, egressIP1, node1IP},
-	})
-
-	// Make k8s1 unhealthy
-	k.healthcheck.unhealthy("k8s1")
-	forceReconcile(egressGatewayManager, eventHealthcheck)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	// Remove k8s1 from node-group-1
-	node1.Labels = noNodeGroup
-	egressGatewayManager.OnUpdateNode(node1)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, zeroIP4, node2IP},
-	})
-
-	// Add back node1
-	node1.Labels = nodeGroup1Labels
-	egressGatewayManager.OnUpdateNode(node1)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	// And make it healthy
-	k.healthcheck.healthy("k8s1")
-	forceReconcile(egressGatewayManager, eventHealthcheck)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, egressIP1, node1IP},
-	})
-
-	// Clear the maxGatewayNodes policy property
-	policy1.maxGatewayNodes = 0
-	addPolicy(c, k.policies, policy1)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, egressIP1, node1IP},
-		{ep1IP, destCIDR, egressIP1, node2IP},
-	})
-
-	// Changing the DestCIDR to 0.0.0.0 results in a conflict with
-	// the existing IP rules. Test that the manager is able to
-	// resolve this conflict.
-	policy1.destinationCIDR = allZeroDestCIDR
-	addPolicy(c, k.policies, policy1)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, allZeroDestCIDR, egressIP1, node1IP},
-		{ep1IP, allZeroDestCIDR, egressIP1, node2IP},
-	})
-
-	// Restore old DestCIDR
-	policy1.destinationCIDR = destCIDR
-	addPolicy(c, k.policies, policy1)
-
-	// Create a new policy
+	// Create a new HA policy that matches no nodes
 	policy2 := &policyParams{
 		name:            "policy-2",
 		endpointLabels:  ep2Labels,
@@ -501,9 +347,10 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep1IP, destCIDR, egressIP1, node2IP},
 	})
 
-	// Add k8s1 to node-group-2 egress group
-	node1.Labels = nodeGroup12Labels
-	egressGatewayManager.OnUpdateNode(node1)
+	// Add k8s1 node to policy-2
+	policy2.activeGatewayIPs = []string{node1IP}
+	policy2.healthyGatewayIPs = []string{node1IP}
+	addPolicy(c, k.policies, policy2)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
@@ -522,9 +369,10 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep2IP, destCIDR, egressIP2, node1IP},
 	})
 
-	// Add also k8s2 to node-group-2 egress group
-	node2.Labels = nodeGroup12Labels
-	egressGatewayManager.OnUpdateNode(node2)
+	// Add also k8s2 to policy-2
+	policy2.activeGatewayIPs = []string{node1IP, node2IP}
+	policy2.healthyGatewayIPs = []string{node1IP, node2IP}
+	addPolicy(c, k.policies, policy2)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, policyMap, []egressRule{
@@ -586,19 +434,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 		{ep2IP, destCIDR, egressIP2, node2IP},
 	})
 
-	// Remove k8s1 from node-group-1 (but keep it in node-group-2)
-	node1.Labels = nodeGroup2Labels
-	egressGatewayManager.OnUpdateNode(node1)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, policyMap, []egressRule{
-		{ep1IP, destCIDR, zeroIP4, node2IP},
-		{ep2IP, destCIDR, egressIP2, node1IP},
-		{ep2IP, destCIDR, egressIP2, node2IP},
-	})
-
 	// Update the EP 1 labels in order for it to not be a match
-	_ = updateEndpointAndIdentity(&ep1, id1, map[string]string{})
+	updateEndpointAndIdentity(&ep1, id1, map[string]string{})
 	egressGatewayManager.OnUpdateEndpoint(&ep1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -608,7 +445,7 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerHAGroup(c *C) {
 	})
 
 	// Update the EP 2 labels in order for it to not be a match
-	_ = updateEndpointAndIdentity(&ep2, id2, map[string]string{})
+	updateEndpointAndIdentity(&ep2, id2, map[string]string{})
 	egressGatewayManager.OnUpdateEndpoint(&ep2)
 	waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -619,35 +456,22 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	createTestInterface(c, testInterface1, egressCIDR1)
 
 	egressGatewayManager := k.manager
-
-	k.healthcheck.nodes = map[string]struct{}{
-		"k8s1": {},
-		"k8s2": {},
-	}
+	reconciliationEventsCount := egressGatewayManager.reconciliationEventsCount.Load()
 
 	close(k.cacheStatus)
 	k.policies.sync(c)
 
-	reconciliationEventsCount := egressGatewayManager.reconciliationEventsCount.Load()
-
-	node1 := newCiliumNode(node1, node1IP, nodeGroup1Labels)
-	egressGatewayManager.OnUpdateNode(node1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	node2 := newCiliumNode(node2, node2IP, nodeGroup1Labels)
-	egressGatewayManager.OnUpdateNode(node2)
-	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
-
-	assertEgressRules(c, k.manager.policyMap, []egressRule{})
-	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Create a new HA policy based on a group config
 	policy1 := &policyParams{
-		name:            "policy-1",
-		endpointLabels:  ep1Labels,
-		destinationCIDR: destCIDR,
-		nodeLabels:      nodeGroup1Labels,
-		iface:           testInterface1,
+		name:              "policy-1",
+		endpointLabels:    ep1Labels,
+		destinationCIDR:   destCIDR,
+		nodeLabels:        nodeGroup1Labels,
+		iface:             testInterface1,
+		activeGatewayIPs:  []string{node1IP, node2IP},
+		healthyGatewayIPs: []string{node1IP, node2IP},
 	}
 	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
@@ -676,9 +500,10 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 		{ep1IP, destIP, node2IP},
 	})
 
-	// Make k8s2 unhealthy
-	k.healthcheck.unhealthy("k8s2")
-	forceReconcile(egressGatewayManager, eventHealthcheck)
+	// Remove k8s2 from policy-1
+	policy1.activeGatewayIPs = []string{node1IP}
+	policy1.healthyGatewayIPs = []string{node1IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
@@ -688,9 +513,10 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	// CT entry is gone:
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
-	// Make k8s2 healthy again
-	k.healthcheck.healthy("k8s2")
-	forceReconcile(egressGatewayManager, eventHealthcheck)
+	// Add back k8s2 to policy-1
+	policy1.activeGatewayIPs = []string{node1IP, node2IP}
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
@@ -719,8 +545,9 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	})
 
 	// Remove k8s2 from node-group-1
-	node2.Labels = noNodeGroup
-	egressGatewayManager.OnUpdateNode(node2)
+	policy1.activeGatewayIPs = []string{node1IP}
+	policy1.healthyGatewayIPs = []string{node1IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
@@ -731,8 +558,9 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Add back k8s2
-	node2.Labels = nodeGroup1Labels
-	egressGatewayManager.OnUpdateNode(node2)
+	policy1.activeGatewayIPs = []string{node1IP, node2IP}
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
@@ -763,7 +591,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	})
 
 	// Update the policy group config to allow at most 1 gateway at a time (k8s1)
-	policy1.maxGatewayNodes = 1
+	policy1.activeGatewayIPs = []string{node1IP}
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
 	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -777,8 +606,9 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	})
 
 	// Make k8s2 unhealthy
-	k.healthcheck.unhealthy("k8s2")
-	forceReconcile(egressGatewayManager, eventHealthcheck)
+	policy1.activeGatewayIPs = []string{node1IP}
+	policy1.healthyGatewayIPs = []string{node1IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
@@ -789,8 +619,9 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Make k8s2 healthy again
-	k.healthcheck.healthy("k8s2")
-	forceReconcile(egressGatewayManager, eventHealthcheck)
+	policy1.activeGatewayIPs = []string{node1IP}
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
@@ -800,7 +631,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Update the policy group config to allow all gateways again
-	policy1.maxGatewayNodes = 0
+	policy1.activeGatewayIPs = []string{node1IP, node2IP}
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
 	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -832,7 +664,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	})
 
 	// Update the policy group config to allow at most 1 gateway at a time (k8s1)
-	policy1.maxGatewayNodes = 1
+	policy1.activeGatewayIPs = []string{node1IP}
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
 	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -846,8 +679,9 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	})
 
 	// Remove k8s2 from node-group-1
-	node2.Labels = noNodeGroup
-	egressGatewayManager.OnUpdateNode(node2)
+	policy1.activeGatewayIPs = []string{node1IP}
+	policy1.healthyGatewayIPs = []string{node1IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
@@ -858,8 +692,9 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Add back k8s2
-	node2.Labels = nodeGroup1Labels
-	egressGatewayManager.OnUpdateNode(node2)
+	policy1.activeGatewayIPs = []string{node1IP}
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
+	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
 	assertEgressRules(c, k.manager.policyMap, []egressRule{
@@ -869,7 +704,8 @@ func (k *EgressGatewayTestSuite) TestEgressGatewayManagerCtEntries(c *C) {
 	assertEgressCtEntries(c, k.manager.ctMap, []egressCtEntry{})
 
 	// Update the policy group config to allow all gateways again
-	policy1.maxGatewayNodes = 0
+	policy1.activeGatewayIPs = []string{node1IP, node2IP}
+	policy1.healthyGatewayIPs = []string{node1IP, node2IP}
 	addPolicy(c, k.policies, policy1)
 	reconciliationEventsCount = waitForReconciliationRun(c, egressGatewayManager, reconciliationEventsCount)
 
@@ -964,9 +800,8 @@ func waitForReconciliationRun(tb testing.TB, egressGatewayManager *Manager, curr
 }
 
 func newCiliumNode(name, nodeIP string, nodeLabels map[string]string) nodeTypes.Node {
-	return nodeTypes.Node{
-		Name:   name,
-		Labels: nodeLabels,
+	n := nodeTypes.Node{
+		Name: name,
 		IPAddresses: []nodeTypes.Address{
 			{
 				Type: addressing.NodeInternalIP,
@@ -974,6 +809,12 @@ func newCiliumNode(name, nodeIP string, nodeLabels map[string]string) nodeTypes.
 			},
 		},
 	}
+
+	if len(nodeLabels) != 0 {
+		n.Labels = nodeLabels
+	}
+
+	return n
 }
 
 // Mock the creation of endpoint and its corresponding identity, returns endpoint and ID.
@@ -984,12 +825,12 @@ func newEndpointAndIdentity(name, ip string, epLabels map[string]string) (k8sTyp
 		ObjectMeta: slimv1.ObjectMeta{
 			Name: name,
 		},
-		Identity: &v2.EndpointIdentity{
+		Identity: &cilium_api_v2.EndpointIdentity{
 			ID: int64(id.ID),
 		},
-		Networking: &v2.EndpointNetworking{
-			Addressing: v2.AddressPairList{
-				&v2.AddressPair{
+		Networking: &cilium_api_v2.EndpointNetworking{
+			Addressing: cilium_api_v2.AddressPairList{
+				&cilium_api_v2.AddressPair{
 					IPV4: ip,
 				},
 			},
@@ -1006,6 +847,7 @@ func updateEndpointAndIdentity(endpoint *k8sTypes.CiliumEndpoint, oldID *identit
 	endpoint.Identity.ID = int64(newID.ID)
 	return newID
 }
+
 func parseEgressRule(sourceIP, destCIDR, egressIP, gatewayIP string) parsedEgressRule {
 	sip := netip.MustParseAddr(sourceIP)
 	dc := netip.MustParsePrefix(destCIDR)
@@ -1064,7 +906,6 @@ func tryAssertEgressRules(policyMap egressmapha.PolicyMap, rules []egressRule) e
 	untrackedRule := false
 	policyMap.IterateWithCallback(
 		func(key *egressmapha.EgressPolicyKey4, val *egressmapha.EgressPolicyVal4) {
-
 		nextPolicyGateway:
 			for _, gatewayIP := range val.GetGatewayIPs() {
 				for _, r := range parsedRules {
@@ -1173,12 +1014,4 @@ func insertEgressCtEntry(c *C, ctMap egressmapha.CtMap, sourceIP, destIP, gatewa
 
 	err := ctMap.Update(key, val, 0)
 	c.Assert(err, IsNil)
-}
-
-func forceReconcile(manager *Manager, event eventType) {
-	manager.Lock()
-	defer manager.Unlock()
-
-	manager.setEventBitmap(event)
-	manager.reconcileLocked()
 }

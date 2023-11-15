@@ -32,6 +32,7 @@ var (
 			k8s.CiliumPodIPPoolResource,
 			k8s.IsovalentFQDNGroup,
 			k8s.IngressClassResource,
+			k8s.CiliumNodeResource,
 		),
 	)
 )
@@ -47,4 +48,5 @@ type Resources struct {
 	CiliumPodIPPools resource.Resource[*cilium_api_v2alpha1.CiliumPodIPPool]
 	FQDNGroups       resource.Resource[*isovalent_api_v1alpha1.IsovalentFQDNGroup]
 	IngressClasses   resource.Resource[*slim_networkingv1.IngressClass]
+	CiliumNodes      resource.Resource[*cilium_api_v2.CiliumNode]
 }
