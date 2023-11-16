@@ -52,7 +52,7 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.15.11
+  cilium_cli_version: v0.15.14
   network-definitions: enterprise/examples/kubernetes/multi-network/isovalentpodnetworks.yaml
 
 jobs:
@@ -154,7 +154,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@951eb9108277f4ffeb86d047bd492b6b96a52542 # v0.15.11
+        uses: cilium/cilium-cli@446392499db483906bcc3ade85f023912a79e5ee # v0.15.14
         with:
           release-version: ${{ env.cilium_cli_version }}
           ci-version: ${{ env.cilium_cli_ci_version }}
