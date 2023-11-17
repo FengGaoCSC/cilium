@@ -72,7 +72,10 @@ jobs:
       - name: Install FQDN proxy
         run: |
           helm repo add isovalent https://helm.isovalent.com
-          helm install -n kube-system cilium-dnsproxy isovalent/cilium-dnsproxy --version ${{ env.fqdn_proxy_version }} --set prometheus.enabled=true --set debug=true
+          helm install -n kube-system cilium-dnsproxy isovalent/cilium-dnsproxy \
+            --version ${{ env.fqdn_proxy_version }} \
+            --set metrics.enabled=true \
+            --set debug=true
           kubectl rollout status -n kube-system ds/cilium
 
       - name: Run enterprise tests
