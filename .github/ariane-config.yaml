@@ -14,7 +14,6 @@ triggers:
     - conformance-ingress.yaml
     - conformance-runtime.yaml
     - enterprise-clustermesh-overlapping-podcidr.yaml
-    - enterprise-multi-network.yaml
     - integration-test.yaml
     - tests-clustermesh-upgrade.yaml
     - tests-datapath-verifier.yaml
