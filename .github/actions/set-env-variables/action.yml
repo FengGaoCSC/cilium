@@ -8,8 +8,14 @@ runs:
         echo "QUAY_ORGANIZATION=isovalent" >> $GITHUB_ENV
         echo "QUAY_ORGANIZATION_DEV=isovalent-dev" >> $GITHUB_ENV
         # no prod yet
+<<<<<<< HEAD
         echo "QUAY_CHARTS_ORGANIZATION_DEV=isovalent-charts-dev" >> $GITHUB_ENV
         echo "BRANCH_SUFFIX=-ce" >> $GITHUB_ENV
+=======
+        echo "QUAY_CHARTS_ORGANIZATION_DEV=cilium-charts-dev" >> $GITHUB_ENV
+        echo "EGRESS_GATEWAY_HELM_VALUES=--helm-set=egressGateway.enabled=true" >> $GITHUB_ENV
+        echo "CILIUM_CLI_RELEASE_REPO=cilium/cilium-cli" >> $GITHUB_ENV
+>>>>>>> 3f694f8... cilium-cli action: Specify the repository parameter
         # renovate: datasource=github-releases depName=cilium/cilium-cli
         CILIUM_CLI_VERSION="v0.15.14"
         echo "CILIUM_CLI_VERSION=$CILIUM_CLI_VERSION" >> $GITHUB_ENV
