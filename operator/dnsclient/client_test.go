@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/miekg/dns"
+	"github.com/cilium/dns"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/goleak"
 

@@ -11,7 +11,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/miekg/dns"
+	"github.com/cilium/dns"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 

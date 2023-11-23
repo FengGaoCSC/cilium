@@ -852,9 +852,6 @@ github.com/mdlayher/packet
 # github.com/mdlayher/socket v0.4.1
 ## explicit; go 1.20
 github.com/mdlayher/socket
-# github.com/miekg/dns v1.1.51
-## explicit; go 1.14
-github.com/miekg/dns
 # github.com/mikioh/ipaddr v0.0.0-20190404000644-d465c8ab6721
 ## explicit
 github.com/mikioh/ipaddr
