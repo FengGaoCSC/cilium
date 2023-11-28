@@ -569,6 +569,12 @@ func putEndpointIDHandler(d *Daemon, params PutEndpointIDParams) (resp middlewar
 	}
 	defer r.Done()
 
+	// Wait for the host datapath to be initialized before starting to manage
+	// endpoint programs. bpf_lxc makes the assumption that bpf_host is loaded
+	// and its policy program(s) inserted. Can't live in createEndpoint as that
+	// function is called from tests that don't set up a host datapath.
+	<-d.Datapath().Loader().HostDatapathInitialized()
+
 	ep, code, err := d.createEndpoint(params.HTTPRequest.Context(), d, epTemplate)
 	if err != nil {
 		r.Error(err)
