@@ -111,6 +111,7 @@ jobs:
             lb-mode: 'snat'
             endpoint-routes: 'true'
             egress-gateway: 'true'
+            ingress-controller: 'true'
 
           - name: '5'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -124,6 +125,7 @@ jobs:
             endpoint-routes: 'true'
             egress-gateway: 'true'
             host-fw: 'true'
+            ingress-controller: 'true'
 
           - name: '6'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -171,6 +173,7 @@ jobs:
             lb-mode: 'snat'
             endpoint-routes: 'true'
             egress-gateway: 'true'
+            ingress-controller: 'true'
 
           - name: '10'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
