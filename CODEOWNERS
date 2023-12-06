@@ -394,6 +394,7 @@ Makefile* @cilium/build
 /pkg/datapath/linux/bandwidth/ @cilium/sig-datapath
 /pkg/bgp/ @cilium/sig-bgp
 /pkg/bgpv1/ @cilium/sig-bgp
+/pkg/bitlpm/ @cilium/ipcache @cilium/sig-policy
 /pkg/bpf/ @cilium/loader
 /pkg/byteorder/ @cilium/sig-datapath @cilium/api
 /pkg/cgroups/ @cilium/sig-datapath
