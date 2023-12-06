@@ -75,8 +75,8 @@ jobs:
       fail-fast: false
       max-parallel: 16
       matrix:
-        #config: ['5.4', '5.10', 'bpf-next']
-        config: ['5.4', 'bpf-next']
+        #config: ['5.4', '5.10', '6.1', 'bpf-next']
+        config: ['5.4', '6.1', 'bpf-next']
         mode: ['minor', 'patch']
         include:
           # Define three config sets
@@ -97,6 +97,15 @@ jobs:
           #  encryption: 'ipsec'
           #  endpoint-routes: 'true'
 
+          - config: '6.1'
+            # renovate: datasource=docker depName=quay.io/lvh-images/kind
+            kernel: '6.1-20231026.065108'
+            kube-proxy: 'iptables'
+            kpr: 'disabled'
+            tunnel: 'vxlan'
+            encryption: 'ipsec'
+            endpoint-routes: 'false'
+
           - config: 'bpf-next'
             # We don't want to update bpf-next after branching
             kernel: 'bpf-next-20230420.212204'
@@ -115,21 +124,29 @@ jobs:
           #  mode: 'minor'
           #  name: '2'
 
-          - config: 'bpf-next'
+          - config: '6.1'
             mode: 'minor'
             name: '3'
 
+          - config: 'bpf-next'
+            mode: 'minor'
+            name: '4'
+
           - config: '5.4'
             mode: 'patch'
-            name: '4'
+            name: '5'
 
           #- config: '5.10'
           #  mode: 'patch'
-          #  name: '5'
+          #  name: '6'
+
+          - config: '6.1'
+            mode: 'patch'
+            name: '7'
 
           - config: 'bpf-next'
             mode: 'patch'
-            name: '6'
+            name: '8'
 
     timeout-minutes: 60
     steps:
