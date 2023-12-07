@@ -239,7 +239,7 @@ jobs:
             --flush-ct
 
       - name: Rotate IPsec Key & Test (${{ join(matrix.*, ', ') }})
-        uses: ./.github/actions/ipsec-rotate-key
+        uses: ./.github/actions/ipsec-key-rotate
         with:
           key-type: ${{ matrix.key-two }}
 
