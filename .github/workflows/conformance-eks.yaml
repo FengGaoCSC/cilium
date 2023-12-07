@@ -252,7 +252,7 @@ jobs:
           --junit-property github_job_step="Run connectivity test (${{ join(matrix.*, ', ') }})"
 
       - name: Run IPsec key rotation tests (${{ join(matrix.*, ', ') }})
-        uses: ./.github/actions/ipsec-rotate-key
+        uses: ./.github/actions/ipsec-key-rotate
         with:
           key-type: "gcm(aes)"
 
