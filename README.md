@@ -9,11 +9,11 @@
 2. Install golang
     refer [Download and install](https://go.dev/doc/install) for detail.
 3. Clone the source code from http://github.com/cilium/cilium and checkout wit
-   ```
+   ```bash
    git clone https://github.com/cilium/cilium.git
    git checkout -b local_develop a6e22ba7c4e8e25a50f36b35361b49f38c27776f
    //Then using current <src>/pkg/wireguard/agent/agent.go to replace that old one
-
+   //Or apply the agent.go.diff in root directory of this project to <src>/pkg/wireguard/agent/agent.go
    //And then build the cilium docker images   
    ```
 4. Build cilium docker images using the following script
