@@ -8,7 +8,8 @@
     refer [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) for detail.
 2. Install golang
     refer [Download and install](https://go.dev/doc/install) for detail.
-3. Build cilium docker images
+3. Clone the source code from http://github.com/cilium/cilium and checkout git checkout -b local_develop a6e22ba7c4e8e25a50f36b35361b49f38c27776f
+4. Build cilium docker images using the following script
     ```bash
     #!/bin/bash
 
@@ -20,7 +21,7 @@
 
     make docker-images-all    
     ```
-4. Push cilium docker image to custom repo
+5. Push cilium docker image to custom repo
     After building, you will get following docker images:
     ```console
     k8s@k8s:~/.../cilium_ws$ docker images
@@ -53,7 +54,7 @@
     image:
     override: ~
     -  repository: "quay.io/cilium/cilium-ci"
-    +  repository: "docker.io/gaofeng/cilium"
+    +  repository: "docker.io/gaofeng1973/cilium"
     tag: "latest"
     pullPolicy: "Always"
     # cilium-digest
