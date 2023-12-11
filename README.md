@@ -8,17 +8,21 @@
     refer [Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/) for detail.
 2. Install golang
     refer [Download and install](https://go.dev/doc/install) for detail.
-3. Clone the source code from http://github.com/cilium/cilium and checkout git checkout -b local_develop a6e22ba7c4e8e25a50f36b35361b49f38c27776f
+3. Clone the source code from http://github.com/cilium/cilium and checkout wit
+   ```
+   git clone https://github.com/cilium/cilium.git
+   git checkout -b local_develop a6e22ba7c4e8e25a50f36b35361b49f38c27776f
+   //Then using current <src>/pkg/wireguard/agent/agent.go to replace that old one
+
+   //And then build the cilium docker images   
+   ```
 4. Build cilium docker images using the following script
     ```bash
     #!/bin/bash
-
     #export DOCKER_BUILDKIT=1
     export DOCKER_BUILDX=1
-
     export DOCKER_REGISTRY=docker.io
     export DOCKER_DEV_ACCOUNT=gaofeng1973
-
     make docker-images-all    
     ```
 5. Push cilium docker image to custom repo
@@ -39,10 +43,10 @@
     ```
     Just `push gaofeng1973/cilium` which include latest code that support `Keepalive` parameter.
 
-1. Install k8s environment 
-2. Setup k8s node 
-3. Join slave node to master node.
-4. Update cilium charts to enable wireguard keepalive option.
+6. Install k8s environment 
+7. Setup k8s node 
+8. Join slave node to master node.
+9. Update cilium charts to enable wireguard keepalive option.
     First copy [cilium charts](https://github.com/cilium/cilium/tree/main/install/kubernetes/cilium) to your local directory, then modify for enable wireguard keepalive option:
     ```diff
     diff --git a/install/kubernetes/cilium/values.yaml b/install/kubernetes/cilium/values.yaml
@@ -59,7 +63,7 @@
     pullPolicy: "Always"
     # cilium-digest
      ```
-5. Install cilium
+10. Install cilium
     ```bash
     #!/bin/bash
     cilium install --encryption wireguard --chart-directory /home/k8s/Work/cilium/install/kubernetes/cilium/
