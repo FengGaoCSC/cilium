@@ -41,7 +41,7 @@
     gaofeng1973/operator-alibabacloud   latest            148054801640   44 hours ago   111MB
     gaofeng1973/operator-azure          latest            863a5c54c8da   44 hours ago   81.8MB
     ```
-    Just `push gaofeng1973/cilium` which include latest code that support `Keepalive` parameter.
+    Just `push gaofeng1973/cilium` which include latest code that support `hub-spoke` wireguard configuration
 
 6. Install k8s environment 
 7. Setup k8s node 
